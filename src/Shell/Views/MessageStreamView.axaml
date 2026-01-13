@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:services="using:ComCross.Shell.Services"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="ComCross.Shell.Views.MessageStreamView"
+             x:DataType="vm:MainWindowViewModel">
+    
+    <Grid RowDefinitions="Auto,Auto,*">
+        <!-- Search Bar -->
+        <Border Grid.Row="0" Background="#141B1F" Padding="16" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+            <TextBox Text="{Binding SearchQuery}" 
+                     Watermark="{x:Static services:LocalizationManager.StreamSearchPlaceholder}" 
+                     Background="#1B242A"
+                     BorderBrush="#25303A" />
+        </Border>
+
+        <!-- Metrics Bar -->
+        <Border Grid.Row="1" Background="#141B1F" Padding="16,8" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="24">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsRx}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding ActiveSession.RxBytes}" FontSize="12" Foreground="#2CB5A9" FontWeight="Bold" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsTx}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding ActiveSession.TxBytes}" FontSize="12" Foreground="#3AA0FF" FontWeight="Bold" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsLines}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding Messages.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Message List -->
+        <ListBox Grid.Row="2" 
+                 ItemsSource="{Binding Messages}" 
+                 Background="#0F1417" 
+                 BorderThickness="0"
+                 SelectionMode="Single"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Padding="16,4" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="Auto,Auto,*">
+                            <!-- Level Indicator -->
+                            <Border Grid.Column="0" Width="4" Background="{Binding Level, Converter={StaticResource LevelColorConverter}}" Margin="0,0,12,0" />
+                            
+                            <!-- Timestamp -->
+                            <TextBlock Grid.Column="1" 
+                                       Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss.fff}'}" 
+                                       FontFamily="JetBrains Mono" 
+                                       FontSize="12" 
+                                       Foreground="#87909B" 
+                                       Margin="0,0,16,0"
+                                       VerticalAlignment="Top" />
+                            
+                            <!-- Content -->
+                            <TextBlock Grid.Column="2" 
+                                       Text="{Binding Content}" 
+                                       FontFamily="JetBrains Mono" 
+                                       FontSize="13" 
+                                       Foreground="#E6EDF3"
+                                       TextWrapping="NoWrap" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

@@ -1,0 +1,14 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:ComCross.Shell.Converters"
+             x:Class="ComCross.Shell.App"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <converters:StatusColorConverter x:Key="StatusColorConverter"/>
+        <converters:LevelColorConverter x:Key="LevelColorConverter"/>
+    </Application.Resources>
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="/Styles/CustomStyles.axaml"/>
+    </Application.Styles>
+</Application>

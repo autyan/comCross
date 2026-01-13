@@ -1,0 +1,60 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        xmlns:services="using:ComCross.Shell.Services"
+        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="350"
+        x:Class="ComCross.Shell.Views.ConnectDialog"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{x:Static services:LocalizationManager.DialogConnectTitle}"
+        Width="450" Height="350"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+
+    <Grid RowDefinitions="*,Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="16">
+            <!-- Port Selection -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{x:Static services:LocalizationManager.DialogConnectPort}" FontWeight="SemiBold" />
+                <ComboBox x:Name="PortComboBox" 
+                          ItemsSource="{Binding Devices}"
+                          SelectedIndex="0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Port}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Baud Rate -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{x:Static services:LocalizationManager.DialogConnectBaudRate}" FontWeight="SemiBold" />
+                <ComboBox x:Name="BaudRateComboBox" SelectedIndex="5">
+                    <ComboBoxItem Content="9600" />
+                    <ComboBoxItem Content="19200" />
+                    <ComboBoxItem Content="38400" />
+                    <ComboBoxItem Content="57600" />
+                    <ComboBoxItem Content="74880" />
+                    <ComboBoxItem Content="115200" />
+                    <ComboBoxItem Content="230400" />
+                    <ComboBoxItem Content="460800" />
+                    <ComboBoxItem Content="921600" />
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Session Name -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{x:Static services:LocalizationManager.DialogConnectSessionName}" FontWeight="SemiBold" />
+                <TextBox x:Name="SessionNameTextBox" Watermark="{x:Static services:LocalizationManager.DialogConnectSessionNamePlaceholder}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button Content="{x:Static services:LocalizationManager.DialogConnectCancel}" Width="100" Click="OnCancelClick" />
+            <Button Content="{x:Static services:LocalizationManager.DialogConnectConnect}" Width="100" Classes="accent" Click="OnConnectClick" />
+        </StackPanel>
+    </Grid>
+</Window>

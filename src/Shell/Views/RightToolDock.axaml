@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:services="using:ComCross.Shell.Services"
+             mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
+             x:Class="ComCross.Shell.Views.RightToolDock"
+             x:DataType="vm:MainWindowViewModel">
+    
+    <Grid RowDefinitions="Auto,*">
+        <!-- Tool Tabs -->
+        <Border Grid.Row="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="8">
+            <StackPanel Spacing="4">
+                <Button Content="{x:Static services:LocalizationManager.ToolSend}" Classes="tool-tab" />
+                <Button Content="{x:Static services:LocalizationManager.ToolFilter}" Classes="tool-tab" />
+                <Button Content="{x:Static services:LocalizationManager.ToolHighlight}" Classes="tool-tab" />
+                <Button Content="{x:Static services:LocalizationManager.ToolExport}" Classes="tool-tab" />
+            </StackPanel>
+        </Border>
+
+        <!-- Tool Content -->
+        <Border Grid.Row="1" Background="#1B242A" Padding="16">
+            <ScrollViewer>
+                <StackPanel Spacing="16">
+                    <!-- Send Tool -->
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="{x:Static services:LocalizationManager.ToolSendQuickCommands}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdStatus}" Classes="secondary" />
+                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdReset}" Classes="secondary" />
+                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdGetConfig}" Classes="secondary" />
+                    </StackPanel>
+
+                    <Separator />
+
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="{x:Static services:LocalizationManager.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                        <TextBox Watermark="{x:Static services:LocalizationManager.ToolSendMessagePlaceholder}" 
+                                 Height="100" 
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 IsEnabled="{Binding IsConnected}" />
+                        
+                        <StackPanel Spacing="8">
+                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendHexMode}" />
+                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendAddCr}" IsChecked="True" />
+                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendAddLf}" IsChecked="True" />
+                        </StackPanel>
+
+                        <Button Content="{x:Static services:LocalizationManager.ToolSendButton}" Classes="accent" IsEnabled="{Binding IsConnected}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>
