@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ComCross
+Comment=Cross-Platform Serial Communication Toolbox
+Exec=ComCross.Shell
+Icon=comcross
+Terminal=false
+Categories=Development;Utility;
+Keywords=serial;uart;communication;debugging;
+StartupWMClass=ComCross.Shell

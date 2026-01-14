@@ -1,7 +1,7 @@
 {
   "id": "serial.protocol",
   "name": "Protocol Helper",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "targetCoreVersion": "0.3",
   "entryPoint": "ComCross.Plugins.Protocol.ProtocolTool",
   "toolGroup": "serial",
