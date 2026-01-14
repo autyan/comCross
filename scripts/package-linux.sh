@@ -83,19 +83,27 @@ if [[ "${rid}" == "linux-arm64" ]]; then
   arch="arm64"
 fi
 
-# Prepare desktop entry and icon
-desktop_file="src/Assets/Resources/comcross.desktop"
-icon_file="src/Assets/Resources/Icons/app-icon-256.png"
+# Prepare staging area for additional files
+staging_dir="/tmp/comcross-staging-$$"
+rm -rf "${staging_dir}"
+mkdir -p "${staging_dir}${prefix}"
+mkdir -p "${staging_dir}/usr/share/applications"
+mkdir -p "${staging_dir}/usr/share/icons/hicolor/256x256/apps"
+
+# Copy application files
+cp -r "${source_dir}"/* "${staging_dir}${prefix}/"
+
+# Copy desktop file and icon
+cp "src/Assets/Resources/comcross.desktop" "${staging_dir}/usr/share/applications/"
+cp "src/Assets/Resources/Icons/app-icon-256.png" "${staging_dir}/usr/share/icons/hicolor/256x256/apps/comcross.png"
 
 fpm -s dir -t deb -n comcross -v "${version}" \
-  -C "${source_dir}" \
-  --prefix "${prefix}" \
-  -d "${runtime_dep}" \
   -a "${arch}" \
+  -d "${runtime_dep}" \
   --deb-no-default-config-files \
-  "${desktop_file}=/usr/share/applications/comcross.desktop" \
-  "${icon_file}=/usr/share/icons/hicolor/256x256/apps/comcross.png" \
-  -p "${pkg_dir}"
+  -C "${staging_dir}" \
+  -p "${pkg_dir}" \
+  .
 
 rpm_arch="x86_64"
 if [[ "${rid}" == "linux-arm64" ]]; then
@@ -103,10 +111,11 @@ if [[ "${rid}" == "linux-arm64" ]]; then
 fi
 
 fpm -s dir -t rpm -n comcross -v "${version}" \
-  -C "${source_dir}" \
-  --prefix "${prefix}" \
-  -d "${runtime_dep}" \
   -a "${rpm_arch}" \
-  "${desktop_file}=/usr/share/applications/comcross.desktop" \
-  "${icon_file}=/usr/share/icons/hicolor/256x256/apps/comcross.png" \
-  -p "${pkg_dir}"
+  -d "${runtime_dep}" \
+  -C "${staging_dir}" \
+  -p "${pkg_dir}" \
+  .
+
+# Clean up staging directory
+rm -rf "${staging_dir}"
