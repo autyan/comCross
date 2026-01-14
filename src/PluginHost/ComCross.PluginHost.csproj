@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -8,12 +9,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
-    <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.1" />
-    <PackageReference Include="NLog" Version="5.2.0" />
-    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
   </ItemGroup>
 </Project>

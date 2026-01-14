@@ -57,6 +57,28 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string ToolSendCmdStatus => _localization.GetString("tool.send.cmd.status");
     public string ToolSendCmdReset => _localization.GetString("tool.send.cmd.reset");
     public string ToolSendCmdGetConfig => _localization.GetString("tool.send.cmd.getconfig");
+    public string ToolCommands => _localization.GetString("tool.commands");
+    public string ToolCommandsEmpty => _localization.GetString("tool.commands.empty");
+    public string ToolCommandsSend => _localization.GetString("tool.commands.send");
+    public string ToolCommandsAdd => _localization.GetString("tool.commands.add");
+    public string ToolCommandsSave => _localization.GetString("tool.commands.save");
+    public string ToolCommandsDelete => _localization.GetString("tool.commands.delete");
+    public string ToolCommandsImport => _localization.GetString("tool.commands.import");
+    public string ToolCommandsExport => _localization.GetString("tool.commands.export");
+    public string ToolCommandsName => _localization.GetString("tool.commands.name");
+    public string ToolCommandsPayload => _localization.GetString("tool.commands.payload");
+    public string ToolCommandsType => _localization.GetString("tool.commands.type");
+    public string ToolCommandsEncoding => _localization.GetString("tool.commands.encoding");
+    public string ToolCommandsGroup => _localization.GetString("tool.commands.group");
+    public string ToolCommandsScope => _localization.GetString("tool.commands.scope");
+    public string ToolCommandsAppendCr => _localization.GetString("tool.commands.appendCr");
+    public string ToolCommandsAppendLf => _localization.GetString("tool.commands.appendLf");
+    public string ToolCommandsHotkey => _localization.GetString("tool.commands.hotkey");
+    public string ToolCommandsSortOrder => _localization.GetString("tool.commands.sortOrder");
+    public string ToolCommandsScopeGlobal => _localization.GetString("tool.commands.scope.global");
+    public string ToolCommandsScopeSession => _localization.GetString("tool.commands.scope.session");
+    public string ToolCommandsTypeText => _localization.GetString("tool.commands.type.text");
+    public string ToolCommandsTypeHex => _localization.GetString("tool.commands.type.hex");
 
     // Status Bar
     public string StatusReady => _localization.GetString("status.ready");
@@ -65,10 +87,12 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SettingsTitle => _localization.GetString("settings.title");
     public string SettingsSectionGeneral => _localization.GetString("settings.section.general");
     public string SettingsSectionLogs => _localization.GetString("settings.section.logs");
+    public string SettingsSectionAppLogs => _localization.GetString("settings.section.appLogs");
     public string SettingsSectionNotifications => _localization.GetString("settings.section.notifications");
     public string SettingsSectionConnection => _localization.GetString("settings.section.connection");
     public string SettingsSectionDisplay => _localization.GetString("settings.section.display");
     public string SettingsSectionExport => _localization.GetString("settings.section.export");
+    public string SettingsSectionPlugins => _localization.GetString("settings.section.plugins");
     public string SettingsLanguage => _localization.GetString("settings.language");
     public string SettingsFollowSystemLanguage => _localization.GetString("settings.followSystemLanguage");
     public string SettingsLogsAutoSave => _localization.GetString("settings.logs.autosave");
@@ -77,6 +101,17 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SettingsLogsMaxTotalSize => _localization.GetString("settings.logs.maxTotalSize");
     public string SettingsLogsAutoDelete => _localization.GetString("settings.logs.autoDelete");
     public string SettingsLogsAutoDeleteRuleTip => _localization.GetString("settings.logs.autoDeleteRuleTip");
+    public string SettingsAppLogsEnabled => _localization.GetString("settings.appLogs.enabled");
+    public string SettingsAppLogsDirectory => _localization.GetString("settings.appLogs.directory");
+    public string SettingsAppLogsFormat => _localization.GetString("settings.appLogs.format");
+    public string SettingsAppLogsMinLevel => _localization.GetString("settings.appLogs.minLevel");
+    public string SettingsPluginsEnabled => _localization.GetString("settings.plugins.enabled");
+    public string SettingsPluginsName => _localization.GetString("settings.plugins.name");
+    public string SettingsPluginsPermissions => _localization.GetString("settings.plugins.permissions");
+    public string SettingsPluginsPath => _localization.GetString("settings.plugins.path");
+    public string SettingsPluginsStatusLoaded => _localization.GetString("settings.plugins.status.loaded");
+    public string SettingsPluginsStatusDisabled => _localization.GetString("settings.plugins.status.disabled");
+    public string SettingsPluginsStatusFailed => _localization.GetString("settings.plugins.status.failed");
     public string SettingsNotificationsStorage => _localization.GetString("settings.notifications.storage");
     public string SettingsNotificationsConnection => _localization.GetString("settings.notifications.connection");
     public string SettingsNotificationsExport => _localization.GetString("settings.notifications.export");
@@ -90,6 +125,10 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SettingsDisplayTimestampFormat => _localization.GetString("settings.display.timestampFormat");
     public string SettingsExportDefaultFormat => _localization.GetString("settings.export.defaultFormat");
     public string SettingsExportDefaultDirectory => _localization.GetString("settings.export.defaultDirectory");
+    public string SettingsExportRange => _localization.GetString("settings.export.range");
+    public string SettingsExportRangeAll => _localization.GetString("settings.export.range.all");
+    public string SettingsExportRangeLatest => _localization.GetString("settings.export.range.latest");
+    public string SettingsExportRangeCount => _localization.GetString("settings.export.range.count");
     public string SettingsClose => _localization.GetString("settings.actions.close");
 
     // Notifications

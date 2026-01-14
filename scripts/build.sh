@@ -63,6 +63,7 @@ if [[ "${publish}" == "true" ]]; then
   for rid in "${rids[@]}"; do
     out_path="${output_dir}/ComCross-${rid}-${config}"
     dotnet publish src/Shell/ComCross.Shell.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
+    dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
   done
 else
   dotnet build src/Shell/ComCross.Shell.csproj -c "${config}"

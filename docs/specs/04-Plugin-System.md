@@ -31,6 +31,7 @@
 ## Loading Rules
 - Scan /plugins directory on startup.
 - Validate manifest and version compatibility.
+- Start a dedicated PluginHost process per plugin.
 - Load tool metadata; create UI only when activated.
 - Disabled tools are hidden and not activated.
 
@@ -44,6 +45,7 @@
 ## Security (MVP)
 - Manifest-based permission display.
 - Optional hash allowlist for offline tools.
+- Process isolation per plugin to avoid plugin crashes affecting the app.
 
 ## Tool Manager UI
 - Show installed tools and status (enabled/disabled).

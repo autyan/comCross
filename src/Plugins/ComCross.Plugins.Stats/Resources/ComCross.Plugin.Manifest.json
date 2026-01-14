@@ -1,0 +1,9 @@
+{
+  "id": "serial.stats",
+  "name": "Stats Panel",
+  "version": "0.3.0",
+  "targetCoreVersion": "0.3",
+  "entryPoint": "ComCross.Plugins.Stats.StatsTool",
+  "toolGroup": "serial",
+  "permissions": ["workspace.read", "serial.read"]
+}

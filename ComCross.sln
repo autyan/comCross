@@ -18,6 +18,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.Tests", "tests\Com
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.Assets", "src\Assets\ComCross.Assets.csproj", "{A7A7A7A7-A7A7-A7A7-A7A7-A7A7A7A7A7A7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.Plugins.Stats", "src\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj", "{B8B8B8B8-B8B8-B8B8-B8B8-B8B8B8B8B8B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.Plugins.Protocol", "src\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj", "{C9C9C9C9-C9C9-C9C9-C9C9-C9C9C9C9C9C9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.Plugins.Flow", "src\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj", "{D8D8D8D8-D8D8-D8D8-D8D8-D8D8D8D8D8D8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ComCross.PluginHost", "src\PluginHost\ComCross.PluginHost.csproj", "{887BA148-7A76-45D4-97C8-10AD58E2A0FA}"
+EndProject
 
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,5 +61,21 @@ Global
 		{A7A7A7A7-A7A7-A7A7-A7A7-A7A7A7A7A7A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A7A7A7A7-A7A7-A7A7-A7A7-A7A7A7A7A7A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A7A7A7A7-A7A7-A7A7-A7A7-A7A7A7A7A7A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8B8B8B8-B8B8-B8B8-B8B8-B8B8B8B8B8B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8B8B8B8-B8B8-B8B8-B8B8-B8B8B8B8B8B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8B8B8B8-B8B8-B8B8-B8B8-B8B8B8B8B8B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8B8B8B8-B8B8-B8B8-B8B8-B8B8B8B8B8B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9C9C9C9-C9C9-C9C9-C9C9-C9C9C9C9C9C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9C9C9C9-C9C9-C9C9-C9C9-C9C9C9C9C9C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9C9C9C9-C9C9-C9C9-C9C9-C9C9C9C9C9C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9C9C9C9-C9C9-C9C9-C9C9-C9C9C9C9C9C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D8D8D8D8-D8D8-D8D8-D8D8-D8D8D8D8D8D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8D8D8D8-D8D8-D8D8-D8D8-D8D8D8D8D8D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8D8D8D8-D8D8-D8D8-D8D8-D8D8D8D8D8D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8D8D8D8-D8D8-D8D8-D8D8-D8D8D8D8D8D8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{887BA148-7A76-45D4-97C8-10AD58E2A0FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{887BA148-7A76-45D4-97C8-10AD58E2A0FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{887BA148-7A76-45D4-97C8-10AD58E2A0FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{887BA148-7A76-45D4-97C8-10AD58E2A0FA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

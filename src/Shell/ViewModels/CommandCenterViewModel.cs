@@ -1,0 +1,430 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using ComCross.Core.Services;
+using ComCross.Shared.Models;
+
+namespace ComCross.Shell.ViewModels;
+
+public sealed class CommandCenterViewModel : INotifyPropertyChanged
+{
+    private readonly CommandService _commandService;
+    private readonly SettingsService _settingsService;
+    private readonly NotificationService _notificationService;
+    private readonly LocalizedStringsViewModel _localizedStrings;
+    private string? _sessionId;
+    private string _sessionName = string.Empty;
+    private CommandDefinition? _selectedCommand;
+    private string _editorName = string.Empty;
+    private string _editorPayload = string.Empty;
+    private string _editorGroup = string.Empty;
+    private string _editorEncoding = "UTF-8";
+    private CommandPayloadType _editorType = CommandPayloadType.Text;
+    private bool _editorAppendCr;
+    private bool _editorAppendLf;
+    private CommandScope _editorScope = CommandScope.Global;
+    private string _editorHotkey = string.Empty;
+    private int _editorSortOrder;
+
+    public CommandCenterViewModel(
+        CommandService commandService,
+        SettingsService settingsService,
+        NotificationService notificationService,
+        LocalizedStringsViewModel localizedStrings)
+    {
+        _commandService = commandService;
+        _settingsService = settingsService;
+        _notificationService = notificationService;
+        _localizedStrings = localizedStrings;
+        RefreshLocalizedOptions();
+    }
+
+    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
+
+    public ObservableCollection<CommandDefinition> Commands { get; } = new();
+
+    public CommandDefinition? SelectedCommand
+    {
+        get => _selectedCommand;
+        set
+        {
+            if (_selectedCommand == value)
+            {
+                return;
+            }
+
+            _selectedCommand = value;
+            LoadEditor(value);
+            OnPropertyChanged();
+        }
+    }
+
+    public string EditorName
+    {
+        get => _editorName;
+        set
+        {
+            if (_editorName == value)
+            {
+                return;
+            }
+
+            _editorName = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string EditorPayload
+    {
+        get => _editorPayload;
+        set
+        {
+            if (_editorPayload == value)
+            {
+                return;
+            }
+
+            _editorPayload = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string EditorGroup
+    {
+        get => _editorGroup;
+        set
+        {
+            if (_editorGroup == value)
+            {
+                return;
+            }
+
+            _editorGroup = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string EditorEncoding
+    {
+        get => _editorEncoding;
+        set
+        {
+            if (_editorEncoding == value)
+            {
+                return;
+            }
+
+            _editorEncoding = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public CommandPayloadType EditorType
+    {
+        get => _editorType;
+        set
+        {
+            if (_editorType == value)
+            {
+                return;
+            }
+
+            _editorType = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool EditorAppendCr
+    {
+        get => _editorAppendCr;
+        set
+        {
+            if (_editorAppendCr == value)
+            {
+                return;
+            }
+
+            _editorAppendCr = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool EditorAppendLf
+    {
+        get => _editorAppendLf;
+        set
+        {
+            if (_editorAppendLf == value)
+            {
+                return;
+            }
+
+            _editorAppendLf = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public CommandScope EditorScope
+    {
+        get => _editorScope;
+        set
+        {
+            if (_editorScope == value)
+            {
+                return;
+            }
+
+            _editorScope = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string EditorHotkey
+    {
+        get => _editorHotkey;
+        set
+        {
+            if (_editorHotkey == value)
+            {
+                return;
+            }
+
+            _editorHotkey = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int EditorSortOrder
+    {
+        get => _editorSortOrder;
+        set
+        {
+            if (_editorSortOrder == value)
+            {
+                return;
+            }
+
+            _editorSortOrder = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions { get; private set; } = Array.Empty<CommandOption<CommandPayloadType>>();
+    public IReadOnlyList<CommandOption<CommandScope>> ScopeOptions { get; private set; } = Array.Empty<CommandOption<CommandScope>>();
+
+    public CommandOption<CommandPayloadType>? SelectedPayloadType
+    {
+        get => PayloadTypeOptions.FirstOrDefault(o => o.Value == EditorType);
+        set
+        {
+            if (value == null || EditorType == value.Value)
+            {
+                return;
+            }
+
+            EditorType = value.Value;
+            OnPropertyChanged();
+        }
+    }
+
+    public CommandOption<CommandScope>? SelectedScope
+    {
+        get => ScopeOptions.FirstOrDefault(o => o.Value == EditorScope);
+        set
+        {
+            if (value == null || EditorScope == value.Value)
+            {
+                return;
+            }
+
+            EditorScope = value.Value;
+            OnPropertyChanged();
+        }
+    }
+
+    public event Func<CommandDefinition, Task>? SendRequested;
+
+    public async Task LoadAsync()
+    {
+        Commands.Clear();
+        var items = _commandService.GetAllCommands(_sessionId);
+        foreach (var item in items)
+        {
+            Commands.Add(item);
+        }
+
+        SelectedCommand = Commands.FirstOrDefault();
+    }
+
+    public void SetSession(string? sessionId, string? sessionName)
+    {
+        _sessionId = sessionId;
+        _sessionName = sessionName ?? string.Empty;
+        _ = LoadAsync();
+    }
+
+    public async Task SaveAsync()
+    {
+        var command = SelectedCommand ?? new CommandDefinition();
+        command.Name = EditorName.Trim();
+        command.Payload = EditorPayload;
+        command.Group = EditorGroup.Trim();
+        command.Encoding = string.IsNullOrWhiteSpace(EditorEncoding) ? "UTF-8" : EditorEncoding.Trim();
+        command.Type = EditorType;
+        command.AppendCr = EditorAppendCr;
+        command.AppendLf = EditorAppendLf;
+        command.Scope = EditorScope;
+        command.SessionId = EditorScope == CommandScope.Session ? _sessionId : null;
+        command.SortOrder = EditorSortOrder > 0 ? EditorSortOrder : command.SortOrder == 0 ? Commands.Count + 1 : command.SortOrder;
+        command.Hotkey = NormalizeHotkey(EditorHotkey);
+
+        await _commandService.AddOrUpdateAsync(command);
+        await LoadAsync();
+    }
+
+    public void NewCommand()
+    {
+        SelectedCommand = null;
+        EditorName = string.Empty;
+        EditorPayload = string.Empty;
+        EditorGroup = string.Empty;
+        EditorEncoding = "UTF-8";
+        EditorType = CommandPayloadType.Text;
+        EditorAppendCr = false;
+        EditorAppendLf = false;
+        EditorScope = CommandScope.Global;
+        EditorHotkey = string.Empty;
+        EditorSortOrder = Commands.Count + 1;
+    }
+
+    public async Task DeleteSelectedAsync()
+    {
+        if (SelectedCommand == null)
+        {
+            return;
+        }
+
+        await _commandService.RemoveAsync(SelectedCommand);
+        await LoadAsync();
+    }
+
+    public async Task SendSelectedAsync()
+    {
+        if (SelectedCommand == null)
+        {
+            return;
+        }
+
+        if (SendRequested != null)
+        {
+            await SendRequested.Invoke(SelectedCommand);
+        }
+    }
+
+    public async Task ExportAsync(string? filePath = null)
+    {
+        var targetPath = string.IsNullOrWhiteSpace(filePath)
+            ? Path.Combine(_settingsService.Current.Export.DefaultDirectory, "commands.json")
+            : filePath;
+        await _commandService.ExportAsync(targetPath);
+        await _notificationService.AddAsync(
+            NotificationCategory.System,
+            NotificationLevel.Info,
+            "notification.export.completed",
+            new object[] { targetPath });
+    }
+
+    public async Task ImportAsync(string? filePath = null)
+    {
+        var sourcePath = string.IsNullOrWhiteSpace(filePath)
+            ? Path.Combine(_settingsService.Current.Export.DefaultDirectory, "commands.json")
+            : filePath;
+        await _commandService.ImportAsync(sourcePath);
+        await LoadAsync();
+    }
+
+    public void RefreshLocalizedOptions()
+    {
+        PayloadTypeOptions = new[]
+        {
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, _localizedStrings.ToolCommandsTypeText),
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, _localizedStrings.ToolCommandsTypeHex)
+        };
+
+        ScopeOptions = new[]
+        {
+            new CommandOption<CommandScope>(CommandScope.Global, _localizedStrings.ToolCommandsScopeGlobal),
+            new CommandOption<CommandScope>(CommandScope.Session, _localizedStrings.ToolCommandsScopeSession)
+        };
+
+        OnPropertyChanged(nameof(PayloadTypeOptions));
+        OnPropertyChanged(nameof(ScopeOptions));
+        OnPropertyChanged(nameof(SelectedPayloadType));
+        OnPropertyChanged(nameof(SelectedScope));
+    }
+
+    private void LoadEditor(CommandDefinition? command)
+    {
+        if (command == null)
+        {
+            return;
+        }
+
+        EditorName = command.Name;
+        EditorPayload = command.Payload;
+        EditorGroup = command.Group;
+        EditorEncoding = command.Encoding;
+        EditorType = command.Type;
+        EditorAppendCr = command.AppendCr;
+        EditorAppendLf = command.AppendLf;
+        EditorScope = command.Scope;
+        EditorHotkey = command.Hotkey ?? string.Empty;
+        EditorSortOrder = command.SortOrder == 0 ? 1 : command.SortOrder;
+        OnPropertyChanged(nameof(SelectedPayloadType));
+        OnPropertyChanged(nameof(SelectedScope));
+    }
+
+    public async Task<bool> TryExecuteHotkeyAsync(string? hotkey)
+    {
+        var normalized = NormalizeHotkey(hotkey);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        var match = Commands.FirstOrDefault(command =>
+            string.Equals(NormalizeHotkey(command.Hotkey), normalized, StringComparison.OrdinalIgnoreCase));
+
+        if (match == null || SendRequested == null)
+        {
+            return false;
+        }
+
+        await SendRequested.Invoke(match);
+        return true;
+    }
+
+    private static string NormalizeHotkey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Replace(" ", string.Empty).Trim();
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public sealed record CommandOption<T>(T Value, string Label);

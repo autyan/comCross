@@ -1,0 +1,9 @@
+{
+  "id": "serial.flow",
+  "name": "Flow Builder",
+  "version": "0.3.0",
+  "targetCoreVersion": "0.3",
+  "entryPoint": "ComCross.Plugins.Flow.FlowTool",
+  "toolGroup": "automation",
+  "permissions": ["workspace.read", "serial.read", "serial.write"]
+}

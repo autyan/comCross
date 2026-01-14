@@ -50,12 +50,18 @@ public sealed class SettingsService
             _current.Logs.Directory = Path.Combine(baseDirectory, "logs");
         }
 
+        if (string.IsNullOrWhiteSpace(_current.AppLogs.Directory))
+        {
+            _current.AppLogs.Directory = Path.Combine(baseDirectory, "app-logs");
+        }
+
         if (string.IsNullOrWhiteSpace(_current.Export.DefaultDirectory))
         {
             _current.Export.DefaultDirectory = Path.Combine(baseDirectory, "exports");
         }
 
         Directory.CreateDirectory(_current.Logs.Directory);
+        Directory.CreateDirectory(_current.AppLogs.Directory);
         Directory.CreateDirectory(_current.Export.DefaultDirectory);
     }
 }

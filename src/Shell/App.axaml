@@ -6,6 +6,8 @@
     <Application.Resources>
         <converters:StatusColorConverter x:Key="StatusColorConverter"/>
         <converters:LevelColorConverter x:Key="LevelColorConverter"/>
+        <converters:IsZeroConverter x:Key="IsZeroConverter"/>
+        <converters:TimestampFormatConverter x:Key="TimestampFormatConverter"/>
     </Application.Resources>
     <Application.Styles>
         <FluentTheme />

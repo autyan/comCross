@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="200"
+             x:Class="ComCross.Shell.Views.PluginManagerView"
+             x:DataType="vm:SettingsViewModel">
+    <StackPanel Spacing="8">
+        <TextBlock Text="{Binding LocalizedStrings.SettingsSectionPlugins}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
+        <Border Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6">
+            <ListBox ItemsSource="{Binding PluginManager.Plugins}" Background="#0F1417" BorderThickness="0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="10" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <CheckBox IsChecked="{Binding IsEnabled}" Click="OnTogglePluginClick" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2">
+                                    <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#E6EDF3" />
+                                    <TextBlock Text="{Binding Permissions}" FontSize="11" Foreground="#87909B" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Version}" FontSize="11" Foreground="#87909B" HorizontalAlignment="Right" />
+                                    <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#87909B" HorizontalAlignment="Right" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </StackPanel>
+</UserControl>

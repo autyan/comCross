@@ -5,6 +5,7 @@ A modern, modular embedded development toolbox designed for serial communication
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)
+![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)
 
 ## ✨ Features
 
@@ -14,11 +15,11 @@ A modern, modular embedded development toolbox designed for serial communication
 - 🎨 **Modern UI** - Cross-platform dark theme interface based on Avalonia
 - 📊 **Multi-Session Support** - Manage multiple serial port connections simultaneously
 - 🔍 **Powerful Search** - Supports keyword and regular expression search
-- 🌐 **Internationalization** - Built-in i18n support (English, 简体中文)
+- 🌐 **Internationalization** - Built-in i18n support (English, Simplified Chinese)
 
-## 🎯 MVP Goals
+## 🎯 Release Goals
 
-### Completed (v0.1) ✅
+### Completed (v0.3.0) ✅
 
 - ✅ Serial device enumeration and connection
 - ✅ Real-time message reception and display
@@ -28,6 +29,11 @@ A modern, modular embedded development toolbox designed for serial communication
 - ✅ Workspace state persistence
 - ✅ Unit test coverage
 - ✅ Internationalization support
+- ✅ Plugin system with process isolation
+- ✅ Official plugins (Stats, Protocol, Flow)
+- ✅ Plugin manager UI
+- ✅ Command system with hotkeys and import/export
+- ✅ Export tooling with range selection
 
 ## 🚀 Quick Start
 
@@ -79,11 +85,11 @@ ComCross supports multiple languages through a JSON-based localization system.
 ### Supported Languages
 
 - **English** (en-US) - Default
-- **简体中文** (zh-CN) - Simplified Chinese
+- **Simplified Chinese** (zh-CN) - Simplified Chinese
 
 ### Adding New Languages
 
-1. Create a new JSON file in `src/Core/Resources/Localization/`:
+1. Create a new JSON file in `src/Assets/Resources/Localization/`:
    ```
    strings.{culture}.json
    ```
@@ -105,7 +111,7 @@ ComCross supports multiple languages through a JSON-based localization system.
 
 ### Adding New Translation Keys
 
-1. Add the key to all language files in `src/Core/Resources/Localization/`
+1. Add the key to all language files in `src/Assets/Resources/Localization/`
 2. Add a corresponding property to `LocalizedStringsViewModel.cs` if needed:
    ```csharp
    public string MyNewKey => _localization.GetString("my.new.key");
@@ -127,7 +133,8 @@ ComCross supports multiple languages through a JSON-based localization system.
 
 ## 🛠️ Technology Stack
 
-- **.NET**: 10.0
+- **.NET SDK**: 10.0
+- **Runtime baseline**: .NET 8 LTS
 - **UI Framework**: Avalonia 11.2.2
 - **Architecture**: MVVM + Service Layer
 - **Testing**: xUnit
@@ -136,32 +143,30 @@ ComCross supports multiple languages through a JSON-based localization system.
 
 ## 📋 Roadmap
 
-### v0.1 (MVP) - ✅ Completed
-- Basic architecture and core services
-- Serial port support
-- Basic UI and message stream
-- State persistence
-- Internationalization support
+### v0.3.0 - ✅ Completed
+- Plugin system with process isolation
+- Official plugins (Stats, Protocol, Flow)
+- Command system and export tooling
+- Packaging scripts for release artifacts
 
-### v0.2 - Planned
-- Complete send tool (HEX mode, history)
-- Data export functionality
-- 高级过滤和高亮规则
+### v0.3.x - Planned
+- MSI/DEB/RPM installers
+- Advanced filter and highlight rules
 
-### v0.3 - 计划中
-- 插件动态加载
-- 脚本支持
-- Windows安装包
+## 🤝 Contributing
 
-## 🤝 贡献
+Contributions are welcome. Please see the contribution guidelines.
 
-欢迎贡献！请查看我们的贡献指南。
+## 📄 License
 
-## 📄 许可证
-
-本项目采用 MIT 许可证。查看 [LICENSE](LICENSE) 文件了解详情。
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-**当前状态**: MVP已完成，所有核心功能已实现并通过测试。
+**Current status**: MVP completed, core features implemented and tested.
 
+## ✅ Runtime Baseline Commitment
+
+ComCross release packages target the .NET 8 LTS runtime baseline. We commit to
+keeping this baseline stable and will only change it when strictly necessary.
+Any breaking change will be announced ahead of time.

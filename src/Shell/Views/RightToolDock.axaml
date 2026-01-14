@@ -3,18 +3,25 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:views="using:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.RightToolDock"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:MainWindowViewModel"
+             x:Name="Root"
+             IsCommandsTabActive="{Binding IsCommandsTabActive}">
     
     <Grid RowDefinitions="Auto,*">
         <!-- Tool Tabs -->
         <Border Grid.Row="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="8">
-            <StackPanel Spacing="4">
-                <Button Content="{Binding LocalizedStrings.ToolSend}" Classes="tool-tab" />
-                <Button Content="{Binding LocalizedStrings.ToolFilter}" Classes="tool-tab" />
-                <Button Content="{Binding LocalizedStrings.ToolHighlight}" Classes="tool-tab" />
-                <Button Content="{Binding LocalizedStrings.ToolExport}" Classes="tool-tab" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ToggleButton Content="{Binding LocalizedStrings.ToolSend}"
+                              Classes="tool-tab"
+                              IsChecked="{Binding IsSendTabActive}"
+                              Click="OnSendTabClick" />
+                <ToggleButton Content="{Binding LocalizedStrings.ToolCommands}"
+                              Classes="tool-tab"
+                              IsChecked="{Binding IsCommandsTabActive}"
+                              Click="OnCommandsTabClick" />
             </StackPanel>
         </Border>
 
@@ -23,16 +30,7 @@
             <ScrollViewer>
                 <StackPanel Spacing="16">
                     <!-- Send Tool -->
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="{Binding LocalizedStrings.ToolSendQuickCommands}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
-                        <Button Content="{Binding LocalizedStrings.ToolSendCmdStatus}" Classes="secondary" />
-                        <Button Content="{Binding LocalizedStrings.ToolSendCmdReset}" Classes="secondary" />
-                        <Button Content="{Binding LocalizedStrings.ToolSendCmdGetConfig}" Classes="secondary" />
-                    </StackPanel>
-
-                    <Separator />
-
-                    <StackPanel Spacing="12">
+                    <StackPanel Spacing="12" IsVisible="{Binding IsSendTabActive}">
                         <TextBlock Text="{Binding LocalizedStrings.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
                         <TextBox Watermark="{Binding LocalizedStrings.ToolSendMessagePlaceholder}" 
                                  Height="100" 
@@ -48,6 +46,8 @@
 
                         <Button Content="{Binding LocalizedStrings.ToolSendButton}" Classes="accent" IsEnabled="{Binding IsConnected}" />
                     </StackPanel>
+
+                    <views:CommandCenterView DataContext="{Binding CommandCenter}" IsVisible="{Binding IsCommandsTabActive, ElementName=Root}" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

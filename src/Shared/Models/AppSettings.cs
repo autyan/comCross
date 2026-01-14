@@ -4,11 +4,22 @@ public sealed class AppSettings
 {
     public string Language { get; set; } = "en-US";
     public bool FollowSystemLanguage { get; set; } = true;
+    public AppLogSettings AppLogs { get; set; } = new();
     public LogSettings Logs { get; set; } = new();
+    public CommandSettings Commands { get; set; } = new();
     public NotificationSettings Notifications { get; set; } = new();
     public ConnectionSettings Connection { get; set; } = new();
     public DisplaySettings Display { get; set; } = new();
     public ExportSettings Export { get; set; } = new();
+    public PluginSettings Plugins { get; set; } = new();
+}
+
+public sealed class AppLogSettings
+{
+    public bool Enabled { get; set; } = true;
+    public string Directory { get; set; } = string.Empty;
+    public string Format { get; set; } = "txt";
+    public string MinLevel { get; set; } = "Info";
 }
 
 public sealed class LogSettings
@@ -47,4 +58,23 @@ public sealed class ExportSettings
 {
     public string DefaultFormat { get; set; } = "txt";
     public string DefaultDirectory { get; set; } = string.Empty;
+    public ExportRangeMode RangeMode { get; set; } = ExportRangeMode.All;
+    public int RangeCount { get; set; } = 1000;
+}
+
+public enum ExportRangeMode
+{
+    All,
+    Latest
+}
+
+public sealed class CommandSettings
+{
+    public List<CommandDefinition> GlobalCommands { get; set; } = new();
+    public Dictionary<string, List<CommandDefinition>> SessionCommands { get; set; } = new();
+}
+
+public sealed class PluginSettings
+{
+    public Dictionary<string, bool> Enabled { get; set; } = new();
 }

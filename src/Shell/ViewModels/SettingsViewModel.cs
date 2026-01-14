@@ -15,28 +15,38 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 {
     private readonly SettingsService _settingsService;
     private readonly ILocalizationService _localization;
+    private readonly PluginManagerViewModel _pluginManager;
     private readonly LocalizedStringsViewModel _localizedStrings;
     private readonly List<LocaleCultureInfo> _availableLanguages;
+    private readonly List<string> _logFormats = new() { "txt", "json" };
+    private readonly List<string> _logLevels = new() { "Trace", "Debug", "Info", "Warn", "Error", "Fatal" };
     private LocaleCultureInfo _selectedLanguage;
     private bool _followSystemLanguage;
+    private IReadOnlyList<SettingOption<ExportRangeMode>> _exportRangeModeOptions = Array.Empty<SettingOption<ExportRangeMode>>();
     private bool _saveScheduled;
 
     public SettingsViewModel(
         SettingsService settingsService,
         ILocalizationService localization,
-        LocalizedStringsViewModel localizedStrings)
+        LocalizedStringsViewModel localizedStrings,
+        PluginManagerViewModel pluginManager)
     {
         _settingsService = settingsService;
         _localization = localization;
         _localizedStrings = localizedStrings;
+        _pluginManager = pluginManager;
         _availableLanguages = localization.AvailableCultures.ToList();
         _selectedLanguage = ResolveLanguage(settingsService.Current.Language);
         _followSystemLanguage = settingsService.Current.FollowSystemLanguage;
+        RefreshExportOptions();
     }
 
     public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
+    public PluginManagerViewModel PluginManager => _pluginManager;
 
     public IReadOnlyList<LocaleCultureInfo> AvailableLanguages => _availableLanguages;
+    public IReadOnlyList<string> AppLogFormats => _logFormats;
+    public IReadOnlyList<string> AppLogLevels => _logLevels;
 
     public LocaleCultureInfo SelectedLanguage
     {
@@ -89,6 +99,70 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             }
 
             _settingsService.Current.Logs.AutoSaveEnabled = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AppLogEnabled
+    {
+        get => _settingsService.Current.AppLogs.Enabled;
+        set
+        {
+            if (_settingsService.Current.AppLogs.Enabled == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.AppLogs.Enabled = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string AppLogDirectory
+    {
+        get => _settingsService.Current.AppLogs.Directory;
+        set
+        {
+            if (_settingsService.Current.AppLogs.Directory == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.AppLogs.Directory = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string AppLogFormat
+    {
+        get => _settingsService.Current.AppLogs.Format;
+        set
+        {
+            if (_settingsService.Current.AppLogs.Format == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.AppLogs.Format = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string AppLogMinLevel
+    {
+        get => _settingsService.Current.AppLogs.MinLevel;
+        set
+        {
+            if (_settingsService.Current.AppLogs.MinLevel == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.AppLogs.MinLevel = value;
             ScheduleSave();
             OnPropertyChanged();
         }
@@ -366,6 +440,40 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    public IReadOnlyList<SettingOption<ExportRangeMode>> ExportRangeModeOptions => _exportRangeModeOptions;
+
+    public SettingOption<ExportRangeMode>? SelectedExportRangeMode
+    {
+        get => _exportRangeModeOptions.FirstOrDefault(o => o.Value == _settingsService.Current.Export.RangeMode);
+        set
+        {
+            if (value == null || _settingsService.Current.Export.RangeMode == value.Value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Export.RangeMode = value.Value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int ExportRangeCount
+    {
+        get => _settingsService.Current.Export.RangeCount;
+        set
+        {
+            if (_settingsService.Current.Export.RangeCount == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Export.RangeCount = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
     public event EventHandler<string>? LanguageChanged;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -407,7 +515,20 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         _localization.SetCulture(cultureCode);
         _localizedStrings.RefreshStrings();
+        RefreshExportOptions();
         LanguageChanged?.Invoke(this, cultureCode);
+    }
+
+    private void RefreshExportOptions()
+    {
+        _exportRangeModeOptions = new[]
+        {
+            new SettingOption<ExportRangeMode>(ExportRangeMode.All, _localizedStrings.SettingsExportRangeAll),
+            new SettingOption<ExportRangeMode>(ExportRangeMode.Latest, _localizedStrings.SettingsExportRangeLatest)
+        };
+
+        OnPropertyChanged(nameof(ExportRangeModeOptions));
+        OnPropertyChanged(nameof(SelectedExportRangeMode));
     }
 
     private LocaleCultureInfo ResolveLanguage(string cultureCode)
@@ -437,3 +558,5 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+public sealed record SettingOption<T>(T Value, string Label);

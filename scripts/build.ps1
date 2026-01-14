@@ -19,6 +19,7 @@ if ($Publish) {
     foreach ($rid in $Rids) {
         $outPath = Join-Path $OutputDir "ComCross-$rid-$Configuration"
         dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $rid --self-contained false -o $outPath
+        dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $rid --self-contained false -o $outPath
     }
 } else {
     dotnet build src/Shell/ComCross.Shell.csproj -c $Configuration

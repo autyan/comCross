@@ -5,7 +5,9 @@
              xmlns:vm="using:ComCross.Shell.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:MainWindowViewModel"
+             x:Name="Root"
+             TimestampFormat="{Binding TimestampFormat}">
     
     <Grid RowDefinitions="Auto,Auto,*">
         <!-- Search Bar -->
@@ -35,7 +37,8 @@
         </Border>
 
         <!-- Message List -->
-        <ListBox Grid.Row="2" 
+        <ListBox Grid.Row="2"
+                 x:Name="MessageList"
                  ItemsSource="{Binding Messages}" 
                  Background="#0F1417" 
                  BorderThickness="0"
@@ -51,12 +54,18 @@
                             
                             <!-- Timestamp -->
                             <TextBlock Grid.Column="1" 
-                                       Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss.fff}'}" 
                                        FontFamily="JetBrains Mono" 
                                        FontSize="12" 
                                        Foreground="#87909B" 
                                        Margin="0,0,16,0"
-                                       VerticalAlignment="Top" />
+                                       VerticalAlignment="Top">
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource TimestampFormatConverter}">
+                                        <Binding Path="Timestamp" />
+                                        <Binding Path="TimestampFormat" ElementName="Root" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
                             
                             <!-- Content -->
                             <TextBlock Grid.Column="2" 
