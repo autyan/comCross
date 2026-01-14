@@ -149,11 +149,11 @@ for rid in "${rids[@]}"; do
 
   if [[ "${package_outputs}" == "true" ]]; then
     if [[ "${rid}" == win-* ]]; then
-      create_archive "${fd_out}" "${output_dir}/packages/framework-dependent/ComCross-${rid}-${config}.zip"
-      create_archive "${sc_out}" "${output_dir}/packages/self-contained/ComCross-${rid}-${config}.zip"
+      create_archive "${fd_out}" "${output_dir}/packages/framework-dependent/ComCross-${rid}-${config}-framework-dependent.zip"
+      create_archive "${sc_out}" "${output_dir}/packages/self-contained/ComCross-${rid}-${config}-self-contained.zip"
     else
-      create_archive "${fd_out}" "${output_dir}/packages/framework-dependent/ComCross-${rid}-${config}.tar.gz"
-      create_archive "${sc_out}" "${output_dir}/packages/self-contained/ComCross-${rid}-${config}.tar.gz"
+      create_archive "${fd_out}" "${output_dir}/packages/framework-dependent/ComCross-${rid}-${config}-framework-dependent.tar.gz"
+      create_archive "${sc_out}" "${output_dir}/packages/self-contained/ComCross-${rid}-${config}-self-contained.tar.gz"
     fi
   fi
 done
