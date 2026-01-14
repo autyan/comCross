@@ -4,11 +4,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:ComCross.Shell.ViewModels"
         xmlns:views="using:ComCross.Shell.Views"
-        xmlns:services="using:ComCross.Shell.Services"
         mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
         x:Class="ComCross.Shell.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
+        KeyDown="OnKeyDown"
         Width="1440" Height="900"
         MinWidth="1280" MinHeight="720">
 
@@ -17,15 +17,15 @@
         <Border Grid.Row="0" Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="16,12">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Orientation="Horizontal" Spacing="16">
-                    <TextBlock Text="ComCross" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding LocalizedStrings.AppTitle}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding ActiveSession.Name}" FontSize="14" VerticalAlignment="Center" Foreground="#B7C1CC" />
                 </StackPanel>
                 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button Content="{x:Static services:LocalizationManager.MenuConnect}" Classes="accent" Click="OnConnectClick" />
-                    <Button Content="{x:Static services:LocalizationManager.MenuDisconnect}" Click="OnDisconnectClick" IsEnabled="{Binding IsConnected}" />
-                    <Button Content="{x:Static services:LocalizationManager.MenuClear}" Click="OnClearClick" />
-                    <Button Content="{x:Static services:LocalizationManager.MenuExport}" Click="OnExportClick" />
+                    <Button Content="{Binding LocalizedStrings.MenuConnect}" Classes="accent" Click="OnConnectClick" />
+                    <Button Content="{Binding LocalizedStrings.MenuDisconnect}" Click="OnDisconnectClick" IsEnabled="{Binding IsConnected}" />
+                    <Button Content="{Binding LocalizedStrings.MenuClear}" Click="OnClearClick" />
+                    <Button Content="{Binding LocalizedStrings.MenuExport}" Click="OnExportClick" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -34,28 +34,65 @@
         <Grid Grid.Row="1" ColumnDefinitions="280,*,320">
             <!-- Left Sidebar -->
             <Border Grid.Column="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,1,0">
-                <views:LeftSidebar DataContext="{Binding}" />
+                <views:LeftSidebar />
             </Border>
 
             <!-- Center Workspace -->
             <Border Grid.Column="1" Background="#0F1417">
-                <views:MessageStreamView DataContext="{Binding}" />
+                <views:MessageStreamView />
             </Border>
 
             <!-- Right Tool Dock -->
             <Border Grid.Column="2" Background="#1B242A" BorderBrush="#25303A" BorderThickness="1,0,0,0">
-                <views:RightToolDock DataContext="{Binding}" />
+                <views:RightToolDock />
             </Border>
         </Grid>
 
         <!-- Bottom Status Bar -->
         <Border Grid.Row="2" Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,1,0,0" Padding="16,8">
             <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="{x:Static services:LocalizationManager.StatusReady}" FontSize="12" VerticalAlignment="Center" Foreground="#87909B" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+                <TextBlock Text="{Binding LocalizedStrings.StatusReady}" FontSize="12" VerticalAlignment="Center" Foreground="#87909B" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                    <Button Content="{Binding LocalizedStrings.NotificationsTitle}" Classes="secondary" Click="OnNotificationsClick" />
+                    <TextBlock Text="{Binding NotificationCenter.UnreadCount, StringFormat=({0})}" FontSize="11" Foreground="#F5A524" VerticalAlignment="Center" />
+                    <Button Content="{Binding LocalizedStrings.SettingsTitle}" Classes="secondary" Click="OnSettingsClick" />
                     <TextBlock Text="{Binding ActiveSession.RxBytes, StringFormat={}{0}}" FontSize="12" Foreground="#2CB5A9" />
                     <TextBlock Text="{Binding ActiveSession.TxBytes, StringFormat={}{0}}" FontSize="12" Foreground="#3AA0FF" />
                 </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Settings Overlay -->
+        <Border Grid.RowSpan="3" Background="#00000080" IsVisible="{Binding IsSettingsOpen}">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="900" Height="720">
+                <Border Background="#141B1F" BorderBrush="#25303A" BorderThickness="1" CornerRadius="8">
+                    <Grid RowDefinitions="Auto,*">
+                        <Border Background="#1B242A" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding LocalizedStrings.SettingsTitle}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
+                                <Button Grid.Column="1" Content="{Binding LocalizedStrings.SettingsClose}" Click="OnSettingsCloseClick" />
+                            </Grid>
+                        </Border>
+                        <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Notifications Overlay -->
+        <Border Grid.RowSpan="3" Background="#00000080" IsVisible="{Binding IsNotificationsOpen}">
+            <Grid HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="420" Margin="0,0,24,0">
+                <Border Background="#141B1F" BorderBrush="#25303A" BorderThickness="1" CornerRadius="8">
+                    <Grid RowDefinitions="Auto,*">
+                        <Border Background="#1B242A" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding LocalizedStrings.NotificationsTitle}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
+                                <Button Grid.Column="1" Content="{Binding LocalizedStrings.SettingsClose}" Click="OnNotificationsCloseClick" />
+                            </Grid>
+                        </Border>
+                        <views:NotificationCenterView Grid.Row="1" DataContext="{Binding NotificationCenter}" />
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
     </Grid>

@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
-             xmlns:services="using:ComCross.Shell.Services"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.RightToolDock"
              x:DataType="vm:MainWindowViewModel">
@@ -12,10 +11,10 @@
         <!-- Tool Tabs -->
         <Border Grid.Row="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="8">
             <StackPanel Spacing="4">
-                <Button Content="{x:Static services:LocalizationManager.ToolSend}" Classes="tool-tab" />
-                <Button Content="{x:Static services:LocalizationManager.ToolFilter}" Classes="tool-tab" />
-                <Button Content="{x:Static services:LocalizationManager.ToolHighlight}" Classes="tool-tab" />
-                <Button Content="{x:Static services:LocalizationManager.ToolExport}" Classes="tool-tab" />
+                <Button Content="{Binding LocalizedStrings.ToolSend}" Classes="tool-tab" />
+                <Button Content="{Binding LocalizedStrings.ToolFilter}" Classes="tool-tab" />
+                <Button Content="{Binding LocalizedStrings.ToolHighlight}" Classes="tool-tab" />
+                <Button Content="{Binding LocalizedStrings.ToolExport}" Classes="tool-tab" />
             </StackPanel>
         </Border>
 
@@ -25,29 +24,29 @@
                 <StackPanel Spacing="16">
                     <!-- Send Tool -->
                     <StackPanel Spacing="12">
-                        <TextBlock Text="{x:Static services:LocalizationManager.ToolSendQuickCommands}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
-                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdStatus}" Classes="secondary" />
-                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdReset}" Classes="secondary" />
-                        <Button Content="{x:Static services:LocalizationManager.ToolSendCmdGetConfig}" Classes="secondary" />
+                        <TextBlock Text="{Binding LocalizedStrings.ToolSendQuickCommands}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                        <Button Content="{Binding LocalizedStrings.ToolSendCmdStatus}" Classes="secondary" />
+                        <Button Content="{Binding LocalizedStrings.ToolSendCmdReset}" Classes="secondary" />
+                        <Button Content="{Binding LocalizedStrings.ToolSendCmdGetConfig}" Classes="secondary" />
                     </StackPanel>
 
                     <Separator />
 
                     <StackPanel Spacing="12">
-                        <TextBlock Text="{x:Static services:LocalizationManager.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
-                        <TextBox Watermark="{x:Static services:LocalizationManager.ToolSendMessagePlaceholder}" 
+                        <TextBlock Text="{Binding LocalizedStrings.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                        <TextBox Watermark="{Binding LocalizedStrings.ToolSendMessagePlaceholder}" 
                                  Height="100" 
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  IsEnabled="{Binding IsConnected}" />
                         
                         <StackPanel Spacing="8">
-                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendHexMode}" />
-                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendAddCr}" IsChecked="True" />
-                            <CheckBox Content="{x:Static services:LocalizationManager.ToolSendAddLf}" IsChecked="True" />
+                            <CheckBox Content="{Binding LocalizedStrings.ToolSendHexMode}" />
+                            <CheckBox Content="{Binding LocalizedStrings.ToolSendAddCr}" IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
+                            <CheckBox Content="{Binding LocalizedStrings.ToolSendAddLf}" IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
                         </StackPanel>
 
-                        <Button Content="{x:Static services:LocalizationManager.ToolSendButton}" Classes="accent" IsEnabled="{Binding IsConnected}" />
+                        <Button Content="{Binding LocalizedStrings.ToolSendButton}" Classes="accent" IsEnabled="{Binding IsConnected}" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

@@ -7,8 +7,7 @@
 
 ## Plugin Layout
 - /plugins/<tool-id>/
-  - tool.json (manifest)
-  - tool.dll
+  - tool.dll (manifest embedded as `ComCross.Plugin.Manifest.json`)
   - assets/
 
 ## Manifest (Concept)

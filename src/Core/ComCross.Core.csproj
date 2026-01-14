@@ -8,15 +8,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
+    <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.1" />
     <PackageReference Include="System.IO.Ports" Version="10.0.0" />
     <PackageReference Include="System.Text.Json" Version="10.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="Resources\**\*" />
-    <EmbeddedResource Include="Resources\**\*.json" />
   </ItemGroup>
 </Project>

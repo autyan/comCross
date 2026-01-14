@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
+             x:Class="ComCross.Shell.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer>
+        <StackPanel Spacing="20" Margin="24">
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionGeneral}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
+            <StackPanel Spacing="8">
+                <TextBlock Text="{Binding LocalizedStrings.SettingsLanguage}" FontSize="12" Foreground="#B7C1CC" />
+                <ComboBox ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding SelectedLanguage}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding NativeName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <CheckBox Content="{Binding LocalizedStrings.SettingsFollowSystemLanguage}" IsChecked="{Binding FollowSystemLanguage}" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionLogs}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,8,0,0" />
+            <StackPanel Spacing="8">
+                <CheckBox Content="{Binding LocalizedStrings.SettingsLogsAutoSave}" IsChecked="{Binding LogAutoSaveEnabled}" />
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding LocalizedStrings.SettingsLogsDirectory}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBox Text="{Binding LogDirectory}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsLogsMaxFileSize}" FontSize="12" Foreground="#B7C1CC" />
+                        <NumericUpDown Minimum="1" Maximum="1024" Value="{Binding LogMaxFileSizeMb}" Width="140" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsLogsMaxTotalSize}" FontSize="12" Foreground="#B7C1CC" />
+                        <NumericUpDown Minimum="10" Maximum="4096" Value="{Binding LogMaxTotalSizeMb}" Width="140" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <CheckBox IsChecked="{Binding LogAutoDeleteEnabled}" />
+                    <TextBlock Text="{Binding LocalizedStrings.SettingsLogsAutoDelete}" VerticalAlignment="Center" />
+                    <Border Background="#F5A524" CornerRadius="8" Width="16" Height="16" VerticalAlignment="Center"
+                            ToolTip.Tip="{Binding LocalizedStrings.SettingsLogsAutoDeleteRuleTip}">
+                        <TextBlock Text="!" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#141B1F" />
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionNotifications}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,8,0,0" />
+            <StackPanel Spacing="8">
+                <CheckBox Content="{Binding LocalizedStrings.SettingsNotificationsStorage}" IsChecked="{Binding NotificationsStorageAlertsEnabled}" />
+                <CheckBox Content="{Binding LocalizedStrings.SettingsNotificationsConnection}" IsChecked="{Binding NotificationsConnectionAlertsEnabled}" />
+                <CheckBox Content="{Binding LocalizedStrings.SettingsNotificationsExport}" IsChecked="{Binding NotificationsExportAlertsEnabled}" />
+                <StackPanel>
+                    <TextBlock Text="{Binding LocalizedStrings.SettingsNotificationsRetentionDays}" FontSize="12" Foreground="#B7C1CC" />
+                    <NumericUpDown Minimum="1" Maximum="365" Value="{Binding NotificationsRetentionDays}" Width="140" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionConnection}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,8,0,0" />
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsConnectionDefaultBaudRate}" FontSize="12" Foreground="#B7C1CC" />
+                        <NumericUpDown Minimum="300" Maximum="2000000" Value="{Binding ConnectionDefaultBaudRate}" Width="180" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsConnectionDefaultEncoding}" FontSize="12" Foreground="#B7C1CC" />
+                        <TextBox Text="{Binding ConnectionDefaultEncoding}" Width="180" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <CheckBox Content="{Binding LocalizedStrings.SettingsConnectionDefaultAddCr}" IsChecked="{Binding ConnectionDefaultAddCr}" />
+                    <CheckBox Content="{Binding LocalizedStrings.SettingsConnectionDefaultAddLf}" IsChecked="{Binding ConnectionDefaultAddLf}" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionDisplay}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,8,0,0" />
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsDisplayMaxMessages}" FontSize="12" Foreground="#B7C1CC" />
+                        <NumericUpDown Minimum="100" Maximum="200000" Value="{Binding DisplayMaxMessages}" Width="180" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsDisplayTimestampFormat}" FontSize="12" Foreground="#B7C1CC" />
+                        <TextBox Text="{Binding DisplayTimestampFormat}" Width="180" />
+                    </StackPanel>
+                </StackPanel>
+                <CheckBox Content="{Binding LocalizedStrings.SettingsDisplayAutoScroll}" IsChecked="{Binding DisplayAutoScroll}" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding LocalizedStrings.SettingsSectionExport}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" Margin="0,8,0,0" />
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsExportDefaultFormat}" FontSize="12" Foreground="#B7C1CC" />
+                        <TextBox Text="{Binding ExportDefaultFormat}" Width="180" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsExportDefaultDirectory}" FontSize="12" Foreground="#B7C1CC" />
+                        <TextBox Text="{Binding ExportDefaultDirectory}" Width="360" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

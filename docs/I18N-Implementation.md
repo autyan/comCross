@@ -29,12 +29,10 @@ ComCross now includes a complete internationalization system that allows the app
 
 ### Resource Files
 
-Localization resources are stored as JSON files in `src/Core/Resources/Localization/`:
+Localization resources are stored in a single JSON file embedded in the Assets assembly:
 
 ```
-src/Core/Resources/Localization/
-├── strings.en-US.json    # English (Default)
-└── strings.zh-CN.json    # Simplified Chinese
+src/Assets/Resources/Localization/strings.json
 ```
 
 ## Supported Languages
@@ -97,19 +95,18 @@ The system uses dot-notation for hierarchical organization:
 
 #### Adding a New Translation Key
 
-1. Add the key-value pair to all JSON files in `src/Core/Resources/Localization/`:
+1. Add the key-value pair to `src/Assets/Resources/Localization/strings.json` under each culture:
 
-**strings.en-US.json:**
 ```json
 {
-  "my.new.key": "My New Text"
-}
-```
-
-**strings.zh-CN.json:**
-```json
-{
-  "my.new.key": "我的新文本"
+  "cultures": {
+    "en-US": {
+      "my.new.key": "My New Text"
+    },
+    "zh-CN": {
+      "my.new.key": "我的新文本"
+    }
+  }
 }
 ```
 
@@ -125,22 +122,19 @@ public string MyNewKey => _localization.GetString("my.new.key");
 
 #### Adding a New Language
 
-1. Create a new JSON file: `strings.{culture}.json`
-   - Example: `strings.ja-JP.json` (Japanese)
-   - Example: `strings.de-DE.json` (German)
-
-2. Copy the structure from `strings.en-US.json`
-
-3. Translate all values:
+1. Add a new culture entry under `cultures` in `strings.json`:
 ```json
 {
-  "app.title": "コムクロス",
-  "menu.connect": "接続",
-  ...
+  "cultures": {
+    "ja-JP": {
+      "app.title": "コムクロス",
+      "menu.connect": "接続"
+    }
+  }
 }
 ```
 
-4. The language will be automatically loaded based on system culture
+2. The language will be automatically loaded based on system culture
 
 #### Switching Languages Programmatically
 
@@ -195,12 +189,11 @@ public MainWindowViewModel()
 
 ### File Structure
 
-JSON files must be embedded resources with build action `EmbeddedResource`:
+The `strings.json` file is embedded as a resource in the Assets project:
 
 ```xml
 <ItemGroup>
-  <EmbeddedResource Include="Resources\Localization\strings.en-US.json" />
-  <EmbeddedResource Include="Resources\Localization\strings.zh-CN.json" />
+  <EmbeddedResource Include="Resources\Localization\strings.json" />
 </ItemGroup>
 ```
 

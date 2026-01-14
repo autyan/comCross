@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
-using System.Reflection;
+using System.Globalization;
 using System.Text.Json;
+using ComCross.Assets;
 using ComCross.Shared.Services;
 
 namespace ComCross.Core.Services;
@@ -19,11 +20,10 @@ public sealed class LocalizationService : ILocalizationService
 
     public LocalizationService()
     {
-        AvailableCultures = new List<LocaleCultureInfo>
-        {
-            new("en-US", "English", "English"),
-            new("zh-CN", "Chinese (Simplified)", "简体中文")
-        };
+        var defaultTranslations = GetEnglishTranslations();
+        _translations["en-US"] = defaultTranslations;
+
+        AvailableCultures = LoadResourceTranslations(defaultTranslations);
 
         // Load default culture
         LoadCulture(_currentCulture);
@@ -75,9 +75,74 @@ public sealed class LocalizationService : ILocalizationService
         }
 
         // Use built-in translations (embedded in code for reliability)
-        _translations[cultureCode] = cultureCode == "zh-CN" 
-            ? GetChineseTranslations() 
+        _translations[cultureCode] = cultureCode == "zh-CN"
+            ? GetChineseTranslations()
             : GetEnglishTranslations();
+    }
+
+    private IReadOnlyList<LocaleCultureInfo> LoadResourceTranslations(
+        Dictionary<string, string> defaultTranslations)
+    {
+        var cultures = new List<LocaleCultureInfo>
+        {
+            new("en-US", "English", "English")
+        };
+
+        var assembly = typeof(AssetMarker).Assembly;
+        var resourceName = "ComCross.Assets.Resources.Localization.strings.json";
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            return cultures;
+        }
+
+        using var doc = JsonDocument.Parse(stream);
+        if (!doc.RootElement.TryGetProperty("cultures", out var culturesElement))
+        {
+            return cultures;
+        }
+
+        foreach (var cultureProperty in culturesElement.EnumerateObject())
+        {
+            var cultureCode = cultureProperty.Name;
+            var strings = new Dictionary<string, string>();
+            foreach (var kvp in cultureProperty.Value.EnumerateObject())
+            {
+                strings[kvp.Name] = kvp.Value.GetString() ?? string.Empty;
+            }
+
+            if (cultureCode == "en-US")
+            {
+                foreach (var kvp in strings)
+                {
+                    defaultTranslations[kvp.Key] = kvp.Value;
+                }
+            }
+            else
+            {
+                _translations[cultureCode] = strings;
+            }
+
+            if (cultureCode != "en-US")
+            {
+                cultures.Add(CreateLocaleCultureInfo(cultureCode));
+            }
+        }
+
+        return cultures;
+    }
+
+    private static LocaleCultureInfo CreateLocaleCultureInfo(string cultureCode)
+    {
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureCode);
+            return new LocaleCultureInfo(culture.Name, culture.EnglishName, culture.NativeName);
+        }
+        catch (CultureNotFoundException)
+        {
+            return new LocaleCultureInfo(cultureCode, cultureCode, cultureCode);
+        }
     }
 
     private static Dictionary<string, string> GetEnglishTranslations()
@@ -134,9 +199,45 @@ public sealed class LocalizationService : ILocalizationService
             ["status.txbytes"] = "TX: {0} bytes",
             
             // Settings
+            ["settings.title"] = "Settings",
+            ["settings.section.general"] = "General",
+            ["settings.section.logs"] = "Logs",
+            ["settings.section.notifications"] = "Notifications",
+            ["settings.section.connection"] = "Connection",
+            ["settings.section.display"] = "Display",
+            ["settings.section.export"] = "Export",
             ["settings.language"] = "Language",
-            ["settings.theme"] = "Theme",
-            ["settings.autosave"] = "Auto Save"
+            ["settings.followSystemLanguage"] = "Follow system language",
+            ["settings.logs.autosave"] = "Auto save logs",
+            ["settings.logs.directory"] = "Log directory",
+            ["settings.logs.maxFileSize"] = "Max file size (MB)",
+            ["settings.logs.maxTotalSize"] = "Max total size (MB)",
+            ["settings.logs.autoDelete"] = "Auto delete when exceeded",
+            ["settings.logs.autoDeleteRuleTip"] = "When enabled, the oldest log files are deleted until the total size is below the limit.",
+            ["settings.notifications.storage"] = "Storage limit alerts",
+            ["settings.notifications.connection"] = "Connection alerts",
+            ["settings.notifications.export"] = "Export alerts",
+            ["settings.notifications.retentionDays"] = "Retention days",
+            ["settings.connection.defaultBaudRate"] = "Default baud rate",
+            ["settings.connection.defaultEncoding"] = "Default encoding",
+            ["settings.connection.defaultAddCr"] = "Append CR by default",
+            ["settings.connection.defaultAddLf"] = "Append LF by default",
+            ["settings.display.maxMessages"] = "Max in-memory messages",
+            ["settings.display.autoScroll"] = "Auto scroll",
+            ["settings.display.timestampFormat"] = "Timestamp format",
+            ["settings.export.defaultFormat"] = "Default format",
+            ["settings.export.defaultDirectory"] = "Default export directory",
+            ["settings.actions.close"] = "Close",
+
+            // Notifications
+            ["notifications.title"] = "Notifications",
+            ["notifications.empty"] = "No notifications",
+            ["notifications.markAllRead"] = "Mark all read",
+            ["notification.storage.limitExceeded"] = "Log storage limit exceeded ({0} MB / {1} MB).",
+            ["notification.storage.autoDeleteApplied"] = "Auto delete removed {0} log files.",
+            ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
+            ["notification.connection.unknownReason"] = "unknown",
+            ["notification.export.completed"] = "Export completed: {0}"
         };
     }
 
@@ -194,9 +295,45 @@ public sealed class LocalizationService : ILocalizationService
             ["status.txbytes"] = "发送: {0} 字节",
             
             // Settings
+            ["settings.title"] = "设置",
+            ["settings.section.general"] = "通用",
+            ["settings.section.logs"] = "日志",
+            ["settings.section.notifications"] = "通知",
+            ["settings.section.connection"] = "连接",
+            ["settings.section.display"] = "显示",
+            ["settings.section.export"] = "导出",
             ["settings.language"] = "语言",
-            ["settings.theme"] = "主题",
-            ["settings.autosave"] = "自动保存"
+            ["settings.followSystemLanguage"] = "跟随系统语言",
+            ["settings.logs.autosave"] = "自动保存日志",
+            ["settings.logs.directory"] = "日志目录",
+            ["settings.logs.maxFileSize"] = "单文件上限 (MB)",
+            ["settings.logs.maxTotalSize"] = "总占用上限 (MB)",
+            ["settings.logs.autoDelete"] = "超限自动删除",
+            ["settings.logs.autoDeleteRuleTip"] = "开启后将按时间删除最旧日志，直到总占用低于上限。",
+            ["settings.notifications.storage"] = "存储超限提醒",
+            ["settings.notifications.connection"] = "连接异常提醒",
+            ["settings.notifications.export"] = "导出完成提醒",
+            ["settings.notifications.retentionDays"] = "保留天数",
+            ["settings.connection.defaultBaudRate"] = "默认波特率",
+            ["settings.connection.defaultEncoding"] = "默认编码",
+            ["settings.connection.defaultAddCr"] = "默认追加 CR",
+            ["settings.connection.defaultAddLf"] = "默认追加 LF",
+            ["settings.display.maxMessages"] = "内存消息上限",
+            ["settings.display.autoScroll"] = "自动滚动",
+            ["settings.display.timestampFormat"] = "时间戳格式",
+            ["settings.export.defaultFormat"] = "默认格式",
+            ["settings.export.defaultDirectory"] = "默认导出目录",
+            ["settings.actions.close"] = "关闭",
+
+            // Notifications
+            ["notifications.title"] = "通知中心",
+            ["notifications.empty"] = "暂无通知",
+            ["notifications.markAllRead"] = "全部已读",
+            ["notification.storage.limitExceeded"] = "日志占用超限（{0} MB / {1} MB）。",
+            ["notification.storage.autoDeleteApplied"] = "自动删除了 {0} 个日志文件。",
+            ["notification.connection.disconnected"] = "会话 {0} 断开（{1}）。",
+            ["notification.connection.unknownReason"] = "未知",
+            ["notification.export.completed"] = "导出完成：{0}"
         };
     }
 }

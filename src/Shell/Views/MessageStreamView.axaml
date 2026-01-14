@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
-             xmlns:services="using:ComCross.Shell.Services"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
              x:DataType="vm:MainWindowViewModel">
@@ -12,7 +11,7 @@
         <!-- Search Bar -->
         <Border Grid.Row="0" Background="#141B1F" Padding="16" BorderBrush="#25303A" BorderThickness="0,0,0,1">
             <TextBox Text="{Binding SearchQuery}" 
-                     Watermark="{x:Static services:LocalizationManager.StreamSearchPlaceholder}" 
+                     Watermark="{Binding LocalizedStrings.StreamSearchPlaceholder}" 
                      Background="#1B242A"
                      BorderBrush="#25303A" />
         </Border>
@@ -21,15 +20,15 @@
         <Border Grid.Row="1" Background="#141B1F" Padding="16,8" BorderBrush="#25303A" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Spacing="24">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsRx}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsRx}" FontSize="10" Foreground="#87909B" />
                     <TextBlock Text="{Binding ActiveSession.RxBytes}" FontSize="12" Foreground="#2CB5A9" FontWeight="Bold" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsTx}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsTx}" FontSize="10" Foreground="#87909B" />
                     <TextBlock Text="{Binding ActiveSession.TxBytes}" FontSize="12" Foreground="#3AA0FF" FontWeight="Bold" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{x:Static services:LocalizationManager.StreamMetricsLines}" FontSize="10" Foreground="#87909B" />
+                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsLines}" FontSize="10" Foreground="#87909B" />
                     <TextBlock Text="{Binding Messages.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" />
                 </StackPanel>
             </StackPanel>

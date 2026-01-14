@@ -4,8 +4,10 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using ComCross.Core.Services;
+using Avalonia.Threading;
 using ComCross.Adapters.Serial;
+using ComCross.Core.Services;
+using ComCross.Shared.Events;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 
@@ -17,10 +19,16 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private readonly MessageStreamService _messageStream;
     private readonly DeviceService _deviceService;
     private readonly ConfigService _configService;
+    private readonly AppDatabase _database;
+    private readonly SettingsService _settingsService;
+    private readonly NotificationService _notificationService;
+    private readonly LogStorageService _logStorageService;
     private readonly ILocalizationService _localization;
     private Session? _activeSession;
     private string _searchQuery = string.Empty;
     private bool _isConnected;
+    private bool _isSettingsOpen;
+    private bool _isNotificationsOpen;
 
     public ObservableCollection<Session> Sessions { get; } = new();
     public ObservableCollection<Device> Devices { get; } = new();
@@ -67,11 +75,41 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool IsSettingsOpen
+    {
+        get => _isSettingsOpen;
+        set
+        {
+            if (_isSettingsOpen != value)
+            {
+                _isSettingsOpen = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsNotificationsOpen
+    {
+        get => _isNotificationsOpen;
+        set
+        {
+            if (_isNotificationsOpen != value)
+            {
+                _isNotificationsOpen = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public string Title => _localization.GetString("app.title");
 
     public ILocalizationService Localization => _localization;
-    
+
     public LocalizedStringsViewModel LocalizedStrings { get; }
+
+    public SettingsViewModel Settings { get; }
+
+    public NotificationCenterViewModel NotificationCenter { get; }
 
     public MainWindowViewModel()
     {
@@ -80,20 +118,40 @@ public class MainWindowViewModel : INotifyPropertyChanged
         var adapter = new SerialAdapter();
         _deviceService = new DeviceService(adapter, _eventBus, _messageStream);
         _configService = new ConfigService();
+        _database = new AppDatabase();
+        _settingsService = new SettingsService(_configService, _database);
         _localization = new LocalizationService();
         LocalizedStrings = new LocalizedStringsViewModel(_localization);
+        _notificationService = new NotificationService(_database, _settingsService);
+        _logStorageService = new LogStorageService(_messageStream, _settingsService, _notificationService, _database);
+
+        Settings = new SettingsViewModel(_settingsService, _localization, LocalizedStrings);
+        Settings.LanguageChanged += OnLanguageChanged;
+        NotificationCenter = new NotificationCenterViewModel(_notificationService, _localization, LocalizedStrings);
+
+        _eventBus.Subscribe<DeviceDisconnectedEvent>(OnDeviceDisconnected);
 
         _ = InitializeAsync();
     }
 
     private async Task InitializeAsync()
     {
+        await _database.InitializeAsync();
+        await _settingsService.InitializeAsync();
+        Dispatcher.UIThread.Post(() =>
+        {
+            Settings.ReloadFromSettings();
+            Settings.ApplySystemLanguageIfNeeded();
+        });
+
         // Load devices
         var devices = await _deviceService.ListDevicesAsync();
         foreach (var device in devices)
         {
             Devices.Add(device);
         }
+
+        await NotificationCenter.LoadAsync();
 
         // Load workspace state
         var state = await _configService.LoadWorkspaceStateAsync();
@@ -128,16 +186,22 @@ public class MainWindowViewModel : INotifyPropertyChanged
         {
             var sessionId = $"session-{Guid.NewGuid()}";
             var settings = new SerialSettings { BaudRate = baudRate };
-            
+
             var session = await _deviceService.ConnectAsync(sessionId, port, name, settings);
             Sessions.Add(session);
             ActiveSession = session;
             IsConnected = true;
 
+            _logStorageService.StartSession(session);
+
             // Subscribe to messages
             _messageStream.Subscribe(sessionId, message =>
             {
-                Messages.Add(message);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Messages.Add(message);
+                    TrimMessages();
+                });
             });
         }
         catch (Exception ex)
@@ -152,6 +216,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         if (ActiveSession != null)
         {
             await _deviceService.DisconnectAsync(ActiveSession.Id);
+            await _logStorageService.StopSessionAsync(ActiveSession.Id);
             ActiveSession.Status = SessionStatus.Disconnected;
             IsConnected = false;
         }
@@ -163,7 +228,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            var data = hex 
+            var data = hex
                 ? Convert.FromHexString(message.Replace(" ", ""))
                 : System.Text.Encoding.UTF8.GetBytes(message);
 
@@ -191,12 +256,31 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    public void ToggleSettings()
+    {
+        IsSettingsOpen = !IsSettingsOpen;
+        if (IsSettingsOpen)
+        {
+            IsNotificationsOpen = false;
+        }
+    }
+
+    public void ToggleNotifications()
+    {
+        IsNotificationsOpen = !IsNotificationsOpen;
+        if (IsNotificationsOpen)
+        {
+            IsSettingsOpen = false;
+        }
+    }
+
     private void LoadMessages()
     {
         Messages.Clear();
         if (ActiveSession != null)
         {
-            var messages = _messageStream.GetMessages(ActiveSession.Id, 0, 1000);
+            var max = _settingsService.Current.Display.MaxMessages;
+            var messages = _messageStream.GetMessages(ActiveSession.Id, 0, max);
             foreach (var message in messages)
             {
                 Messages.Add(message);
@@ -219,6 +303,35 @@ public class MainWindowViewModel : INotifyPropertyChanged
         {
             LoadMessages();
         }
+    }
+
+    private void TrimMessages()
+    {
+        var max = _settingsService.Current.Display.MaxMessages;
+        while (Messages.Count > max)
+        {
+            Messages.RemoveAt(0);
+        }
+    }
+
+    private void OnDeviceDisconnected(DeviceDisconnectedEvent @event)
+    {
+        var reason = @event.Reason ?? _localization.GetString("notification.connection.unknownReason");
+        _ = _notificationService.AddAsync(
+            NotificationCategory.Connection,
+            NotificationLevel.Warning,
+            "notification.connection.disconnected",
+            new object[]
+            {
+                @event.Port,
+                reason
+            });
+    }
+
+    private void OnLanguageChanged(object? sender, string cultureCode)
+    {
+        OnPropertyChanged(nameof(Title));
+        NotificationCenter.RefreshLocalizedText();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

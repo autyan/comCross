@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ComCross.Shell.ViewModels;
@@ -10,6 +12,25 @@ public partial class ConnectDialog : Window
     public ConnectDialog()
     {
         InitializeComponent();
+        Opened += OnDialogOpened;
+    }
+
+    private void OnDialogOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var targetBaud = vm.Settings.ConnectionDefaultBaudRate.ToString();
+        foreach (var item in BaudRateComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Content?.ToString(), targetBaud, StringComparison.Ordinal))
+            {
+                BaudRateComboBox.SelectedItem = item;
+                break;
+            }
+        }
     }
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ComCross.Shared.Models;
 
 namespace ComCross.Core.Services;
 
@@ -82,6 +83,36 @@ public sealed class ConfigService
         catch (Exception ex)
         {
             Console.Error.WriteLine($"ConfigService: Failed to load toolset: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task SaveAppSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var filePath = Path.Combine(_configDirectory, "app-settings.json");
+        var json = JsonSerializer.Serialize(settings, _jsonOptions);
+        await File.WriteAllTextAsync(filePath, json, cancellationToken);
+    }
+
+    public async Task<AppSettings?> LoadAppSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var filePath = Path.Combine(_configDirectory, "app-settings.json");
+
+        if (!File.Exists(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath, cancellationToken);
+            return JsonSerializer.Deserialize<AppSettings>(json, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"ConfigService: Failed to load app settings: {ex.Message}");
             return null;
         }
     }

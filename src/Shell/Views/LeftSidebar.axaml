@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
-             xmlns:services="using:ComCross.Shell.Services"
              mc:Ignorable="d" d:DesignWidth="280" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.LeftSidebar"
              x:DataType="vm:MainWindowViewModel">
@@ -11,7 +10,7 @@
     <Grid RowDefinitions="Auto,*">
         <!-- Devices Section -->
         <StackPanel Grid.Row="0" Margin="16">
-            <TextBlock Text="{x:Static services:LocalizationManager.SidebarDevices}" FontSize="12" FontWeight="Bold" Foreground="#87909B" Margin="0,0,0,12" />
+            <TextBlock Text="{Binding LocalizedStrings.SidebarDevices}" FontSize="12" FontWeight="Bold" Foreground="#87909B" Margin="0,0,0,12" />
             <ListBox ItemsSource="{Binding Devices}" SelectionMode="Single" Background="Transparent" BorderThickness="0">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -28,7 +27,7 @@
 
         <!-- Sessions Section -->
         <StackPanel Grid.Row="1" Margin="16">
-            <TextBlock Text="{x:Static services:LocalizationManager.SidebarSessions}" FontSize="12" FontWeight="Bold" Foreground="#87909B" Margin="0,16,0,12" />
+            <TextBlock Text="{Binding LocalizedStrings.SidebarSessions}" FontSize="12" FontWeight="Bold" Foreground="#87909B" Margin="0,16,0,12" />
             <ListBox ItemsSource="{Binding Sessions}" 
                      SelectedItem="{Binding ActiveSession}" 
                      SelectionMode="Single"
