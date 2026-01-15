@@ -5,7 +5,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ComCross.Adapters.Serial;
 using ComCross.Core.Services;
@@ -20,6 +26,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private readonly EventBus _eventBus;
     private readonly MessageStreamService _messageStream;
     private readonly DeviceService _deviceService;
+    private readonly SerialAdapter _serialAdapter;
     private readonly ConfigService _configService;
     private readonly AppDatabase _database;
     private readonly SettingsService _settingsService;
@@ -30,7 +37,13 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private readonly PluginDiscoveryService _pluginDiscoveryService;
     private readonly PluginRuntimeService _pluginRuntimeService;
     private readonly ILocalizationService _localization;
+    
+    // Business services
+    private readonly WorkspaceService _workspaceService;
+    private readonly ExportService _exportService;
+    private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
     private Session? _activeSession;
+    private Device? _selectedDevice;
     private string _searchQuery = string.Empty;
     private bool _isConnected;
     private bool _isSettingsOpen;
@@ -40,6 +53,21 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<Session> Sessions { get; } = new();
     public ObservableCollection<Device> Devices { get; } = new();
     public ObservableCollection<LogMessage> Messages { get; } = new();
+
+    public Device? SelectedDevice
+    {
+        get => _selectedDevice;
+        set
+        {
+            if (_selectedDevice != value)
+            {
+                _selectedDevice = value;
+                OnPropertyChanged();
+                (QuickConnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (QuickConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
 
     public Session? ActiveSession
     {
@@ -52,8 +80,37 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 OnPropertyChanged();
                 LoadMessages();
                 CommandCenter.SetSession(_activeSession?.Id, _activeSession?.Name);
+                
+                // Sync device selection and connection state
+                if (_activeSession != null)
+                {
+                    var device = Devices.FirstOrDefault(d => d.Port == _activeSession.Port);
+                    if (device != null && SelectedDevice != device)
+                    {
+                        SelectedDevice = device;
+                    }
+                    IsConnected = _activeSession.Status == SessionStatus.Connected;
+                }
             }
         }
+    }
+
+    public async Task UpdateSessionNameAsync(string newName)
+    {
+        if (ActiveSession == null || string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        var oldName = ActiveSession.Name;
+        ActiveSession.Name = newName;
+        OnPropertyChanged(nameof(ActiveSession));
+
+        // Update command center
+        CommandCenter.SetSession(ActiveSession.Id, newName);
+
+        // Log the change
+        _appLogService.Info($"Session name updated: '{oldName}' -> '{newName}'");
     }
 
     public string SearchQuery
@@ -79,6 +136,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             {
                 _isConnected = value;
                 OnPropertyChanged();
+                UpdateCommandStates();
             }
         }
     }
@@ -132,6 +190,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public string Title => _localization.GetString("app.title");
     public string TimestampFormat => _settingsService.Current.Display.TimestampFormat;
     public bool AutoScrollEnabled => _settingsService.Current.Display.AutoScroll;
+    public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
+    public int MessageFontSize => _settingsService.Current.Display.FontSize;
 
     public ILocalizationService Localization => _localization;
 
@@ -145,23 +205,46 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
     public PluginManagerViewModel PluginManager { get; }
 
+    // Commands
+    public ICommand QuickConnectCommand { get; }
+    public ICommand DisconnectCommand { get; }
+    public ICommand ClearMessagesCommand { get; }
+    public ICommand ExportMessagesCommand { get; }
+
     public MainWindowViewModel()
     {
+        // Core infrastructure
         _eventBus = new EventBus();
         _messageStream = new MessageStreamService();
-        var adapter = new SerialAdapter();
-        _deviceService = new DeviceService(adapter, _eventBus, _messageStream);
+        
+        // Configuration and database
         _configService = new ConfigService();
         _database = new AppDatabase();
         _settingsService = new SettingsService(_configService, _database);
-        _appLogService = new AppLogService();
+        
+        // Localization
         _localization = new LocalizationService();
         LocalizedStrings = new LocalizedStringsViewModel(_localization);
+        
+        // Notification system (depends on database and settings)
         _notificationService = new NotificationService(_database, _settingsService);
+        
+        // Device services (depends on notification)
+        _serialAdapter = new SerialAdapter();
+        _deviceService = new DeviceService(_serialAdapter, _eventBus, _messageStream, _notificationService);
+        
+        // Other services
+        _appLogService = new AppLogService();
         _logStorageService = new LogStorageService(_messageStream, _settingsService, _notificationService, _database);
         _commandService = new CommandService(_settingsService);
+        
+        // Plugin system
         _pluginDiscoveryService = new PluginDiscoveryService();
         _pluginRuntimeService = new PluginRuntimeService();
+
+        // Business services (encapsulate business logic)
+        _workspaceService = new WorkspaceService(_deviceService, _messageStream, _logStorageService, _notificationService, _configService);
+        _exportService = new ExportService(_messageStream, _notificationService, _settingsService);
 
         PluginManager = new PluginManagerViewModel(
             _pluginDiscoveryService,
@@ -170,6 +253,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             LocalizedStrings);
         Settings = new SettingsViewModel(_settingsService, _localization, LocalizedStrings, PluginManager);
         Settings.LanguageChanged += OnLanguageChanged;
+        Settings.LinuxScanSettingsChanged += OnLinuxScanSettingsChanged;
         NotificationCenter = new NotificationCenterViewModel(_notificationService, _localization, LocalizedStrings);
         CommandCenter = new CommandCenterViewModel(
             _commandService,
@@ -180,6 +264,12 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
         _eventBus.Subscribe<DeviceDisconnectedEvent>(OnDeviceDisconnected);
 
+        // Initialize commands
+        QuickConnectCommand = new AsyncRelayCommand(QuickConnectAsync, () => SelectedDevice != null);
+        DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => IsConnected);
+        ClearMessagesCommand = new RelayCommand(ClearMessages, () => IsConnected);
+        ExportMessagesCommand = new AsyncRelayCommand(() => ExportAsync(null), () => IsConnected);
+
         _ = InitializeAsync();
     }
 
@@ -189,11 +279,25 @@ public class MainWindowViewModel : INotifyPropertyChanged
         await _settingsService.InitializeAsync();
         _appLogService.Initialize(_settingsService.Current.AppLogs);
         _settingsService.SettingsChanged += OnSettingsChanged;
+        
+        // Initialize MessageBoxService with localization
+        Shell.Services.MessageBoxService.Initialize(_localization);
+        
         Dispatcher.UIThread.Post(() =>
         {
             Settings.ReloadFromSettings();
             Settings.ApplySystemLanguageIfNeeded();
+            
+            // Trigger initial property notifications for tool tab state
+            OnPropertyChanged(nameof(IsSendTabActive));
+            OnPropertyChanged(nameof(IsCommandsTabActive));
         });
+
+        // Configure SerialAdapter with Linux scan settings
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
+        }
 
         // Load devices
         var devices = await _deviceService.ListDevicesAsync();
@@ -250,8 +354,125 @@ public class MainWindowViewModel : INotifyPropertyChanged
             CommandCenter.SetSession(session.Id, session.Name);
             _logStorageService.StartSession(session);
 
+            // Subscribe to messages (only if not already subscribed)
+            if (!_messageSubscriptions.ContainsKey(sessionId))
+            {
+                var subscription = _messageStream.Subscribe(sessionId, message =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (ActiveSession?.Id == sessionId)
+                        {
+                            Messages.Add(message);
+                            TrimMessages();
+                        }
+                    });
+                });
+                _messageSubscriptions[sessionId] = subscription;
+            }
+        }
+        catch (SerialPortAccessDeniedException ex)
+        {
+            _appLogService.LogException(ex, "Serial port access denied");
+            await Shell.Services.MessageBoxService.ShowSerialPortAccessDeniedErrorAsync(port, ex);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Connection failed: {ex.Message}");
+            _appLogService.LogException(ex, "Connect failed");
+        }
+    }
+
+    public async Task QuickConnectAsync()
+    {
+        if (SelectedDevice == null)
+        {
+            await Shell.Services.MessageBoxService.ShowWarningAsync(
+                LocalizedStrings.ConnectionErrorNoPortSelected,
+                LocalizedStrings.ConnectionErrorNoPortSelectedMessage);
+            return;
+        }
+
+        var port = SelectedDevice.Port;
+        
+        // If current active session is for this port, just reconnect it
+        if (ActiveSession != null && ActiveSession.Port == port)
+        {
+            if (ActiveSession.Status == SessionStatus.Disconnected)
+            {
+                await ReconnectSessionAsync(ActiveSession);
+            }
+            // Already connected to this port, do nothing
+            return;
+        }
+        
+        // Check if there's an existing session for this port
+        var existingSession = Sessions.FirstOrDefault(s => s.Port == port);
+        if (existingSession != null)
+        {
+            var behavior = _settingsService.Current.Connection.ExistingSessionBehavior;
+            
+            switch (behavior)
+            {
+                case ConnectionBehavior.SwitchToExisting:
+                    ActiveSession = existingSession;
+                    if (existingSession.Status == SessionStatus.Disconnected)
+                    {
+                        // Reconnect
+                        await ReconnectSessionAsync(existingSession);
+                    }
+                    return;
+                    
+                case ConnectionBehavior.PromptUser:
+                    var switchToExisting = LocalizedStrings.ConnectionConfirmOk;
+                    var createNew = LocalizedStrings.ConnectionConfirmCancel;
+                    var cancel = _localization.GetString("messagebox.cancel");
+                    
+                    var choice = await Shell.Services.MessageBoxService.ShowCustomAsync(
+                        LocalizedStrings.ConnectionConfirmExistingSessionTitle,
+                        string.Format(_localization.GetString("connection.confirm.existingSession.message"), port),
+                        Shell.Services.MessageBoxIcon.Question,
+                        switchToExisting, createNew, cancel);
+                    
+                    if (choice == 0) // Switch to existing
+                    {
+                        ActiveSession = existingSession;
+                        if (existingSession.Status == SessionStatus.Disconnected)
+                        {
+                            await ReconnectSessionAsync(existingSession);
+                        }
+                        return;
+                    }
+                    else if (choice == 1) // Create new
+                    {
+                        // Continue to create new session
+                        break;
+                    }
+                    else // Cancel (choice == 2 or -1)
+                    {
+                        return;
+                    }
+                    
+                case ConnectionBehavior.CreateNew:
+                default:
+                    // Continue to create new session
+                    break;
+            }
+        }
+
+        var settings = new SerialSettings { BaudRate = 115200 };
+        var name = port;
+
+        try
+        {            var session = await _workspaceService.ConnectAsync(port, settings, name);
+            Sessions.Add(session);
+            ActiveSession = session;
+            IsConnected = true;
+
+            CommandCenter.SetSession(session.Id, session.Name);
+
             // Subscribe to messages
-            _messageStream.Subscribe(sessionId, message =>
+            _workspaceService.SubscribeToMessages(session.Id, message =>
             {
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -259,31 +480,147 @@ public class MainWindowViewModel : INotifyPropertyChanged
                     TrimMessages();
                 });
             });
+
+            // Save workspace state
+            await SaveWorkspaceStateAsync();
         }
         catch (Exception ex)
         {
-            // Handle error
             Console.Error.WriteLine($"Connection failed: {ex.Message}");
             _appLogService.LogException(ex, "Connect failed");
+            await Shell.Services.MessageBoxService.ShowErrorAsync(
+                LocalizedStrings.ConnectionErrorFailed,
+                string.Format(_localization.GetString("connection.error.failedMessage"), port, ex.Message));
         }
     }
 
     public async Task DisconnectAsync()
     {
-        if (ActiveSession != null)
+        if (ActiveSession == null) return;
+
+        try
         {
-            try
-            {
-                await _deviceService.DisconnectAsync(ActiveSession.Id);
-                await _logStorageService.StopSessionAsync(ActiveSession.Id);
+            await _workspaceService.DisconnectAsync(ActiveSession.Id);
             ActiveSession.Status = SessionStatus.Disconnected;
             IsConnected = false;
             CommandCenter.SetSession(null, null);
+
+            // Save workspace state
+            await SaveWorkspaceStateAsync();
         }
-            catch (Exception ex)
+        catch (Exception ex)
+        {
+            _appLogService.LogException(ex, "Disconnect failed");
+        }
+    }
+
+    public async Task RefreshDevicesAsync()
+    {
+        try
+        {
+            // Reconfigure adapter if on Linux
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                _appLogService.LogException(ex, "Disconnect failed");
+                _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
             }
+
+            var devices = await _deviceService.ListDevicesAsync();
+            
+            // Remember current selection
+            var currentPort = SelectedDevice?.Port;
+            
+            Dispatcher.UIThread.Post(() =>
+            {
+                Devices.Clear();
+                foreach (var device in devices)
+                {
+                    Devices.Add(device);
+                }
+                
+                // Restore selection if the port still exists
+                if (currentPort != null)
+                {
+                    SelectedDevice = Devices.FirstOrDefault(d => d.Port == currentPort);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _appLogService.LogException(ex, "Refresh devices failed");
+        }
+    }
+
+    public async Task DeleteSessionAsync(string sessionId)
+    {
+        try
+        {
+            await _workspaceService.DeleteSessionAsync(sessionId);
+            
+            var session = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (session != null)
+            {
+                Sessions.Remove(session);
+                if (ActiveSession?.Id == sessionId)
+                {
+                    ActiveSession = null;
+                    IsConnected = false;
+                }
+            }
+            
+            // Save workspace state
+            await SaveWorkspaceStateAsync();
+        }
+        catch (Exception ex)
+        {
+            _appLogService.LogException(ex, "Delete session failed");
+        }
+    }
+
+    private async Task ReconnectSessionAsync(Session oldSession)
+    {
+        try
+        {
+            var newSession = await _workspaceService.ConnectAsync(oldSession.Port, oldSession.Settings, oldSession.Name);
+            
+            // Replace old session with new connected session
+            var index = Sessions.IndexOf(oldSession);
+            if (index >= 0)
+            {
+                Sessions[index] = newSession;
+                ActiveSession = newSession;
+                IsConnected = true;
+            }
+            
+            // Subscribe to messages (only if not already subscribed)
+            if (!_messageSubscriptions.ContainsKey(newSession.Id))
+            {
+                var subscription = _workspaceService.SubscribeToMessages(newSession.Id, message =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (ActiveSession?.Id == newSession.Id)
+                        {
+                            Messages.Add(message);
+                            TrimMessages();
+                        }
+                    });
+                });
+                _messageSubscriptions[newSession.Id] = subscription;
+            }
+            
+            await SaveWorkspaceStateAsync();
+        }
+        catch (SerialPortAccessDeniedException ex)
+        {
+            _appLogService.LogException(ex, "Serial port access denied");
+            await Shell.Services.MessageBoxService.ShowSerialPortAccessDeniedErrorAsync(oldSession.Port, ex);
+        }
+        catch (Exception ex)
+        {
+            _appLogService.LogException(ex, "Reconnect failed");
+            await Shell.Services.MessageBoxService.ShowErrorAsync(
+                LocalizedStrings.ConnectionErrorFailed,
+                string.Format(_localization.GetString("connection.error.failedMessage"), oldSession.Port, ex.Message));
         }
     }
 
@@ -293,18 +630,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            var data = hex
-                ? Convert.FromHexString(message.Replace(" ", ""))
-                : System.Text.Encoding.UTF8.GetBytes(message);
-
-            if (addCr || addLf)
-            {
-                var suffix = (addCr ? "\r" : "") + (addLf ? "\n" : "");
-                var suffixBytes = System.Text.Encoding.UTF8.GetBytes(suffix);
-                data = data.Concat(suffixBytes).ToArray();
-            }
-
-            await _deviceService.SendAsync(ActiveSession.Id, data);
+            var format = hex ? MessageFormat.Hex : MessageFormat.Text;
+            await _workspaceService.SendMessageAsync(ActiveSession.Id, message, format, addCr, addLf);
         }
         catch (Exception ex)
         {
@@ -317,113 +644,23 @@ public class MainWindowViewModel : INotifyPropertyChanged
     {
         if (ActiveSession != null)
         {
-            _messageStream.Clear(ActiveSession.Id);
+            _workspaceService.ClearMessages(ActiveSession.Id);
             Messages.Clear();
         }
     }
 
     public async Task ExportAsync(string? filePath = null)
     {
-        if (ActiveSession == null)
+        if (ActiveSession == null) return;
+
+        try
         {
-            return;
+            await _exportService.ExportAsync(ActiveSession, SearchQuery, filePath);
         }
-
-        var format = ResolveExportFormat(filePath);
-        var directory = ResolveExportDirectory(filePath);
-        Directory.CreateDirectory(directory);
-
-        var safeName = SanitizeFileName(ActiveSession.Name);
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var targetPath = string.IsNullOrWhiteSpace(filePath)
-            ? Path.Combine(directory, $"{safeName}_{timestamp}.{format}")
-            : filePath;
-
-        var source = string.IsNullOrWhiteSpace(SearchQuery)
-            ? _messageStream.GetMessages(ActiveSession.Id, 0, int.MaxValue)
-            : _messageStream.Search(ActiveSession.Id, SearchQuery);
-        source = ApplyExportRange(source);
-
-        if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(source, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-            await File.WriteAllTextAsync(targetPath, json);
+            _appLogService.LogException(ex, "Export failed");
         }
-        else
-        {
-            await using var writer = new StreamWriter(targetPath);
-            foreach (var message in source)
-            {
-                await writer.WriteLineAsync($"{message.Timestamp:O}\t{message.Level}\t{message.Source}\t{message.Content}");
-            }
-        }
-
-        await _notificationService.AddAsync(
-            NotificationCategory.Export,
-            NotificationLevel.Info,
-            "notification.export.completed",
-            new object[] { targetPath });
-    }
-
-    private IReadOnlyList<LogMessage> ApplyExportRange(IReadOnlyList<LogMessage> source)
-    {
-        var settings = _settingsService.Current.Export;
-        if (settings.RangeMode != ExportRangeMode.Latest || settings.RangeCount <= 0)
-        {
-            return source;
-        }
-
-        if (source.Count <= settings.RangeCount)
-        {
-            return source;
-        }
-
-        return source.Skip(source.Count - settings.RangeCount).ToList();
-    }
-
-    private string ResolveExportDirectory(string? filePath)
-    {
-        if (!string.IsNullOrWhiteSpace(filePath))
-        {
-            var directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                _settingsService.Current.Export.DefaultDirectory = directory;
-                _ = _settingsService.SaveAsync();
-                return directory;
-            }
-        }
-
-        var directorySetting = _settingsService.Current.Export.DefaultDirectory;
-        if (!string.IsNullOrWhiteSpace(directorySetting))
-        {
-            return directorySetting;
-        }
-
-        var fallback = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross",
-            "exports");
-        _settingsService.Current.Export.DefaultDirectory = fallback;
-        _ = _settingsService.SaveAsync();
-        return fallback;
-    }
-
-    private string ResolveExportFormat(string? filePath)
-    {
-        if (!string.IsNullOrWhiteSpace(filePath))
-        {
-            var extension = Path.GetExtension(filePath);
-            if (!string.IsNullOrWhiteSpace(extension))
-            {
-                return extension.TrimStart('.');
-            }
-        }
-
-        return _settingsService.Current.Export.DefaultFormat;
     }
 
     public void ToggleSettings()
@@ -460,10 +697,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task SendCommandAsync(CommandDefinition command)
     {
-        if (ActiveSession == null || !IsConnected)
-        {
-            return;
-        }
+        if (ActiveSession == null || !IsConnected) return;
 
         try
         {
@@ -485,7 +719,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 data = data.Concat(suffixBytes).ToArray();
             }
 
-            await _deviceService.SendAsync(ActiveSession.Id, data);
+            await _workspaceService.SendDataAsync(ActiveSession.Id, data);
         }
         catch (Exception ex)
         {
@@ -503,16 +737,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
         {
             return System.Text.Encoding.UTF8;
         }
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        foreach (var ch in Path.GetInvalidFileNameChars())
-        {
-            name = name.Replace(ch, '_');
-        }
-
-        return name;
     }
 
     private void FilterMessages()
@@ -569,12 +793,23 @@ public class MainWindowViewModel : INotifyPropertyChanged
             _appLogService.Error(message, ex);
         });
     }
+    
+    private async void OnLinuxScanSettingsChanged(object? sender, EventArgs e)
+    {
+        // Linux scan settings changed, automatically refresh device list
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            await RefreshDevicesAsync();
+        }
+    }
 
     private void OnSettingsChanged(object? sender, AppSettings settings)
     {
         _appLogService.Update(settings.AppLogs);
         OnPropertyChanged(nameof(TimestampFormat));
         OnPropertyChanged(nameof(AutoScrollEnabled));
+        OnPropertyChanged(nameof(MessageFontFamily));
+        OnPropertyChanged(nameof(MessageFontSize));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -583,6 +818,263 @@ public class MainWindowViewModel : INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    private void UpdateCommandStates()
+    {
+        (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ClearMessagesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (ExportMessagesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    private async Task SaveWorkspaceStateAsync()
+    {
+        try
+        {
+            await _workspaceService.SaveCurrentStateAsync(Sessions, ActiveSession, AutoScrollEnabled);
+        }
+        catch (Exception ex)
+        {
+            _appLogService.LogException(ex, "Failed to save workspace state");
+        }
+    }
+    
+    /// <summary>
+    /// Cleanup resources before application exit
+    /// </summary>
+    public void Cleanup()
+    {
+        try
+        {
+            _appLogService.Info("Starting application cleanup...");
+            
+            // Disconnect all active sessions with longer timeout
+            foreach (var session in Sessions.Where(s => s.Status == SessionStatus.Connected).ToList())
+            {
+                try
+                {
+                    _appLogService.Info($"Disconnecting session: {session.Name} ({session.Port})");
+                    var disconnectTask = _deviceService.DisconnectAsync(session.Id);
+                    if (!disconnectTask.Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        _appLogService.Warn($"Disconnect timeout for session {session.Id}, forcing close");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _appLogService.Warn($"Error disconnecting session {session.Id}: {ex.Message}");
+                }
+            }
+            
+            // Dispose all subscriptions
+            foreach (var subscription in _messageSubscriptions.Values)
+            {
+                try
+                {
+                    subscription?.Dispose();
+                }
+                catch { }
+            }
+            _messageSubscriptions.Clear();
+            
+            // Dispose services
+            _deviceService?.Dispose();
+            
+            _appLogService.Info("Application cleanup completed.");
+        }
+        catch (Exception ex)
+        {
+            _appLogService.Error($"Error during cleanup: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Cleanup with progress dialog - runs on background thread
+    /// </summary>
+    public async Task CleanupWithProgressAsync()
+    {
+        var progressDialog = new ProgressDialogViewModel(_localization);
+        
+        // Show progress dialog on UI thread
+        var dialogTask = Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new Window
+            {
+                Title = _localization.GetString("shutdown.title"),
+                Width = 400,
+                Height = 200,
+                CanResize = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Content = new Border
+                {
+                    Padding = new Avalonia.Thickness(20),
+                    Child = new StackPanel
+                    {
+                        Spacing = 16,
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = _localization.GetString("shutdown.message"),
+                                FontSize = 14,
+                                TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                            },
+                            new TextBlock
+                            {
+                                Text = progressDialog.CurrentStatus,
+                                FontSize = 12,
+                                Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#87909B")),
+                                [!TextBlock.TextProperty] = new Avalonia.Data.Binding("CurrentStatus") { Source = progressDialog }
+                            },
+                            new ProgressBar
+                            {
+                                IsIndeterminate = true,
+                                Height = 4
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+            {
+                dialog.Show(desktop.MainWindow);
+            }
+            else
+            {
+                dialog.Show();
+            }
+
+            return dialog;
+        });
+
+        Window? progressWindow = await dialogTask;
+
+        try
+        {
+            _appLogService.Info("Starting application cleanup with progress...");
+            
+            var connectedSessions = Sessions.Where(s => s.Status == SessionStatus.Connected).ToList();
+            
+            // Disconnect all active sessions on background thread
+            foreach (var session in connectedSessions)
+            {
+                try
+                {
+                    progressDialog.UpdateStatus(string.Format(
+                        _localization.GetString("shutdown.disconnecting"),
+                        session.Name));
+                    
+                    _appLogService.Info($"Disconnecting session: {session.Name} ({session.Port})");
+                    
+                    // Run disconnect on background thread with timeout
+                    await Task.Run(async () =>
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        try
+                        {
+                            await _deviceService.DisconnectAsync(session.Id);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            _appLogService.Warn($"Disconnect timeout for session {session.Id}");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _appLogService.Warn($"Error disconnecting session {session.Id}: {ex.Message}");
+                }
+                
+                // Small delay to ensure cleanup completes
+                await Task.Delay(100);
+            }
+            
+            // Save workspace state
+            progressDialog.UpdateStatus(_localization.GetString("shutdown.savingState"));
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    await SaveWorkspaceStateAsync();
+                }
+                catch (Exception ex)
+                {
+                    _appLogService.Warn($"Error saving workspace state: {ex.Message}");
+                }
+            });
+            
+            // Dispose resources
+            progressDialog.UpdateStatus(_localization.GetString("shutdown.cleaningUp"));
+            await Task.Run(() =>
+            {
+                // Dispose all subscriptions
+                foreach (var subscription in _messageSubscriptions.Values)
+                {
+                    try
+                    {
+                        subscription?.Dispose();
+                    }
+                    catch { }
+                }
+                _messageSubscriptions.Clear();
+                
+                // Dispose services
+                _deviceService?.Dispose();
+            });
+            
+            progressDialog.UpdateStatus(_localization.GetString("shutdown.complete"));
+            await Task.Delay(300); // Brief delay to show completion
+            
+            _appLogService.Info("Application cleanup completed.");
+        }
+        catch (Exception ex)
+        {
+            _appLogService.Error($"Error during cleanup: {ex.Message}", ex);
+        }
+        finally
+        {
+            // Close progress dialog on UI thread
+            if (progressWindow != null)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => progressWindow.Close());
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Progress dialog view model for cleanup
+/// </summary>
+internal class ProgressDialogViewModel : INotifyPropertyChanged
+{
+    private string _currentStatus = string.Empty;
+    private readonly ILocalizationService _localization;
+
+    public ProgressDialogViewModel(ILocalizationService localization)
+    {
+        _localization = localization;
+        _currentStatus = localization.GetString("shutdown.cleaningUp");
+    }
+
+    public string CurrentStatus
+    {
+        get => _currentStatus;
+        private set
+        {
+            if (_currentStatus != value)
+            {
+                _currentStatus = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentStatus)));
+            }
+        }
+    }
+
+    public void UpdateStatus(string status)
+    {
+        CurrentStatus = status;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public enum ToolDockTab

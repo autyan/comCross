@@ -6,6 +6,7 @@
     <Application.Resources>
         <converters:StatusColorConverter x:Key="StatusColorConverter"/>
         <converters:LevelColorConverter x:Key="LevelColorConverter"/>
+        <converters:DirectionColorConverter x:Key="DirectionColorConverter"/>
         <converters:IsZeroConverter x:Key="IsZeroConverter"/>
         <converters:TimestampFormatConverter x:Key="TimestampFormatConverter"/>
     </Application.Resources>

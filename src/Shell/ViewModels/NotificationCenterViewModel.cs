@@ -85,6 +85,34 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
         });
     }
 
+    public async Task DeleteAsync(string id)
+    {
+        await _notificationService.DeleteAsync(id);
+        Dispatcher.UIThread.Post(() =>
+        {
+            var item = Items.FirstOrDefault(i => i.Id == id);
+            if (item != null)
+            {
+                Items.Remove(item);
+                UpdateUnreadCount();
+                OnPropertyChanged(nameof(HasNotifications));
+                OnPropertyChanged(nameof(IsEmpty));
+            }
+        });
+    }
+
+    public async Task ClearAllAsync()
+    {
+        await _notificationService.ClearAllAsync();
+        Dispatcher.UIThread.Post(() =>
+        {
+            Items.Clear();
+            UpdateUnreadCount();
+            OnPropertyChanged(nameof(HasNotifications));
+            OnPropertyChanged(nameof(IsEmpty));
+        });
+    }
+
     public void RefreshLocalizedText()
     {
         foreach (var item in Items)

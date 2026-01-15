@@ -35,6 +35,16 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     // Sidebar
     public string SidebarDevices => _localization.GetString("sidebar.devices");
     public string SidebarSessions => _localization.GetString("sidebar.sessions");
+    public string SidebarSelectPort => _localization.GetString("sidebar.selectPort");
+    public string SidebarRefreshPorts => _localization.GetString("sidebar.refreshPorts");
+    public string SidebarQuickConnect => _localization.GetString("sidebar.quickConnect");
+    public string SidebarBaudRate => _localization.GetString("sidebar.baudRate");
+    public string SidebarDataBits => _localization.GetString("sidebar.dataBits");
+    public string SidebarParity => _localization.GetString("sidebar.parity");
+    public string SidebarStopBits => _localization.GetString("sidebar.stopBits");
+    public string SidebarParityNone => _localization.GetString("sidebar.parity.none");
+    public string SidebarParityOdd => _localization.GetString("sidebar.parity.odd");
+    public string SidebarParityEven => _localization.GetString("sidebar.parity.even");
 
     // Message Stream
     public string StreamSearchPlaceholder => _localization.GetString("stream.search.placeholder");
@@ -120,9 +130,19 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SettingsConnectionDefaultEncoding => _localization.GetString("settings.connection.defaultEncoding");
     public string SettingsConnectionDefaultAddCr => _localization.GetString("settings.connection.defaultAddCr");
     public string SettingsConnectionDefaultAddLf => _localization.GetString("settings.connection.defaultAddLf");
+    public string SettingsConnectionExistingSessionBehavior => _localization.GetString("settings.connection.existingSessionBehavior");
+    public string SettingsConnectionBehaviorCreateNew => _localization.GetString("settings.connection.behavior.createNew");
+    public string SettingsConnectionBehaviorSwitchToExisting => _localization.GetString("settings.connection.behavior.switchToExisting");
+    public string SettingsConnectionBehaviorPromptUser => _localization.GetString("settings.connection.behavior.promptUser");
+    public string SettingsConnectionLinuxScan => _localization.GetString("settings.connection.linuxScan");
+    public string SettingsConnectionLinuxScanScanPatterns => _localization.GetString("settings.connection.linuxScan.scanPatterns");
+    public string SettingsConnectionLinuxScanExcludePatterns => _localization.GetString("settings.connection.linuxScan.excludePatterns");
+    public string SettingsConnectionLinuxScanTip => _localization.GetString("settings.connection.linuxScan.tip");
     public string SettingsDisplayMaxMessages => _localization.GetString("settings.display.maxMessages");
     public string SettingsDisplayAutoScroll => _localization.GetString("settings.display.autoScroll");
     public string SettingsDisplayTimestampFormat => _localization.GetString("settings.display.timestampFormat");
+    public string SettingsDisplayFontFamily => _localization.GetString("settings.display.fontFamily");
+    public string SettingsDisplayFontSize => _localization.GetString("settings.display.fontSize");
     public string SettingsExportDefaultFormat => _localization.GetString("settings.export.defaultFormat");
     public string SettingsExportDefaultDirectory => _localization.GetString("settings.export.defaultDirectory");
     public string SettingsExportRange => _localization.GetString("settings.export.range");
@@ -135,6 +155,34 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string NotificationsTitle => _localization.GetString("notifications.title");
     public string NotificationsEmpty => _localization.GetString("notifications.empty");
     public string NotificationsMarkAllRead => _localization.GetString("notifications.markAllRead");
+    public string NotificationsClearAll => _localization.GetString("notifications.clearAll");
+    public string NotificationsDelete => _localization.GetString("notifications.delete");
+
+    // Tool Send - Additional
+    public string ToolSendClearAfterSend => _localization.GetString("tool.send.clearAfterSend");
+
+    // Session Menu
+    public string SessionMenuRename => _localization.GetString("session.menu.rename");
+    public string SessionMenuDisconnect => _localization.GetString("session.menu.disconnect");
+    public string SessionMenuDelete => _localization.GetString("session.menu.delete");
+
+    // Session Rename Dialog
+    public string SessionRenameTitle => _localization.GetString("session.rename.title");
+    public string SessionRenameLabel => _localization.GetString("session.rename.label");
+    public string SessionRenamePlaceholder => _localization.GetString("session.rename.placeholder");
+    public string SessionRenameOk => _localization.GetString("session.rename.ok");
+    public string SessionRenameCancel => _localization.GetString("session.rename.cancel");
+
+    // Connection Errors
+    public string ConnectionErrorNoPortSelected => _localization.GetString("connection.error.noPortSelected");
+    public string ConnectionErrorNoPortSelectedMessage => _localization.GetString("connection.error.noPortSelectedMessage");
+    public string ConnectionErrorFailed => _localization.GetString("connection.error.failed");
+    
+    // Connection Confirm
+    public string ConnectionConfirmExistingSessionTitle => _localization.GetString("connection.confirm.existingSession.title");
+    public string ConnectionConfirmExistingSessionMessage => _localization.GetString("connection.confirm.existingSession.message");
+    public string ConnectionConfirmOk => _localization.GetString("connection.confirm.ok");
+    public string ConnectionConfirmCancel => _localization.GetString("connection.confirm.cancel");
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

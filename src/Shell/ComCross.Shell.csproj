@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="app-icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Core\ComCross.Core.csproj" />
     <ProjectReference Include="..\Adapters\ComCross.Adapters.csproj" />
     <ProjectReference Include="..\Tools\ComCross.Tools.csproj" />

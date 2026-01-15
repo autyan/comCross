@@ -10,6 +10,7 @@
     <Grid RowDefinitions="Auto,*">
         <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Content="{Binding LocalizedStrings.NotificationsMarkAllRead}" Click="OnMarkAllReadClick" />
+            <Button Content="{Binding LocalizedStrings.NotificationsClearAll}" Click="OnClearAllClick" Classes="secondary" />
         </StackPanel>
 
         <Border Grid.Row="1" Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Margin="0,12,0,0">
@@ -22,12 +23,26 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Padding="12" BorderBrush="#25303A" BorderThickness="0,0,0,1">
-                                <StackPanel Spacing="6">
-                                    <TextBlock Text="{Binding Message}" FontSize="12" Foreground="#E6EDF3" TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="#87909B" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="6">
+                                        <TextBlock Text="{Binding Message}" FontSize="12" Foreground="#E6EDF3" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="#87909B" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
+                                    <Button Grid.Column="1" 
+                                            Content="✖" 
+                                            FontSize="12" 
+                                            Padding="6" 
+                                            Background="Transparent" 
+                                            Foreground="#87909B"
+                                            BorderThickness="0"
+                                            Cursor="Hand"
+                                            ToolTip.Tip="Delete"
+                                            Click="OnDeleteClick"
+                                            CommandParameter="{Binding Id}"
+                                            VerticalAlignment="Top" />
+                                </Grid>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

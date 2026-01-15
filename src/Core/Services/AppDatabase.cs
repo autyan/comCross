@@ -163,6 +163,27 @@ public sealed class AppDatabase
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task DeleteNotificationAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM notifications WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task ClearAllNotificationsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM notifications;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task UpsertLogFileAsync(LogFileRecord record, CancellationToken cancellationToken = default)
     {
         await using var connection = CreateConnection();

@@ -13,12 +13,30 @@ public partial class MessageStreamView : UserControl
     public static readonly StyledProperty<string?> TimestampFormatProperty =
         AvaloniaProperty.Register<MessageStreamView, string?>(nameof(TimestampFormat));
 
+    public static readonly StyledProperty<string> MessageFontFamilyProperty =
+        AvaloniaProperty.Register<MessageStreamView, string>(nameof(MessageFontFamily), "Consolas");
+
+    public static readonly StyledProperty<int> MessageFontSizeProperty =
+        AvaloniaProperty.Register<MessageStreamView, int>(nameof(MessageFontSize), 11);
+
     private INotifyCollectionChanged? _currentMessages;
 
     public string? TimestampFormat
     {
         get => GetValue(TimestampFormatProperty);
         set => SetValue(TimestampFormatProperty, value);
+    }
+
+    public string MessageFontFamily
+    {
+        get => GetValue(MessageFontFamilyProperty);
+        set => SetValue(MessageFontFamilyProperty, value);
+    }
+
+    public int MessageFontSize
+    {
+        get => GetValue(MessageFontSizeProperty);
+        set => SetValue(MessageFontSizeProperty, value);
     }
 
     public MessageStreamView()

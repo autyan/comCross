@@ -11,6 +11,7 @@ public sealed class LogMessage
     public LogLevel Level { get; init; } = LogLevel.Info;
     public string? Source { get; init; }
     public byte[]? RawData { get; init; }
+    public MessageFormat Format { get; init; } = MessageFormat.Text;
 }
 
 public enum LogLevel
@@ -21,4 +22,10 @@ public enum LogLevel
     Warning,
     Error,
     Critical
+}
+
+public enum MessageFormat
+{
+    Text,
+    Hex
 }

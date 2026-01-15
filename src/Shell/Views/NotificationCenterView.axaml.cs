@@ -18,4 +18,20 @@ public partial class NotificationCenterView : UserControl
             await vm.MarkAllReadAsync();
         }
     }
+
+    private async void OnClearAllClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NotificationCenterViewModel vm)
+        {
+            await vm.ClearAllAsync();
+        }
+    }
+
+    private async void OnDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NotificationCenterViewModel vm && sender is Button button && button.CommandParameter is string id)
+        {
+            await vm.DeleteAsync(id);
+        }
+    }
 }
