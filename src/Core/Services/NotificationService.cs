@@ -62,6 +62,16 @@ public sealed class NotificationService
         await _database.MarkNotificationReadAsync(id, cancellationToken);
     }
 
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await _database.DeleteNotificationAsync(id, cancellationToken);
+    }
+
+    public async Task ClearAllAsync(CancellationToken cancellationToken = default)
+    {
+        await _database.ClearAllNotificationsAsync(cancellationToken);
+    }
+
     private bool IsCategoryEnabled(NotificationCategory category)
     {
         var settings = _settingsService.Current.Notifications;

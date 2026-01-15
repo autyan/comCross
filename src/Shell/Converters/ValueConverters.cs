@@ -51,3 +51,25 @@ public class LevelColorConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+
+public class DirectionColorConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is string direction)
+        {
+            return direction switch
+            {
+                "TX" => new SolidColorBrush(Color.Parse("#3AA0FF")), // Blue for transmit
+                "RX" => new SolidColorBrush(Color.Parse("#2CB5A9")), // Green for receive
+                _ => new SolidColorBrush(Color.Parse("#87909B"))
+            };
+        }
+        return new SolidColorBrush(Color.Parse("#87909B"));
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}

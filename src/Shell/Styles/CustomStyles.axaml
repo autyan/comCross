@@ -31,6 +31,35 @@
         <Setter Property="Foreground" Value="#B7C1CC" />
     </Style>
 
+    <!-- Tool Tab Styles (ToggleButton) -->
+    <Style Selector="ToggleButton.tool-tab">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#87909B" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-tab:pointerover">
+        <Setter Property="Background" Value="#25303A" />
+        <Setter Property="Foreground" Value="#B7C1CC" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-tab:checked">
+        <Setter Property="Background" Value="#2F3A44" />
+        <Setter Property="Foreground" Value="#3AA0FF" />
+        <Setter Property="BorderThickness" Value="0,0,0,2" />
+        <Setter Property="BorderBrush" Value="#3AA0FF" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-tab:checked:pointerover">
+        <Setter Property="Background" Value="#2F3A44" />
+        <Setter Property="Foreground" Value="#5BB5FF" />
+    </Style>
+
+    <!-- Button Styles (kept for backward compatibility) -->
     <Style Selector="Button.tool-tab">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="#87909B" />

@@ -14,14 +14,22 @@
         <!-- Tool Tabs -->
         <Border Grid.Row="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="8">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <ToggleButton Content="{Binding LocalizedStrings.ToolSend}"
-                              Classes="tool-tab"
+                <ToggleButton Classes="tool-tab"
                               IsChecked="{Binding IsSendTabActive}"
-                              Click="OnSendTabClick" />
-                <ToggleButton Content="{Binding LocalizedStrings.ToolCommands}"
-                              Classes="tool-tab"
+                              Click="OnSendTabClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="📨" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding LocalizedStrings.ToolSend}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton Classes="tool-tab"
                               IsChecked="{Binding IsCommandsTabActive}"
-                              Click="OnCommandsTabClick" />
+                              Click="OnCommandsTabClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="⚒️" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding LocalizedStrings.ToolCommands}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
             </StackPanel>
         </Border>
 
@@ -32,19 +40,57 @@
                     <!-- Send Tool -->
                     <StackPanel Spacing="12" IsVisible="{Binding IsSendTabActive}">
                         <TextBlock Text="{Binding LocalizedStrings.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
-                        <TextBox Watermark="{Binding LocalizedStrings.ToolSendMessagePlaceholder}" 
+                        <TextBox x:Name="SendMessageBox"
+                                 Watermark="{Binding LocalizedStrings.ToolSendMessagePlaceholder}" 
                                  Height="100" 
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  IsEnabled="{Binding IsConnected}" />
                         
-                        <StackPanel Spacing="8">
-                            <CheckBox Content="{Binding LocalizedStrings.ToolSendHexMode}" />
-                            <CheckBox Content="{Binding LocalizedStrings.ToolSendAddCr}" IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
-                            <CheckBox Content="{Binding LocalizedStrings.ToolSendAddLf}" IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
-                        </StackPanel>
+                        <!-- Send Options in compact layout -->
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                            <CheckBox Grid.Column="0" Grid.Row="0" 
+                                      x:Name="HexModeCheckBox" 
+                                      Content="{Binding LocalizedStrings.ToolSendHexMode}" 
+                                      Margin="0,0,8,4" />
+                            <CheckBox Grid.Column="1" Grid.Row="0" 
+                                      x:Name="ClearAfterSendCheckBox" 
+                                      Content="{Binding LocalizedStrings.ToolSendClearAfterSend}" 
+                                      Margin="8,0,0,4" />
+                            <CheckBox Grid.Column="0" Grid.Row="1" 
+                                      x:Name="AddCrCheckBox" 
+                                      Content="{Binding LocalizedStrings.ToolSendAddCr}" 
+                                      IsChecked="{Binding Settings.ConnectionDefaultAddCr}" 
+                                      Margin="0,4,8,0" />
+                            <CheckBox Grid.Column="1" Grid.Row="1" 
+                                      x:Name="AddLfCheckBox" 
+                                      Content="{Binding LocalizedStrings.ToolSendAddLf}" 
+                                      IsChecked="{Binding Settings.ConnectionDefaultAddLf}" 
+                                      Margin="8,4,0,0" />
+                        </Grid>
 
-                        <Button Content="{Binding LocalizedStrings.ToolSendButton}" Classes="accent" IsEnabled="{Binding IsConnected}" />
+                        <Button Content="{Binding LocalizedStrings.ToolSendButton}" 
+                                Classes="accent" 
+                                IsEnabled="{Binding IsConnected}" 
+                                Click="OnSendClick" />
+                        
+                        <!-- Stream Actions -->
+                        <Separator Background="#25303A" Margin="0,8" />
+                        
+                        <Grid ColumnDefinitions="*,*">
+                            <Button Grid.Column="0" 
+                                    Content="{Binding LocalizedStrings.MenuClear}" 
+                                    Click="OnClearClick"
+                                    IsEnabled="{Binding IsConnected}"
+                                    HorizontalAlignment="Stretch" 
+                                    Margin="0,0,4,0" />
+                            <Button Grid.Column="1" 
+                                    Content="{Binding LocalizedStrings.MenuExport}" 
+                                    Click="OnExportClick"
+                                    IsEnabled="{Binding IsConnected}"
+                                    HorizontalAlignment="Stretch" 
+                                    Margin="4,0,0,0" />
+                        </Grid>
                     </StackPanel>
 
                     <views:CommandCenterView DataContext="{Binding CommandCenter}" IsVisible="{Binding IsCommandsTabActive, ElementName=Root}" />

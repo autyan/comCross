@@ -1,17 +1,137 @@
 using System;
+using System.ComponentModel;
+using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ComCross.Shell.ViewModels;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.Views;
 
 public partial class MainWindow : Window
 {
+    private bool _isClosing = false;
+    
     public MainWindow()
     {
         InitializeComponent();
+        
+        // Subscribe to window closing event to trigger cleanup
+        Closing += OnWindowClosing;
+    }
+
+    private async void OnSessionNameClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || vm.ActiveSession == null)
+        {
+            return;
+        }
+
+        var localization = vm.Localization;
+        var dialog = new Window
+        {
+            Title = localization.GetString("session.edit.title"),
+            Width = 400,
+            Height = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        var textBox = new TextBox
+        {
+            Text = vm.ActiveSession.Name,
+            Watermark = localization.GetString("dialog.connect.sessionname.placeholder"),
+            Margin = new Thickness(0, 8, 0, 16)
+        };
+
+        var okButton = new Button
+        {
+            Content = localization.GetString("session.edit.save"),
+            Width = 80,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+
+        var cancelButton = new Button
+        {
+            Content = localization.GetString("session.edit.cancel"),
+            Width = 80
+        };
+
+        okButton.Click += async (s, e) =>
+        {
+            var newName = textBox.Text?.Trim();
+            if (!string.IsNullOrEmpty(newName))
+            {
+                await vm.UpdateSessionNameAsync(newName);
+            }
+            dialog.Close();
+        };
+
+        cancelButton.Click += (s, e) => dialog.Close();
+
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Children = { okButton, cancelButton }
+        };
+
+        var content = new StackPanel
+        {
+            Margin = new Thickness(20),
+            Children =
+            {
+                new TextBlock { Text = localization.GetString("session.edit.name"), Margin = new Thickness(0, 0, 0, 4) },
+                textBox,
+                buttonPanel
+            }
+        };
+
+        dialog.Content = content;
+
+        // Focus textbox and select all text
+        dialog.Opened += (s, e) =>
+        {
+            textBox.Focus();
+            textBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+    }
+
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return; // Already processing close
+        }
+
+        // Cancel the default close behavior
+        e.Cancel = true;
+        _isClosing = true;
+
+        // Run cleanup asynchronously
+        if (DataContext is MainWindowViewModel vm)
+        {
+            await Task.Run(async () =>
+            {
+                await vm.CleanupWithProgressAsync();
+            });
+        }
+
+        // Now actually close
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.Shutdown();
+            }
+        });
     }
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)

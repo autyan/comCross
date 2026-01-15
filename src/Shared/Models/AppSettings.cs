@@ -45,6 +45,15 @@ public sealed class ConnectionSettings
     public string DefaultEncoding { get; set; } = "UTF-8";
     public bool DefaultAddCr { get; set; } = true;
     public bool DefaultAddLf { get; set; } = true;
+    public ConnectionBehavior ExistingSessionBehavior { get; set; } = ConnectionBehavior.PromptUser;
+    public LinuxSerialScanSettings LinuxSerialScan { get; set; } = new();
+}
+
+public enum ConnectionBehavior
+{
+    CreateNew,
+    SwitchToExisting,
+    PromptUser
 }
 
 public sealed class DisplaySettings
@@ -52,6 +61,24 @@ public sealed class DisplaySettings
     public int MaxMessages { get; set; } = 10000;
     public bool AutoScroll { get; set; } = true;
     public string TimestampFormat { get; set; } = "HH:mm:ss.fff";
+    public string FontFamily { get; set; } = GetDefaultFontFamily();
+    public int FontSize { get; set; } = 11;
+
+    private static string GetDefaultFontFamily()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "Consolas";
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            return "Menlo";
+        }
+        else // Linux
+        {
+            return "DejaVu Sans Mono";
+        }
+    }
 }
 
 public sealed class ExportSettings
@@ -77,4 +104,30 @@ public sealed class CommandSettings
 public sealed class PluginSettings
 {
     public Dictionary<string, bool> Enabled { get; set; } = new();
+}
+
+public sealed class LinuxSerialScanSettings
+{
+    /// <summary>
+    /// Scan patterns for Linux serial port discovery
+    /// </summary>
+    public List<string> ScanPatterns { get; set; } = new()
+    {
+        "/dev/ttyUSB*",     // USB serial adapters
+        "/dev/ttyACM*",     // USB CDC-ACM devices (Arduino, etc.)
+        "/dev/ttyS*",       // Standard serial ports
+        "/dev/ttyAMA*",     // ARM PL011 UART (Raspberry Pi, etc.)
+        "/dev/pts/*",       // Pseudo-terminal devices (socat, etc.)
+        "/tmp/vserial*",    // Custom virtual serial ports
+        "/tmp/tty*"         // Custom temporary serial ports
+    };
+    
+    /// <summary>
+    /// Exclude patterns to filter out unwanted devices
+    /// </summary>
+    public List<string> ExcludePatterns { get; set; } = new()
+    {
+        "/dev/pts/0",       // Console
+        "/dev/pts/ptmx"     // PTY master
+    };
 }

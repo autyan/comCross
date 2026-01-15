@@ -17,3 +17,6 @@ Thumbs.db
 
 # Publish outputs
 artifacts/
+
+# AI Development Rules (local configuration)
+.ai-rules.md

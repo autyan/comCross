@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
@@ -23,6 +24,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private LocaleCultureInfo _selectedLanguage;
     private bool _followSystemLanguage;
     private IReadOnlyList<SettingOption<ExportRangeMode>> _exportRangeModeOptions = Array.Empty<SettingOption<ExportRangeMode>>();
+    private IReadOnlyList<SettingOption<ConnectionBehavior>> _connectionBehaviorOptions = Array.Empty<SettingOption<ConnectionBehavior>>();
     private bool _saveScheduled;
 
     public SettingsViewModel(
@@ -39,10 +41,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _selectedLanguage = ResolveLanguage(settingsService.Current.Language);
         _followSystemLanguage = settingsService.Current.FollowSystemLanguage;
         RefreshExportOptions();
+        RefreshConnectionBehaviorOptions();
     }
 
     public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
     public PluginManagerViewModel PluginManager => _pluginManager;
+    public bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
     public IReadOnlyList<LocaleCultureInfo> AvailableLanguages => _availableLanguages;
     public IReadOnlyList<string> AppLogFormats => _logFormats;
@@ -54,6 +58,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         set
         {
             if (_selectedLanguage == value)
+            {
+                return;
+            }
+
+            // Enforce follow system language priority
+            if (FollowSystemLanguage)
             {
                 return;
             }
@@ -360,6 +370,48 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    public IReadOnlyList<SettingOption<ConnectionBehavior>> ConnectionBehaviorOptions => _connectionBehaviorOptions;
+
+    public SettingOption<ConnectionBehavior>? SelectedConnectionBehavior
+    {
+        get => _connectionBehaviorOptions.FirstOrDefault(o => o.Value == _settingsService.Current.Connection.ExistingSessionBehavior);
+        set
+        {
+            if (value == null || _settingsService.Current.Connection.ExistingSessionBehavior == value.Value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Connection.ExistingSessionBehavior = value.Value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string LinuxScanPatterns
+    {
+        get => string.Join(Environment.NewLine, _settingsService.Current.Connection.LinuxSerialScan.ScanPatterns);
+        set
+        {
+            var patterns = value.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            _settingsService.Current.Connection.LinuxSerialScan.ScanPatterns = patterns;
+            ScheduleSaveAndNotifyLinuxScanChanged();
+            OnPropertyChanged();
+        }
+    }
+
+    public string LinuxExcludePatterns
+    {
+        get => string.Join(Environment.NewLine, _settingsService.Current.Connection.LinuxSerialScan.ExcludePatterns);
+        set
+        {
+            var patterns = value.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            _settingsService.Current.Connection.LinuxSerialScan.ExcludePatterns = patterns;
+            ScheduleSaveAndNotifyLinuxScanChanged();
+            OnPropertyChanged();
+        }
+    }
+
     public int DisplayMaxMessages
     {
         get => _settingsService.Current.Display.MaxMessages;
@@ -403,6 +455,38 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             }
 
             _settingsService.Current.Display.TimestampFormat = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string DisplayFontFamily
+    {
+        get => _settingsService.Current.Display.FontFamily;
+        set
+        {
+            if (_settingsService.Current.Display.FontFamily == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Display.FontFamily = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int DisplayFontSize
+    {
+        get => _settingsService.Current.Display.FontSize;
+        set
+        {
+            if (_settingsService.Current.Display.FontSize == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Display.FontSize = value;
             ScheduleSave();
             OnPropertyChanged();
         }
@@ -475,6 +559,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     }
 
     public event EventHandler<string>? LanguageChanged;
+    public event EventHandler? LinuxScanSettingsChanged;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -516,6 +601,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _localization.SetCulture(cultureCode);
         _localizedStrings.RefreshStrings();
         RefreshExportOptions();
+        RefreshConnectionBehaviorOptions();
         LanguageChanged?.Invoke(this, cultureCode);
     }
 
@@ -529,6 +615,19 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(ExportRangeModeOptions));
         OnPropertyChanged(nameof(SelectedExportRangeMode));
+    }
+
+    private void RefreshConnectionBehaviorOptions()
+    {
+        _connectionBehaviorOptions = new[]
+        {
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.CreateNew, _localizedStrings.SettingsConnectionBehaviorCreateNew),
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.SwitchToExisting, _localizedStrings.SettingsConnectionBehaviorSwitchToExisting),
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.PromptUser, _localizedStrings.SettingsConnectionBehaviorPromptUser)
+        };
+
+        OnPropertyChanged(nameof(ConnectionBehaviorOptions));
+        OnPropertyChanged(nameof(SelectedConnectionBehavior));
     }
 
     private LocaleCultureInfo ResolveLanguage(string cultureCode)
@@ -551,6 +650,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             _saveScheduled = false;
             await _settingsService.SaveAsync();
         });
+    }
+    
+    private void ScheduleSaveAndNotifyLinuxScanChanged()
+    {
+        ScheduleSave();
+        LinuxScanSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

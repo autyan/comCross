@@ -36,4 +36,47 @@ public partial class RightToolDock : UserControl
             vm.SelectedToolTab = ToolDockTab.Commands;
         }
     }
+    
+    private void OnClearClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ClearMessages();
+        }
+    }
+    
+    private async void OnExportClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            await vm.ExportAsync();
+        }
+    }
+    
+    private async void OnSendClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            var sendBox = this.FindControl<TextBox>("SendMessageBox");
+            var hexMode = this.FindControl<CheckBox>("HexModeCheckBox");
+            var addCr = this.FindControl<CheckBox>("AddCrCheckBox");
+            var addLf = this.FindControl<CheckBox>("AddLfCheckBox");
+            var clearAfterSend = this.FindControl<CheckBox>("ClearAfterSendCheckBox");
+            
+            if (sendBox != null && !string.IsNullOrWhiteSpace(sendBox.Text))
+            {
+                await vm.SendAsync(
+                    sendBox.Text,
+                    hexMode?.IsChecked ?? false,
+                    addCr?.IsChecked ?? false,
+                    addLf?.IsChecked ?? false);
+                    
+                // Clear only if option is checked
+                if (clearAfterSend?.IsChecked ?? false)
+                {
+                    sendBox.Text = string.Empty;
+                }
+            }
+        }
+    }
 }
