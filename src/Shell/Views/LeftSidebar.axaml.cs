@@ -8,17 +8,8 @@ using System.Threading.Tasks;
 
 namespace ComCross.Shell.Views;
 
-public partial class LeftSidebar : UserControl
+public partial class LeftSidebar : BaseUserControl
 {
-    public static readonly StyledProperty<LocalizedStringsViewModel?> LocalizedStringsProperty =
-        AvaloniaProperty.Register<LeftSidebar, LocalizedStringsViewModel?>(nameof(LocalizedStrings));
-
-    public LocalizedStringsViewModel? LocalizedStrings
-    {
-        get => GetValue(LocalizedStringsProperty);
-        set => SetValue(LocalizedStringsProperty, value);
-    }
-
     public LeftSidebar()
     {
         InitializeComponent();
@@ -54,10 +45,10 @@ public partial class LeftSidebar : UserControl
         {
             var flyout = new MenuFlyout();
             
-            var renameItem = new MenuItem { Header = vm.LocalizedStrings.SessionMenuRename };
+            var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
             renameItem.Click += async (s, args) => await ShowRenameDialogAsync(session, vm);
             
-            var deleteItem = new MenuItem { Header = vm.LocalizedStrings.SessionMenuDelete };
+            var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
             deleteItem.Click += async (s, args) =>
             {
                 if (DataContext is MainWindowViewModel viewModel)
@@ -78,7 +69,7 @@ public partial class LeftSidebar : UserControl
         {
             var dialog = new Window
             {
-                Title = vm.LocalizedStrings.SessionRenameTitle,
+                Title = vm.L["dialog.renameSession.title"],
                 Width = 350,
                 Height = 150,
                 CanResize = false,
@@ -88,13 +79,13 @@ public partial class LeftSidebar : UserControl
             var textBox = new TextBox
             {
                 Text = session.Name,
-                Watermark = vm.LocalizedStrings.SessionRenamePlaceholder,
+                Watermark = vm.L["dialog.renameSession.placeholder"],
                 Margin = new Avalonia.Thickness(0, 0, 0, 10)
             };
 
             var okButton = new Button
             {
-                Content = vm.LocalizedStrings.SessionRenameOk,
+                Content = vm.L["dialog.renameSession.ok"],
                 Width = 80,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
                 Margin = new Avalonia.Thickness(0, 0, 10, 0)
@@ -102,7 +93,7 @@ public partial class LeftSidebar : UserControl
 
             var cancelButton = new Button
             {
-                Content = vm.LocalizedStrings.SessionRenameCancel,
+                Content = vm.L["dialog.renameSession.cancel"],
                 Width = 80,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
             };
@@ -130,7 +121,7 @@ public partial class LeftSidebar : UserControl
                 Margin = new Avalonia.Thickness(20),
                 Children = 
                 {
-                    new TextBlock { Text = vm.LocalizedStrings.SessionRenameLabel, Margin = new Avalonia.Thickness(0, 0, 0, 5) },
+                    new TextBlock { Text = vm.L["dialog.renameSession.label"], Margin = new Avalonia.Thickness(0, 0, 0, 5) },
                     textBox,
                     buttonPanel
                 }

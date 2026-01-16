@@ -4,7 +4,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class PluginManagerView : UserControl
+public partial class PluginManagerView : BaseUserControl
 {
     public PluginManagerView()
     {

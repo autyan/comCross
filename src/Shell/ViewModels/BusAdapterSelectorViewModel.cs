@@ -1,21 +1,21 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using ComCross.Shell.Models;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
 /// <summary>
 /// ViewModel for bus adapter selection and configuration
 /// </summary>
-public sealed class BusAdapterSelectorViewModel : INotifyPropertyChanged
+public sealed class BusAdapterSelectorViewModel : BaseViewModel
 {
     private BusAdapterInfo? _selectedAdapter;
     private UserControl? _configPanel;
 
-    public BusAdapterSelectorViewModel()
+    public BusAdapterSelectorViewModel(ILocalizationService localization)
+        : base(localization)
     {
         // Initialize available adapters
         AvailableAdapters = new ObservableCollection<BusAdapterInfo>
@@ -125,12 +125,5 @@ public sealed class BusAdapterSelectorViewModel : INotifyPropertyChanged
             // No custom config panel, use default or null
             ConfigPanel = null;
         }
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

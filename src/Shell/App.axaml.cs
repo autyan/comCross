@@ -6,17 +6,36 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ComCross.Shell.ViewModels;
 using ComCross.Shell.Views;
+using ComCross.Shell.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell;
 
 public partial class App : Application
 {
+    private static IServiceProvider? _serviceProvider;
     private MainWindowViewModel? _viewModel;
     private bool _isShuttingDown = false;
+    
+    /// <summary>
+    /// Global service provider for accessing DI services.
+    /// Used by base classes (BaseWindow, BaseUserControl) via Service Locator pattern.
+    /// </summary>
+    public static IServiceProvider ServiceProvider
+    {
+        get => _serviceProvider ?? throw new InvalidOperationException(
+            "ServiceProvider not initialized. Call Initialize() first.");
+        internal set => _serviceProvider = value; // For testing
+    }
     
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        
+        // Configure DI container
+        var services = new ServiceCollection();
+        services.AddComCrossServices();
+        _serviceProvider = services.BuildServiceProvider();
         
         // Capture global unhandled exceptions
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
@@ -45,11 +64,11 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            _viewModel = new MainWindowViewModel();
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = _viewModel
-            };
+            // Create MainWindow using DI
+            _viewModel = ServiceProvider.GetRequiredService<MainWindowViewModel>();
+            var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
+            mainWindow.DataContext = _viewModel;
+            desktop.MainWindow = mainWindow;
             
             desktop.ShutdownRequested += OnShutdownRequested;
         }

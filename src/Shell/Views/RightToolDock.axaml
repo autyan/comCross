@@ -19,7 +19,7 @@
                               Click="OnSendTabClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="📨" FontSize="14" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding LocalizedStrings.ToolSend}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding L[tool.send]}" VerticalAlignment="Center" />
                     </StackPanel>
                 </ToggleButton>
                 <ToggleButton Classes="tool-tab"
@@ -27,7 +27,7 @@
                               Click="OnCommandsTabClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="⚒️" FontSize="14" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding LocalizedStrings.ToolCommands}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding L[tool.commands]}" VerticalAlignment="Center" />
                     </StackPanel>
                 </ToggleButton>
             </StackPanel>
@@ -39,9 +39,9 @@
                 <StackPanel Spacing="16">
                     <!-- Send Tool -->
                     <StackPanel Spacing="12" IsVisible="{Binding IsSendTabActive}">
-                        <TextBlock Text="{Binding LocalizedStrings.ToolSendMessage}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                        <TextBlock Text="{Binding L[tool.send.message]}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
                         <TextBox x:Name="SendMessageBox"
-                                 Watermark="{Binding LocalizedStrings.ToolSendMessagePlaceholder}" 
+                                 Watermark="{Binding L[tool.send.message.placeholder]}" 
                                  Height="100" 
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
@@ -51,25 +51,25 @@
                         <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
                             <CheckBox Grid.Column="0" Grid.Row="0" 
                                       x:Name="HexModeCheckBox" 
-                                      Content="{Binding LocalizedStrings.ToolSendHexMode}" 
+                                      Content="{Binding L[tool.send.hexmode]}" 
                                       Margin="0,0,8,4" />
                             <CheckBox Grid.Column="1" Grid.Row="0" 
                                       x:Name="ClearAfterSendCheckBox" 
-                                      Content="{Binding LocalizedStrings.ToolSendClearAfterSend}" 
+                                      Content="{Binding L[tool.send.clearAfterSend]}" 
                                       Margin="8,0,0,4" />
                             <CheckBox Grid.Column="0" Grid.Row="1" 
                                       x:Name="AddCrCheckBox" 
-                                      Content="{Binding LocalizedStrings.ToolSendAddCr}" 
+                                      Content="{Binding L[tool.send.addcr]}" 
                                       IsChecked="{Binding Settings.ConnectionDefaultAddCr}" 
                                       Margin="0,4,8,0" />
                             <CheckBox Grid.Column="1" Grid.Row="1" 
                                       x:Name="AddLfCheckBox" 
-                                      Content="{Binding LocalizedStrings.ToolSendAddLf}" 
+                                      Content="{Binding L[tool.send.addlf]}" 
                                       IsChecked="{Binding Settings.ConnectionDefaultAddLf}" 
                                       Margin="8,4,0,0" />
                         </Grid>
 
-                        <Button Content="{Binding LocalizedStrings.ToolSendButton}" 
+                        <Button Content="{Binding L[tool.send.button]}" 
                                 Classes="accent" 
                                 IsEnabled="{Binding IsConnected}" 
                                 Click="OnSendClick" />
@@ -79,13 +79,13 @@
                         
                         <Grid ColumnDefinitions="*,*">
                             <Button Grid.Column="0" 
-                                    Content="{Binding LocalizedStrings.MenuClear}" 
+                                    Content="{Binding L[menu.clear]}" 
                                     Click="OnClearClick"
                                     IsEnabled="{Binding IsConnected}"
                                     HorizontalAlignment="Stretch" 
                                     Margin="0,0,4,0" />
                             <Button Grid.Column="1" 
-                                    Content="{Binding LocalizedStrings.MenuExport}" 
+                                    Content="{Binding L[menu.export]}" 
                                     Click="OnExportClick"
                                     IsEnabled="{Binding IsConnected}"
                                     HorizontalAlignment="Stretch" 

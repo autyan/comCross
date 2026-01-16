@@ -299,7 +299,7 @@ public sealed class WorkspaceDatabaseService : IDisposable, IAsyncDisposable
         IEnumerable<(string SessionId, long Timestamp, string Direction, byte[] RawData)> messages,
         CancellationToken cancellationToken = default)
     {
-        using var transaction = await Connection.BeginTransactionAsync(cancellationToken) as SqliteTransaction;
+        await using var transaction = (SqliteTransaction)await Connection.BeginTransactionAsync(cancellationToken);
 
         try
         {

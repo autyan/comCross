@@ -20,7 +20,7 @@
     <StackPanel Grid.Row="0" Spacing="12">
       <!-- Name Field -->
       <StackPanel Spacing="8">
-        <TextBlock Text="{Binding LocalizedStrings.DialogRenameWorkloadName}"
+        <TextBlock Text="{Binding L[dialog.renameWorkload.name]}"
                    FontSize="13"
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />

@@ -16,16 +16,16 @@ using Avalonia.Threading;
 using ComCross.Adapters.Serial;
 using ComCross.Core.Services;
 using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ComCross.Shell.ViewModels;
 
-public class MainWindowViewModel : INotifyPropertyChanged
+public class MainWindowViewModel : BaseViewModel
 {
-    private readonly EventBus _eventBus;
-    private readonly MessageStreamService _messageStream;
+    private readonly IEventBus _eventBus;
+    private readonly IMessageStreamService _messageStream;
     private readonly DeviceService _deviceService;
     private readonly SerialAdapter _serialAdapter;
     private readonly ConfigService _configService;
@@ -37,12 +37,11 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private readonly CommandService _commandService;
     private readonly PluginDiscoveryService _pluginDiscoveryService;
     private readonly PluginRuntimeService _pluginRuntimeService;
-    private readonly ILocalizationService _localization;
     
     // Business services
     private readonly WorkspaceService _workspaceService;
     private readonly WorkloadService _workloadService;
-    private readonly ExportService? _exportService;
+    private readonly ExportService _exportService;
     private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
     private Session? _activeSession;
     private Device? _selectedDevice;
@@ -70,7 +69,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>
     /// Workload tabs ViewModel (延迟加载)
     /// </summary>
-    public WorkloadTabsViewModel? WorkloadTabsViewModel { get; private set; }
+    public WorkloadTabsViewModel WorkloadTabsViewModel { get; private set; } = null!;
 
     /// <summary>
     /// Bus adapter selector ViewModel
@@ -215,7 +214,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public bool IsSendTabActive => _selectedToolTab == ToolDockTab.Send;
     public bool IsCommandsTabActive => _selectedToolTab == ToolDockTab.Commands;
 
-    public string Title => _localization.GetString("app.title");
+    public string Title => L["app.title"];
     public string TimestampFormat => _settingsService.Current.Display.TimestampFormat;
     public bool AutoScrollEnabled => _settingsService.Current.Display.AutoScroll;
     public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
@@ -249,10 +248,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public ILocalizationService Localization => _localization;
-
-    public LocalizedStringsViewModel LocalizedStrings { get; }
-
     public SettingsViewModel Settings { get; }
 
     public NotificationCenterViewModel NotificationCenter { get; }
@@ -267,77 +262,58 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ClearMessagesCommand { get; }
     public ICommand ExportMessagesCommand { get; }
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(
+        ILocalizationService localization,
+        IEventBus eventBus,
+        IMessageStreamService messageStream,
+        DeviceService deviceService,
+        SerialAdapter serialAdapter,
+        ConfigService configService,
+        AppDatabase database,
+        SettingsService settingsService,
+        AppLogService appLogService,
+        NotificationService notificationService,
+        LogStorageService logStorageService,
+        CommandService commandService,
+        PluginDiscoveryService pluginDiscoveryService,
+        PluginRuntimeService pluginRuntimeService,
+        WorkspaceService workspaceService,
+        WorkloadService workloadService,
+        ExportService exportService,
+        WorkloadPanelViewModel workloadPanelViewModel,
+        WorkloadTabsViewModel workloadTabsViewModel,
+        BusAdapterSelectorViewModel busAdapterSelectorViewModel,
+        NotificationCenterViewModel notificationCenterViewModel,
+        CommandCenterViewModel commandCenterViewModel,
+        PluginManagerViewModel pluginManagerViewModel,
+        SettingsViewModel settingsViewModel)
+        : base(localization)
     {
-        // Core infrastructure
-        _eventBus = new EventBus();
-        _messageStream = new MessageStreamService();
-        
-        // Configuration and database
-        _configService = new ConfigService();
-        _database = new AppDatabase();
-        _settingsService = new SettingsService(_configService, _database);
-        
-        // Localization
-        _localization = new LocalizationService();
-        LocalizedStrings = new LocalizedStringsViewModel(_localization);
-        
-        // Notification system (depends on database and settings)
-        _notificationService = new NotificationService(_database, _settingsService);
-        
-        // Device services (depends on notification)
-        _serialAdapter = new SerialAdapter();
-        _deviceService = new DeviceService(_serialAdapter, _eventBus, _messageStream, _notificationService);
-        
-        // Other services
-        _appLogService = new AppLogService();
-        _logStorageService = new LogStorageService(_messageStream, _settingsService, _notificationService, _database);
-        _commandService = new CommandService(_settingsService);
-        
-        // Plugin system
-        _pluginDiscoveryService = new PluginDiscoveryService();
-        _pluginRuntimeService = new PluginRuntimeService();
+        _eventBus = eventBus;
+        _messageStream = messageStream;
+        _deviceService = deviceService;
+        _serialAdapter = serialAdapter;
+        _configService = configService;
+        _database = database;
+        _settingsService = settingsService;
+        _appLogService = appLogService;
+        _notificationService = notificationService;
+        _logStorageService = logStorageService;
+        _commandService = commandService;
+        _pluginDiscoveryService = pluginDiscoveryService;
+        _pluginRuntimeService = pluginRuntimeService;
+        _workspaceService = workspaceService;
+        _workloadService = workloadService;
+        _exportService = exportService;
 
-        // Business services
-        _workloadService = new WorkloadService(
-            NullLogger<WorkloadService>.Instance, 
-            _eventBus, 
-            _configService,
-            _localization);
-        var migrationService = new WorkspaceMigrationService(
-            NullLogger<WorkspaceMigrationService>.Instance);
-        _workspaceService = new WorkspaceService(
-            _deviceService, 
-            _messageStream, 
-            _logStorageService, 
-            _notificationService, 
-            _configService,
-            _workloadService,
-            migrationService);
-        
-        BusAdapterSelectorViewModel = new BusAdapterSelectorViewModel();
-        WorkloadTabsViewModel = new WorkloadTabsViewModel(_workloadService, _eventBus, LocalizedStrings);
-        
-        // Initialize ViewModels (order matters due to dependencies)
-        NotificationCenter = new NotificationCenterViewModel(
-            _notificationService,
-            _localization,
-            LocalizedStrings);
-        CommandCenter = new CommandCenterViewModel(
-            _commandService,
-            _settingsService,
-            _notificationService,
-            LocalizedStrings);
-        PluginManager = new PluginManagerViewModel(
-            _pluginDiscoveryService,
-            _pluginRuntimeService,
-            _settingsService,
-            LocalizedStrings);
-        Settings = new SettingsViewModel(
-            _settingsService,
-            _localization,
-            LocalizedStrings,
-            PluginManager);
+        WorkloadPanelViewModel = workloadPanelViewModel;
+        WorkloadTabsViewModel = workloadTabsViewModel;
+        BusAdapterSelectorViewModel = busAdapterSelectorViewModel;
+
+        NotificationCenter = notificationCenterViewModel;
+        CommandCenter = commandCenterViewModel;
+        PluginManager = pluginManagerViewModel;
+        Settings = settingsViewModel;
         
         // Initialize commands
         QuickConnectCommand = new AsyncRelayCommand(QuickConnectAsync, () => SelectedDevice != null);
@@ -359,7 +335,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             UpdateStatistics();
         });
         
-        // _ = InitializeAsync();
+        _ = InitializeAsync();
     }
 
     private void OnStatisticsUpdateTick(object? sender, EventArgs e)
@@ -402,7 +378,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             _settingsService.SettingsChanged += OnSettingsChanged;
             
             // Initialize MessageBoxService with localization
-            Shell.Services.MessageBoxService.Initialize(_localization);
+            Shell.Services.MessageBoxService.Initialize(Localization);
             
             Dispatcher.UIThread.Post(() =>
             {
@@ -534,8 +510,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         if (SelectedDevice == null)
         {
             await Shell.Services.MessageBoxService.ShowWarningAsync(
-                LocalizedStrings.ConnectionErrorNoPortSelected,
-                LocalizedStrings.ConnectionErrorNoPortSelectedMessage);
+                L["connection.error.noPortSelected"],
+                L["connection.error.noPortSelectedMessage"]);
             return;
         }
 
@@ -570,13 +546,13 @@ public class MainWindowViewModel : INotifyPropertyChanged
                     return;
                     
                 case ConnectionBehavior.PromptUser:
-                    var switchToExisting = LocalizedStrings.ConnectionConfirmOk;
-                    var createNew = LocalizedStrings.ConnectionConfirmCancel;
-                    var cancel = _localization.GetString("messagebox.cancel");
+                    var switchToExisting = L["connection.confirm.ok"];
+                    var createNew = L["connection.confirm.cancel"];
+                    var cancel = L["messagebox.cancel"];
                     
                     var choice = await Shell.Services.MessageBoxService.ShowCustomAsync(
-                        LocalizedStrings.ConnectionConfirmExistingSessionTitle,
-                        string.Format(_localization.GetString("connection.confirm.existingSession.message"), port),
+                        L["connection.confirm.existingSession.title"],
+                        string.Format(L["connection.confirm.existingSession.message"], port),
                         Shell.Services.MessageBoxIcon.Question,
                         switchToExisting, createNew, cancel);
                     
@@ -610,7 +586,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         var name = port;
 
         try
-        {            var session = await _workspaceService.ConnectAsync(port, settings, name);
+        {
+            var session = await _workspaceService.ConnectAsync(port, settings, name);
             Sessions.Add(session);
             ActiveSession = session;
             IsConnected = true;
@@ -635,8 +612,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
             Console.Error.WriteLine($"Connection failed: {ex.Message}");
             _appLogService.LogException(ex, "Connect failed");
             await Shell.Services.MessageBoxService.ShowErrorAsync(
-                LocalizedStrings.ConnectionErrorFailed,
-                string.Format(_localization.GetString("connection.error.failedMessage"), port, ex.Message));
+                L["connection.error.failed"],
+                string.Format(L["connection.error.failedMessage"], port, ex.Message));
         }
     }
 
@@ -774,8 +751,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         {
             _appLogService.LogException(ex, "Reconnect failed");
             await Shell.Services.MessageBoxService.ShowErrorAsync(
-                LocalizedStrings.ConnectionErrorFailed,
-                string.Format(_localization.GetString("connection.error.failedMessage"), oldSession.Port, ex.Message));
+                L["connection.error.failed"],
+                string.Format(L["connection.error.failedMessage"], oldSession.Port, ex.Message));
         }
     }
 
@@ -922,7 +899,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
 
     private void OnDeviceDisconnected(DeviceDisconnectedEvent @event)
     {
-        var reason = @event.Reason ?? _localization.GetString("notification.connection.unknownReason");
+        var reason = @event.Reason ?? L["notification.connection.unknownReason"];
         _ = _notificationService.AddAsync(
             NotificationCategory.Connection,
             NotificationLevel.Warning,
@@ -967,12 +944,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(MessageFontSize));
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
+    // PropertyChanged implementation inherited from BaseViewModel
 
     private void UpdateCommandStates()
     {
@@ -1047,14 +1019,14 @@ public class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task CleanupWithProgressAsync()
     {
-        var progressDialog = new ProgressDialogViewModel(_localization);
+        var progressDialog = new ProgressDialogViewModel(Localization);
         
         // Show progress dialog on UI thread
         var dialogTask = Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var dialog = new Window
             {
-                Title = _localization.GetString("shutdown.title"),
+                Title = L["shutdown.title"],
                 Width = 400,
                 Height = 200,
                 CanResize = false,
@@ -1069,7 +1041,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
                         {
                             new TextBlock
                             {
-                                Text = _localization.GetString("shutdown.message"),
+                                Text = L["shutdown.message"],
                                 FontSize = 14,
                                 TextWrapping = Avalonia.Media.TextWrapping.Wrap
                             },
@@ -1116,7 +1088,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 try
                 {
                     progressDialog.UpdateStatus(string.Format(
-                        _localization.GetString("shutdown.disconnecting"),
+                        L["shutdown.disconnecting"],
                         session.Name));
                     
                     _appLogService.Info($"Disconnecting session: {session.Name} ({session.Port})");
@@ -1145,7 +1117,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             }
             
             // Save workspace state
-            progressDialog.UpdateStatus(_localization.GetString("shutdown.savingState"));
+            progressDialog.UpdateStatus(L["shutdown.savingState"]);
             await Task.Run(async () =>
             {
                 try
@@ -1159,7 +1131,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             });
             
             // Dispose resources
-            progressDialog.UpdateStatus(_localization.GetString("shutdown.cleaningUp"));
+            progressDialog.UpdateStatus(L["shutdown.cleaningUp"]);
             await Task.Run(() =>
             {
                 // Dispose all subscriptions
@@ -1177,7 +1149,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 _deviceService?.Dispose();
             });
             
-            progressDialog.UpdateStatus(_localization.GetString("shutdown.complete"));
+            progressDialog.UpdateStatus(L["shutdown.complete"]);
             await Task.Delay(300); // Brief delay to show completion
             
             _appLogService.Info("Application cleanup completed.");

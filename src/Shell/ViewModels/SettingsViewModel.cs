@@ -1,7 +1,5 @@
 using System;
-using System.ComponentModel;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Linq;
@@ -12,12 +10,10 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class SettingsViewModel : INotifyPropertyChanged
+public sealed class SettingsViewModel : BaseViewModel
 {
     private readonly SettingsService _settingsService;
-    private readonly ILocalizationService _localization;
     private readonly PluginManagerViewModel _pluginManager;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private readonly List<LocaleCultureInfo> _availableLanguages;
     private readonly List<string> _logFormats = new() { "txt", "json" };
     private readonly List<string> _logLevels = new() { "Trace", "Debug", "Info", "Warn", "Error", "Fatal" };
@@ -28,14 +24,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private bool _saveScheduled;
 
     public SettingsViewModel(
-        SettingsService settingsService,
         ILocalizationService localization,
-        LocalizedStringsViewModel localizedStrings,
+        SettingsService settingsService,
         PluginManagerViewModel pluginManager)
+        : base(localization)
     {
         _settingsService = settingsService;
-        _localization = localization;
-        _localizedStrings = localizedStrings;
         _pluginManager = pluginManager;
         _availableLanguages = localization.AvailableCultures.ToList();
         _selectedLanguage = ResolveLanguage(settingsService.Current.Language);
@@ -43,8 +37,6 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         RefreshExportOptions();
         RefreshConnectionBehaviorOptions();
     }
-
-    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
     public PluginManagerViewModel PluginManager => _pluginManager;
     public bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
@@ -596,8 +588,6 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public event EventHandler<string>? LanguageChanged;
     public event EventHandler? LinuxScanSettingsChanged;
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
     public void ReloadFromSettings()
     {
         _followSystemLanguage = _settingsService.Current.FollowSystemLanguage;
@@ -633,8 +623,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     private void ApplyLanguage(string cultureCode)
     {
-        _localization.SetCulture(cultureCode);
-        _localizedStrings.RefreshStrings();
+        Localization.SetCulture(cultureCode);
         RefreshExportOptions();
         RefreshConnectionBehaviorOptions();
         LanguageChanged?.Invoke(this, cultureCode);
@@ -644,8 +633,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         _exportRangeModeOptions = new[]
         {
-            new SettingOption<ExportRangeMode>(ExportRangeMode.All, _localizedStrings.SettingsExportRangeAll),
-            new SettingOption<ExportRangeMode>(ExportRangeMode.Latest, _localizedStrings.SettingsExportRangeLatest)
+            new SettingOption<ExportRangeMode>(ExportRangeMode.All, L["settings.export.range.all"]),
+            new SettingOption<ExportRangeMode>(ExportRangeMode.Latest, L["settings.export.range.latest"])
         };
 
         OnPropertyChanged(nameof(ExportRangeModeOptions));
@@ -656,9 +645,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         _connectionBehaviorOptions = new[]
         {
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.CreateNew, _localizedStrings.SettingsConnectionBehaviorCreateNew),
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.SwitchToExisting, _localizedStrings.SettingsConnectionBehaviorSwitchToExisting),
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.PromptUser, _localizedStrings.SettingsConnectionBehaviorPromptUser)
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.CreateNew, L["settings.connection.behavior.createNew"]),
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.SwitchToExisting, L["settings.connection.behavior.switchToExisting"]),
+            new SettingOption<ConnectionBehavior>(ConnectionBehavior.PromptUser, L["settings.connection.behavior.promptUser"])
         };
 
         OnPropertyChanged(nameof(ConnectionBehaviorOptions));
@@ -691,11 +680,6 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         ScheduleSave();
         LinuxScanSettingsChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 

@@ -5,7 +5,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class RightToolDock : UserControl
+public partial class RightToolDock : BaseUserControl
 {
     public static readonly StyledProperty<bool> IsCommandsTabActiveProperty =
         AvaloniaProperty.Register<RightToolDock, bool>(nameof(IsCommandsTabActive));

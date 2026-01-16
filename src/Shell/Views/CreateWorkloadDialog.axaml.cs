@@ -4,32 +4,23 @@ using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using ComCross.Shell.ViewModels;
+using ComCross.Shared.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Views;
 
-public partial class CreateWorkloadDialog : Window, INotifyPropertyChanged
+public partial class CreateWorkloadDialog : BaseWindow
 {
     private string _workloadName = string.Empty;
     private string _workloadDescription = string.Empty;
     private string? _nameError;
 
     // 无参构造函数用于Avalonia XAML设计器
-    public CreateWorkloadDialog() : this(new LocalizedStringsViewModel(new ComCross.Core.Services.LocalizationService()))
+    public CreateWorkloadDialog()
     {
-    }
-
-    public CreateWorkloadDialog(LocalizedStringsViewModel localizedStrings)
-    {
-        LocalizedStrings = localizedStrings ?? throw new ArgumentNullException(nameof(localizedStrings));
         InitializeComponent();
-        DataContext = this;
+        DataContext = this; // 启用L绑定
     }
-
-    /// <summary>
-    /// 本地化字符串
-    /// </summary>
-    public LocalizedStringsViewModel LocalizedStrings { get; }
 
     private void InitializeComponent()
     {
@@ -104,15 +95,15 @@ public partial class CreateWorkloadDialog : Window, INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(WorkloadName))
         {
-            NameError = LocalizedStrings.DialogCreateWorkloadErrorEmpty;
+            NameError = L["dialog.createWorkload.error.empty"];
         }
         else if (WorkloadName.Length < 2)
         {
-            NameError = LocalizedStrings.DialogCreateWorkloadErrorMinLength;
+            NameError = L["dialog.createWorkload.error.minLength"];
         }
         else if (WorkloadName.Length > 50)
         {
-            NameError = LocalizedStrings.DialogCreateWorkloadErrorMaxLength;
+            NameError = L["dialog.createWorkload.error.maxLength"];
         }
         else
         {
@@ -143,16 +134,12 @@ public partial class CreateWorkloadDialog : Window, INotifyPropertyChanged
         }
     }
 
-    #region INotifyPropertyChanged
-
     public new event PropertyChangedEventHandler? PropertyChanged;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
-
-    #endregion
 }
 
 /// <summary>

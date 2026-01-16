@@ -7,11 +7,11 @@
              x:Class="ComCross.Shell.Views.CommandCenterView"
              x:DataType="vm:CommandCenterViewModel">
     <StackPanel Spacing="12">
-        <TextBlock Text="{Binding LocalizedStrings.ToolCommands}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+        <TextBlock Text="{Binding L[tool.commands]}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
 
         <Border Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6">
             <Grid>
-                <TextBlock Text="{Binding LocalizedStrings.ToolCommandsEmpty}" Foreground="#87909B"
+                <TextBlock Text="{Binding L[tool.commands.empty]}" Foreground="#87909B"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            IsVisible="{Binding Commands.Count, Converter={StaticResource IsZeroConverter}}" />
                 <ListBox ItemsSource="{Binding Commands}"
@@ -32,28 +32,28 @@
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{Binding LocalizedStrings.ToolCommandsSend}" Click="OnSendClick" />
-            <Button Content="{Binding LocalizedStrings.ToolCommandsAdd}" Click="OnNewClick" />
-            <Button Content="{Binding LocalizedStrings.ToolCommandsDelete}" Click="OnDeleteClick" />
+            <Button Content="{Binding L[tool.commands.send]}" Click="OnSendClick" />
+            <Button Content="{Binding L[tool.commands.add]}" Click="OnNewClick" />
+            <Button Content="{Binding L[tool.commands.delete]}" Click="OnDeleteClick" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{Binding LocalizedStrings.ToolCommandsImport}" Click="OnImportClick" Classes="secondary" />
-            <Button Content="{Binding LocalizedStrings.ToolCommandsExport}" Click="OnExportClick" Classes="secondary" />
+            <Button Content="{Binding L[tool.commands.import]}" Click="OnImportClick" Classes="secondary" />
+            <Button Content="{Binding L[tool.commands.export]}" Click="OnExportClick" Classes="secondary" />
         </StackPanel>
 
         <Separator />
 
         <StackPanel Spacing="8">
-            <TextBlock Text="{Binding LocalizedStrings.ToolCommandsName}" FontSize="12" Foreground="#B7C1CC" />
+            <TextBlock Text="{Binding L[tool.commands.name]}" FontSize="12" Foreground="#B7C1CC" />
             <TextBox Text="{Binding EditorName}" />
 
-            <TextBlock Text="{Binding LocalizedStrings.ToolCommandsPayload}" FontSize="12" Foreground="#B7C1CC" />
+            <TextBlock Text="{Binding L[tool.commands.payload]}" FontSize="12" Foreground="#B7C1CC" />
             <TextBox Text="{Binding EditorPayload}" AcceptsReturn="True" Height="80" />
 
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsType}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.type]}" FontSize="12" Foreground="#B7C1CC" />
                     <ComboBox ItemsSource="{Binding PayloadTypeOptions}" SelectedItem="{Binding SelectedPayloadType}" Width="120">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -63,14 +63,14 @@
                     </ComboBox>
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsEncoding}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.encoding]}" FontSize="12" Foreground="#B7C1CC" />
                     <TextBox Text="{Binding EditorEncoding}" Width="120" />
                 </StackPanel>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsScope}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.scope]}" FontSize="12" Foreground="#B7C1CC" />
                     <ComboBox ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding SelectedScope}" Width="120">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -80,28 +80,28 @@
                     </ComboBox>
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsGroup}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.group]}" FontSize="12" Foreground="#B7C1CC" />
                     <TextBox Text="{Binding EditorGroup}" Width="120" />
                 </StackPanel>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <CheckBox Content="{Binding LocalizedStrings.ToolCommandsAppendCr}" IsChecked="{Binding EditorAppendCr}" />
-                <CheckBox Content="{Binding LocalizedStrings.ToolCommandsAppendLf}" IsChecked="{Binding EditorAppendLf}" />
+                <CheckBox Content="{Binding L[tool.commands.appendCr]}" IsChecked="{Binding EditorAppendCr}" />
+                <CheckBox Content="{Binding L[tool.commands.appendLf]}" IsChecked="{Binding EditorAppendLf}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsHotkey}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.hotkey]}" FontSize="12" Foreground="#B7C1CC" />
                     <TextBox Text="{Binding EditorHotkey}" Width="160" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="{Binding LocalizedStrings.ToolCommandsSortOrder}" FontSize="12" Foreground="#B7C1CC" />
+                    <TextBlock Text="{Binding L[tool.commands.sortOrder]}" FontSize="12" Foreground="#B7C1CC" />
                     <TextBox Text="{Binding EditorSortOrder}" Width="80" />
                 </StackPanel>
             </StackPanel>
 
-            <Button Content="{Binding LocalizedStrings.ToolCommandsSave}" Classes="accent" Click="OnSaveClick" />
+            <Button Content="{Binding L[tool.commands.save]}" Classes="accent" Click="OnSaveClick" />
         </StackPanel>
     </StackPanel>
 </UserControl>

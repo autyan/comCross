@@ -9,7 +9,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class WorkloadTabs : UserControl
+public partial class WorkloadTabs : BaseUserControl
 {
     public WorkloadTabs()
     {

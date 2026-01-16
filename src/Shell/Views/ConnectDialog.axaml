@@ -6,7 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="350"
         x:Class="ComCross.Shell.Views.ConnectDialog"
         x:DataType="vm:MainWindowViewModel"
-        Title="{Binding LocalizedStrings.DialogConnectTitle}"
+        Title="{Binding L[dialog.connect.title]}"
         Width="450" Height="350"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
@@ -15,7 +15,7 @@
         <StackPanel Grid.Row="0" Spacing="16">
             <!-- Port Selection -->
             <StackPanel Spacing="8">
-                <TextBlock Text="{Binding LocalizedStrings.DialogConnectPort}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding L[dialog.connect.port]}" FontWeight="SemiBold" />
                 <ComboBox x:Name="PortComboBox" 
                           ItemsSource="{Binding Devices}"
                           SelectedIndex="0">
@@ -29,7 +29,7 @@
 
             <!-- Baud Rate -->
             <StackPanel Spacing="8">
-                <TextBlock Text="{Binding LocalizedStrings.DialogConnectBaudRate}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding L[dialog.connect.baudrate]}" FontWeight="SemiBold" />
                 <ComboBox x:Name="BaudRateComboBox" SelectedIndex="5">
                     <ComboBoxItem Content="9600" />
                     <ComboBoxItem Content="19200" />
@@ -45,15 +45,15 @@
 
             <!-- Session Name -->
             <StackPanel Spacing="8">
-                <TextBlock Text="{Binding LocalizedStrings.DialogConnectSessionName}" FontWeight="SemiBold" />
-                <TextBox x:Name="SessionNameTextBox" Watermark="{Binding LocalizedStrings.DialogConnectSessionNamePlaceholder}" />
+                <TextBlock Text="{Binding L[dialog.connect.sessionname]}" FontWeight="SemiBold" />
+                <TextBox x:Name="SessionNameTextBox" Watermark="{Binding L[dialog.connect.sessionname.placeholder]}" />
             </StackPanel>
         </StackPanel>
 
         <!-- Buttons -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-            <Button Content="{Binding LocalizedStrings.DialogConnectCancel}" Width="100" Click="OnCancelClick" />
-            <Button Content="{Binding LocalizedStrings.DialogConnectConnect}" Width="100" Classes="accent" Click="OnConnectClick" />
+            <Button Content="{Binding L[dialog.connect.cancel]}" Width="100" Click="OnCancelClick" />
+            <Button Content="{Binding L[dialog.connect.connect]}" Width="100" Classes="accent" Click="OnConnectClick" />
         </StackPanel>
     </Grid>
 </Window>

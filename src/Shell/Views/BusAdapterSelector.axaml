@@ -7,7 +7,7 @@
 
   <StackPanel Spacing="12">
     <!-- Section Header -->
-    <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.SidebarBusAdapter}" 
+    <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[sidebar.busAdapter]}" 
                FontSize="11" 
                FontWeight="Bold" 
                Foreground="#87909B"
@@ -26,7 +26,7 @@
             <TextBlock Text="{Binding Name}" 
                        FontSize="13" 
                        VerticalAlignment="Center" />
-            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.SidebarBusAdapterComingSoon}" 
+            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[sidebar.busAdapter.comingSoon]}" 
                        FontSize="11" 
                        Foreground="#87909B"
                        VerticalAlignment="Center"

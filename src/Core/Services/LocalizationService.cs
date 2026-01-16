@@ -12,18 +12,37 @@ namespace ComCross.Core.Services;
 public sealed class LocalizationService : ILocalizationService
 {
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _translations = new();
+    private readonly ConcurrentDictionary<string, byte> _missingKeyLogged = new();
+    private readonly LocalizationStrings _strings;
     private string _currentCulture = "en-US";
+    private readonly bool _debugI18n;
 
     public string CurrentCulture => _currentCulture;
 
     public IReadOnlyList<LocaleCultureInfo> AvailableCultures { get; }
+    
+    public ILocalizationStrings Strings => _strings;
 
     public LocalizationService()
     {
+        _debugI18n = string.Equals(
+            Environment.GetEnvironmentVariable("COMCROSS_I18N_DEBUG"),
+            "1",
+            StringComparison.Ordinal);
+
+        _strings = new LocalizationStrings(this);
+        
         var defaultTranslations = GetEnglishTranslations();
         _translations["en-US"] = defaultTranslations;
 
         AvailableCultures = LoadResourceTranslations(defaultTranslations);
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] LocalizationService initialized. DefaultCulture=en-US CurrentCulture={_currentCulture}");
+            Console.WriteLine($"[i18n] AvailableCultures: {string.Join(", ", AvailableCultures.Select(c => c.Code))}");
+            Console.WriteLine($"[i18n] en-US keys loaded: {defaultTranslations.Count}");
+        }
 
         // Load default culture
         LoadCulture(_currentCulture);
@@ -37,7 +56,14 @@ public sealed class LocalizationService : ILocalizationService
         }
 
         _currentCulture = cultureCode;
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] SetCulture -> {cultureCode}");
+        }
+
         LoadCulture(cultureCode);
+        _strings.RefreshAll(); // Notify XAML bindings to refresh
     }
 
     public string GetString(string key, params object[] args)
@@ -62,6 +88,11 @@ public sealed class LocalizationService : ILocalizationService
             {
                 return args.Length > 0 ? string.Format(value, args) : value;
             }
+        }
+
+        if (_debugI18n && _missingKeyLogged.TryAdd($"{_currentCulture}:{key}", 0))
+        {
+            Console.WriteLine($"[i18n] Missing key '{key}' (culture={_currentCulture})");
         }
 
         return $"[{key}]"; // Return key if not found
@@ -94,13 +125,41 @@ public sealed class LocalizationService : ILocalizationService
 
         var assembly = typeof(AssetMarker).Assembly;
         var resourceName = "ComCross.Assets.Resources.Localization.strings.json";
-        using var stream = assembly.GetManifestResourceStream(resourceName);
+        var stream = assembly.GetManifestResourceStream(resourceName);
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] Trying to load embedded resource: {resourceName}");
+        }
+
         if (stream == null)
         {
+            var fallbackName = assembly
+                .GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith("Resources.Localization.strings.json", StringComparison.Ordinal));
+
+            if (_debugI18n)
+            {
+                Console.WriteLine($"[i18n] Embedded resource not found by exact name. Fallback match: {fallbackName ?? "<null>"}");
+            }
+
+            if (fallbackName != null)
+            {
+                stream = assembly.GetManifestResourceStream(fallbackName);
+            }
+        }
+
+        if (stream == null)
+        {
+            if (_debugI18n)
+            {
+                Console.WriteLine("[i18n] No embedded strings.json found; only en-US will be available.");
+            }
             return cultures;
         }
 
-        using var doc = JsonDocument.Parse(stream);
+        using var streamToDispose = stream;
+        using var doc = JsonDocument.Parse(streamToDispose);
         if (!doc.RootElement.TryGetProperty("cultures", out var culturesElement))
         {
             return cultures;
@@ -152,6 +211,9 @@ public sealed class LocalizationService : ILocalizationService
             ["menu.disconnect"] = "Disconnect",
             ["menu.clear"] = "Clear",
             ["menu.export"] = "Export",
+
+            // MessageBox
+            ["messagebox.cancel"] = "Cancel",
             
             // Connect Dialog
             ["dialog.connect.title"] = "Connect to Device",
@@ -161,6 +223,12 @@ public sealed class LocalizationService : ILocalizationService
             ["dialog.connect.sessionname.placeholder"] = "My Session",
             ["dialog.connect.cancel"] = "Cancel",
             ["dialog.connect.connect"] = "Connect",
+
+            // Session Edit
+            ["session.edit.title"] = "Edit Session",
+            ["session.edit.name"] = "Session Name",
+            ["session.edit.save"] = "Save",
+            ["session.edit.cancel"] = "Cancel",
             
             // Workload
             ["workload.new"] = "New Workload",
@@ -210,6 +278,36 @@ public sealed class LocalizationService : ILocalizationService
             ["sidebar.parity.odd"] = "Odd",
             ["sidebar.parity.even"] = "Even",
             ["sidebar.newSession"] = "New Session",
+
+            // Session
+            ["session.menu.rename"] = "Rename",
+            ["session.menu.delete"] = "Delete",
+            ["dialog.renameSession.title"] = "Rename Session",
+            ["dialog.renameSession.label"] = "Session Name",
+            ["dialog.renameSession.placeholder"] = "Enter session name",
+            ["dialog.renameSession.ok"] = "OK",
+            ["dialog.renameSession.cancel"] = "Cancel",
+
+            // Connection Errors & Confirmation
+            ["connection.error.noPortSelected"] = "No port selected",
+            ["connection.error.noPortSelectedMessage"] = "Please select a serial port first.",
+            ["connection.error.failed"] = "Connection failed",
+            ["connection.error.failedMessage"] = "Failed to connect to {0}: {1}",
+            ["connection.confirm.existingSession.title"] = "Existing session",
+            ["connection.confirm.existingSession.message"] = "A session for '{0}' already exists. What do you want to do?",
+            ["connection.confirm.ok"] = "Switch",
+            ["connection.confirm.cancel"] = "Create new",
+
+            // Notifications
+            ["notification.connection.unknownReason"] = "Unknown reason",
+
+            // Shutdown / Cleanup
+            ["shutdown.title"] = "Shutting down",
+            ["shutdown.message"] = "Please wait while ComCross cleans up resources...",
+            ["shutdown.disconnecting"] = "Disconnecting {0}...",
+            ["shutdown.savingState"] = "Saving workspace state...",
+            ["shutdown.cleaningUp"] = "Cleaning up...",
+            ["shutdown.complete"] = "Complete.",
             
             // Message Stream
             ["stream.search.placeholder"] = "Search messages...",
@@ -311,10 +409,20 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.connection.defaultEncoding"] = "Default encoding",
             ["settings.connection.defaultAddCr"] = "Append CR by default",
             ["settings.connection.defaultAddLf"] = "Append LF by default",
+            ["settings.connection.existingSessionBehavior"] = "When a session already exists",
+            ["settings.connection.behavior.createNew"] = "Create new session",
+            ["settings.connection.behavior.switchToExisting"] = "Switch to existing session",
+            ["settings.connection.behavior.promptUser"] = "Ask every time",
+            ["settings.connection.linuxScan"] = "Linux serial scan",
+            ["settings.connection.linuxScan.tip"] = "Tip: Use glob patterns like /dev/ttyUSB*",
+            ["settings.connection.linuxScan.scanPatterns"] = "Scan patterns",
+            ["settings.connection.linuxScan.excludePatterns"] = "Exclude patterns",
             ["settings.display.maxMessages"] = "Max in-memory messages",
             ["settings.display.autoScroll"] = "Auto scroll",
             ["tool.send.clearAfterSend"] = "Clear after send",
             ["settings.display.timestampFormat"] = "Timestamp format",
+            ["settings.display.fontFamily"] = "Font family",
+            ["settings.display.fontSize"] = "Font size",
             ["settings.export.defaultFormat"] = "Default format",
             ["settings.export.defaultDirectory"] = "Default export directory",
             ["settings.export.range"] = "Range",
@@ -327,10 +435,11 @@ public sealed class LocalizationService : ILocalizationService
             ["notifications.title"] = "Notifications",
             ["notifications.empty"] = "No notifications",
             ["notifications.markAllRead"] = "Mark all read",
+            ["notifications.clearAll"] = "Clear all",
             ["notification.storage.limitExceeded"] = "Log storage limit exceeded ({0} MB / {1} MB).",
             ["notification.storage.autoDeleteApplied"] = "Auto delete removed {0} log files.",
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
-            ["notification.connection.unknownReason"] = "unknown",
+            ["notification.connection.unknownReason"] = "Unknown reason",
             ["notification.export.completed"] = "Export completed: {0}"
         };
     }

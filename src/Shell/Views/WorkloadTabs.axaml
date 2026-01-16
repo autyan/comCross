@@ -65,7 +65,7 @@
                             IsVisible="{Binding CanClose}"
                             Command="{Binding CloseCommand}"
                             CommandParameter="{Binding Id}"
-                            ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadClose}">
+                            ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.close]}">
                       <Button.Styles>
                         <Style Selector="Button:pointerover">
                           <Setter Property="Background" Value="#FF4444" />
@@ -79,7 +79,7 @@
                   <Border.ContextMenu>
                     <ContextMenu>
                       <!-- Rename (all workloads) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadRename}" 
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.rename]}" 
                                 IsEnabled="{Binding CanRename}"
                                 Command="{Binding RenameCommand}"
                                 CommandParameter="{Binding Id}">
@@ -89,7 +89,7 @@
                       </MenuItem>
                       
                       <!-- Copy (all workloads) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadCopy}" 
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.copy]}" 
                                 IsEnabled="{Binding CanCopy}"
                                 Command="{Binding CopyCommand}"
                                 CommandParameter="{Binding Id}">
@@ -101,7 +101,7 @@
                       <Separator IsVisible="{Binding CanDelete}" />
                       
                       <!-- Delete (except default) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadDelete}" 
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.delete]}" 
                                 IsEnabled="{Binding CanDelete}"
                                 Command="{Binding CloseCommand}"
                                 CommandParameter="{Binding Id}">
@@ -124,7 +124,7 @@
                   Padding="16,10"
                   VerticalAlignment="Center"
                   Command="{Binding CreateWorkloadCommand}"
-                  ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadNew}">
+                  ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.new]}">
             <Button.Styles>
               <Style Selector="Button:pointerover">
                 <Setter Property="Background" Value="#1A2530" />
@@ -146,7 +146,7 @@
                 BorderThickness="0"
                 Padding="8"
                 Click="OnNotificationsClick"
-                ToolTip.Tip="{Binding LocalizedStrings.ActionNotificationsTooltip}">
+                ToolTip.Tip="{Binding L[action.notifications.tooltip]}">
           <Button.Styles>
             <Style Selector="Button:pointerover">
               <Setter Property="Background" Value="#1A2530" />
@@ -165,7 +165,7 @@
                 BorderThickness="0"
                 Padding="8"
                 Click="OnSettingsClick"
-                ToolTip.Tip="{Binding LocalizedStrings.ActionSettingsTooltip}">
+                ToolTip.Tip="{Binding L[action.settings.tooltip]}">
           <Button.Styles>
             <Style Selector="Button:pointerover">
               <Setter Property="Background" Value="#1A2530" />

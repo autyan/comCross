@@ -8,28 +8,31 @@ using System.Windows.Input;
 using ComCross.Core.Models;
 using ComCross.Core.Services;
 using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 using ComCross.Shell.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.ViewModels;
 
 /// <summary>
 /// ViewModel for Workload tabs management
 /// </summary>
-public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
+public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
 {
     private readonly WorkloadService _workloadService;
-    private readonly EventBus _eventAggregator;
+    private readonly IEventBus _eventBus;
     private WorkloadTabItemViewModel? _activeTab;
 
-    public LocalizedStringsViewModel LocalizedStrings { get; }
-
-    public WorkloadTabsViewModel(WorkloadService workloadService, EventBus eventAggregator, LocalizedStringsViewModel localizedStrings)
+    public WorkloadTabsViewModel(
+        ILocalizationService localization,
+        WorkloadService workloadService,
+        IEventBus eventBus)
+        : base(localization)
     {
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
-        _eventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
-        LocalizedStrings = localizedStrings ?? throw new ArgumentNullException(nameof(localizedStrings));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
 
         Tabs = new ObservableCollection<WorkloadTabItemViewModel>();
 
@@ -40,9 +43,9 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
         RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
         CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
 
-        _eventAggregator.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
-        _eventAggregator.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
-        _eventAggregator.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
+        _eventBus.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
+        _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
+        _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
     }
 
     /// <summary>
@@ -113,7 +116,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private async Task CreateWorkloadAsync()
     {
-        var dialog = new CreateWorkloadDialog(LocalizedStrings);
+        var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
         var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
             ? desktop.MainWindow 
             : null;
@@ -144,7 +147,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
             _workloadService.SetActiveWorkload(workloadId);
             
             // Notify that active workload has changed (so statistics can be updated)
-            _eventAggregator.Publish(new ActiveWorkloadChangedEvent(workloadId));
+            _eventBus.Publish(new ActiveWorkloadChangedEvent(workloadId));
         }
     }
 
@@ -196,7 +199,8 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
         if (mainWindow == null)
             return;
 
-        var dialog = new RenameWorkloadDialog(LocalizedStrings, tab.Name);
+        var dialog = App.ServiceProvider.GetRequiredService<RenameWorkloadDialog>();
+        dialog.CurrentName = tab.Name;
 
         var result = await dialog.ShowDialog<string?>(mainWindow);
 
@@ -226,7 +230,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
             return;
 
         // Show dialog to input new name
-        var dialog = new CreateWorkloadDialog(LocalizedStrings);
+        var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
         var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
 
         if (result != null)
@@ -281,13 +285,6 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
                 }
             }
         }
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     public void Dispose()

@@ -1,22 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class CommandCenterViewModel : INotifyPropertyChanged
+public sealed class CommandCenterViewModel : BaseViewModel
 {
     private readonly CommandService _commandService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private string? _sessionId;
     private string _sessionName = string.Empty;
     private CommandDefinition? _selectedCommand;
@@ -32,19 +30,17 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
     private int _editorSortOrder;
 
     public CommandCenterViewModel(
+        ILocalizationService localization,
         CommandService commandService,
         SettingsService settingsService,
-        NotificationService notificationService,
-        LocalizedStringsViewModel localizedStrings)
+        NotificationService notificationService)
+        : base(localization)
     {
         _commandService = commandService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _localizedStrings = localizedStrings;
         RefreshLocalizedOptions();
     }
-
-    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
 
     public ObservableCollection<CommandDefinition> Commands { get; } = new();
 
@@ -352,14 +348,14 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
     {
         PayloadTypeOptions = new[]
         {
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, _localizedStrings.ToolCommandsTypeText),
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, _localizedStrings.ToolCommandsTypeHex)
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, L["tool.commands.type.text"]),
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, L["tool.commands.type.hex"])
         };
 
         ScopeOptions = new[]
         {
-            new CommandOption<CommandScope>(CommandScope.Global, _localizedStrings.ToolCommandsScopeGlobal),
-            new CommandOption<CommandScope>(CommandScope.Session, _localizedStrings.ToolCommandsScopeSession)
+            new CommandOption<CommandScope>(CommandScope.Global, L["tool.commands.scope.global"]),
+            new CommandOption<CommandScope>(CommandScope.Session, L["tool.commands.scope.session"])
         };
 
         OnPropertyChanged(nameof(PayloadTypeOptions));
@@ -419,12 +415,6 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         return value.Replace(" ", string.Empty).Trim();
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }
 
 public sealed record CommandOption<T>(T Value, string Label);

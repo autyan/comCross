@@ -8,7 +8,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class MessageStreamView : UserControl
+public partial class MessageStreamView : BaseUserControl
 {
     public static readonly StyledProperty<string?> TimestampFormatProperty =
         AvaloniaProperty.Register<MessageStreamView, string?>(nameof(TimestampFormat));

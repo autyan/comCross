@@ -1,7 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Linq;
@@ -13,25 +13,19 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class NotificationCenterViewModel : INotifyPropertyChanged
+public sealed class NotificationCenterViewModel : BaseViewModel
 {
     private readonly NotificationService _notificationService;
-    private readonly ILocalizationService _localization;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private int _unreadCount;
 
     public NotificationCenterViewModel(
-        NotificationService notificationService,
         ILocalizationService localization,
-        LocalizedStringsViewModel localizedStrings)
+        NotificationService notificationService)
+        : base(localization)
     {
         _notificationService = notificationService;
-        _localization = localization;
-        _localizedStrings = localizedStrings;
         _notificationService.NotificationAdded += OnNotificationAdded;
     }
-
-    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
 
     public ObservableCollection<NotificationItemViewModel> Items { get; } = new();
 
@@ -61,7 +55,7 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
             Items.Clear();
             foreach (var item in items)
             {
-                Items.Add(new NotificationItemViewModel(item, _localization));
+                Items.Add(new NotificationItemViewModel(item, Localization));
             }
 
             UpdateUnreadCount();
@@ -117,7 +111,7 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
     {
         foreach (var item in Items)
         {
-            item.RefreshMessage(_localization);
+            item.RefreshMessage(Localization);
         }
 
         OnPropertyChanged(nameof(HasNotifications));
@@ -128,7 +122,7 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
     {
         Dispatcher.UIThread.Post(() =>
         {
-            Items.Insert(0, new NotificationItemViewModel(item, _localization));
+            Items.Insert(0, new NotificationItemViewModel(item, Localization));
             UpdateUnreadCount();
             OnPropertyChanged(nameof(HasNotifications));
             OnPropertyChanged(nameof(IsEmpty));
@@ -138,13 +132,6 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
     private void UpdateUnreadCount()
     {
         UnreadCount = Items.Count(i => !i.IsRead);
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 

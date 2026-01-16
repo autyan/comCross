@@ -9,13 +9,13 @@
     <Border Padding="16">
     <Grid RowDefinitions="Auto,*">
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{Binding LocalizedStrings.NotificationsMarkAllRead}" Click="OnMarkAllReadClick" />
-            <Button Content="{Binding LocalizedStrings.NotificationsClearAll}" Click="OnClearAllClick" Classes="secondary" />
+            <Button Content="{Binding L[notifications.markAllRead]}" Click="OnMarkAllReadClick" />
+            <Button Content="{Binding L[notifications.clearAll]}" Click="OnClearAllClick" Classes="secondary" />
         </StackPanel>
 
         <Border Grid.Row="1" Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Margin="0,12,0,0">
             <Grid>
-                <TextBlock Text="{Binding LocalizedStrings.NotificationsEmpty}" Foreground="#87909B" 
+                <TextBlock Text="{Binding L[notifications.empty]}" Foreground="#87909B" 
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            IsVisible="{Binding IsEmpty}" />
                 <ListBox ItemsSource="{Binding Items}" Background="#0F1417" BorderThickness="0"

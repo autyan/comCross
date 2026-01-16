@@ -10,6 +10,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Views;
 
@@ -142,10 +143,8 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm)
         {
             // Show connect dialog
-            var dialog = new ConnectDialog
-            {
-                DataContext = vm
-            };
+            var dialog = App.ServiceProvider.GetRequiredService<ConnectDialog>();
+            dialog.DataContext = vm;
 
             await dialog.ShowDialog(this);
         }
@@ -182,7 +181,7 @@ public partial class MainWindow : Window
             var suggestedName = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}.{format}";
             var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                Title = vm.LocalizedStrings.MenuExport,
+                Title = vm.L["menu.export"],
                 SuggestedFileName = suggestedName,
                 DefaultExtension = format,
                 FileTypeChoices =

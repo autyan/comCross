@@ -5,41 +5,34 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using ComCross.Shell.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Views;
 
-public partial class RenameWorkloadDialog : Window, INotifyPropertyChanged
+public partial class RenameWorkloadDialog : BaseWindow
 {
     private string _workloadName = string.Empty;
     private string _originalName = string.Empty;
     private string? _nameError;
 
     // 无参构造函数用于Avalonia XAML设计器
-    public RenameWorkloadDialog() : this(new LocalizedStringsViewModel(new ComCross.Core.Services.LocalizationService()))
+    public RenameWorkloadDialog()
     {
-    }
-
-    public RenameWorkloadDialog(LocalizedStringsViewModel localizedStrings)
-    {
-        LocalizedStrings = localizedStrings ?? throw new ArgumentNullException(nameof(localizedStrings));
         InitializeComponent();
         DataContext = this;
     }
 
     /// <summary>
-    /// 构造函数（带当前名称）
+    /// 设置当前名称
     /// </summary>
-    public RenameWorkloadDialog(LocalizedStringsViewModel localizedStrings, string currentName) : this(localizedStrings)
+    public string CurrentName
     {
-        _originalName = currentName;
-        WorkloadName = currentName;
+        set
+        {
+            _originalName = value;
+            WorkloadName = value;
+        }
     }
-
-    /// <summary>
-    /// 本地化字符串
-    /// </summary>
-    public LocalizedStringsViewModel LocalizedStrings { get; }
 
     private void InitializeComponent()
     {

@@ -22,7 +22,7 @@
         <Grid Grid.Row="1" ColumnDefinitions="250,*,350">
             <!-- Left Sidebar -->
             <Border Grid.Column="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,1,0">
-                <views:LeftSidebar LocalizedStrings="{Binding LocalizedStrings}" />
+                <views:LeftSidebar />
             </Border>
 
             <!-- Center Workspace: Message Stream -->
@@ -41,7 +41,7 @@
             <Grid ColumnDefinitions="*,Auto,Auto">
                 <!-- Left: Status and Metrics -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
-                    <TextBlock Text="{Binding LocalizedStrings.StatusReady}" 
+                    <TextBlock Text="{Binding L[status.ready]}" 
                                FontSize="12" 
                                VerticalAlignment="Center" 
                                Foreground="#87909B" />
@@ -49,7 +49,7 @@
                     <!-- RX/TX Statistics (Workload Total) -->
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding LocalizedStrings.StatusRx}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding L[status.rx]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding TotalRxBytes, StringFormat={}{0:N0} B}" 
                                        FontSize="11" 
                                        Foreground="#2CB5A9" 
@@ -58,7 +58,7 @@
                                        ToolTip.Tip="{Binding TotalRxBytes, StringFormat=Total received: {0:N0} bytes}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding LocalizedStrings.StatusTx}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding L[status.tx]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding TotalTxBytes, StringFormat={}{0:N0} B}" 
                                        FontSize="11" 
                                        Foreground="#3AA0FF" 
@@ -67,7 +67,7 @@
                                        ToolTip.Tip="{Binding TotalTxBytes, StringFormat=Total transmitted: {0:N0} bytes}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding LocalizedStrings.StreamMetricsLines}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding L[stream.metrics.lines]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding Messages.Count}" 
                                        FontSize="11" 
                                        Foreground="#E6EDF3" 
@@ -79,11 +79,11 @@
                     <!-- System Resources (Placeholder) -->
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding LocalizedStrings.StatusCpu}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding L[status.cpu]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
                             <TextBlock Text="0%" FontSize="11" Foreground="#F5A524" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding LocalizedStrings.StatusMem}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding L[status.mem]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
                             <TextBlock Text="0 MB" FontSize="11" Foreground="#F5A524" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                     </StackPanel>
@@ -98,8 +98,8 @@
                     <Grid RowDefinitions="Auto,*">
                         <Border Background="#1B242A" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding LocalizedStrings.SettingsTitle}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
-                                <Button Grid.Column="1" Content="{Binding LocalizedStrings.SettingsClose}" Click="OnSettingsCloseClick" />
+                                <TextBlock Text="{Binding L[settings.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
+                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Click="OnSettingsCloseClick" />
                             </Grid>
                         </Border>
                         <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
@@ -115,8 +115,8 @@
                     <Grid RowDefinitions="Auto,*">
                         <Border Background="#1B242A" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding LocalizedStrings.NotificationsTitle}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
-                                <Button Grid.Column="1" Content="{Binding LocalizedStrings.SettingsClose}" Click="OnNotificationsCloseClick" />
+                                <TextBlock Text="{Binding L[notifications.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
+                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Click="OnNotificationsCloseClick" />
                             </Grid>
                         </Border>
                         <views:NotificationCenterView Grid.Row="1" DataContext="{Binding NotificationCenter}" />

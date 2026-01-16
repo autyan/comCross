@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using ComCross.Core.Services;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
+using ComCross.Shared.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace ComCross.Shell.ViewModels;
@@ -16,30 +16,27 @@ namespace ComCross.Shell.ViewModels;
 /// <summary>
 /// Workload 面板的 ViewModel，管理所有 Workload 的显示和操作
 /// </summary>
-public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
+public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
 {
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
     private readonly ILogger<WorkloadPanelViewModel> _logger;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private WorkloadItemViewModel? _selectedWorkload;
     private bool _isLoading;
     
     // Event subscriptions
     private readonly List<IDisposable> _subscriptions = new();
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
     public WorkloadPanelViewModel(
+        ILocalizationService localization,
         WorkloadService workloadService,
         IEventBus eventBus,
-        ILogger<WorkloadPanelViewModel> logger,
-        LocalizedStringsViewModel localizedStrings)
+        ILogger<WorkloadPanelViewModel> logger)
+        : base(localization)
     {
         _workloadService = workloadService;
         _eventBus = eventBus;
         _logger = logger;
-        _localizedStrings = localizedStrings;
 
         Workloads = new ObservableCollection<WorkloadItemViewModel>();
 
@@ -167,7 +164,7 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
             ComCross.Shell.Views.CreateWorkloadResult? result = null;
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var dialog = new ComCross.Shell.Views.CreateWorkloadDialog(_localizedStrings);
+                var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.CreateWorkloadDialog>();
                 result = await dialog.ShowDialog<ComCross.Shell.Views.CreateWorkloadResult?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
                         ? desktop.MainWindow!
@@ -209,7 +206,8 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
             string? newName = null;
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var dialog = new ComCross.Shell.Views.RenameWorkloadDialog(_localizedStrings, currentName);
+                var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.RenameWorkloadDialog>();
+                dialog.CurrentName = currentName;
                 newName = await dialog.ShowDialog<string?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
                         ? desktop.MainWindow!
@@ -319,10 +317,5 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
             subscription.Dispose();
         }
         _subscriptions.Clear();
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

@@ -8,28 +8,28 @@ using System.Threading.Tasks;
 using System.Linq;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class PluginManagerViewModel : INotifyPropertyChanged
+public sealed class PluginManagerViewModel : BaseViewModel
 {
     private readonly PluginDiscoveryService _discoveryService;
     private readonly PluginRuntimeService _runtimeService;
     private readonly SettingsService _settingsService;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private string _pluginsDirectory;
     private List<PluginRuntime> _runtimes = new();
 
     public PluginManagerViewModel(
+        ILocalizationService localization,
         PluginDiscoveryService discoveryService,
         PluginRuntimeService runtimeService,
-        SettingsService settingsService,
-        LocalizedStringsViewModel localizedStrings)
+        SettingsService settingsService)
+        : base(localization)
     {
         _discoveryService = discoveryService;
         _runtimeService = runtimeService;
         _settingsService = settingsService;
-        _localizedStrings = localizedStrings;
         _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
     }
 
@@ -64,7 +64,7 @@ public sealed class PluginManagerViewModel : INotifyPropertyChanged
 
         foreach (var runtime in _runtimes)
         {
-            Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, _localizedStrings));
+            Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, L));
         }
 
         await Task.CompletedTask;
@@ -81,7 +81,7 @@ public sealed class PluginManagerViewModel : INotifyPropertyChanged
     {
         foreach (var plugin in Plugins)
         {
-            plugin.RefreshStatus(_localizedStrings);
+            plugin.RefreshStatus(L);
         }
     }
 
@@ -103,16 +103,9 @@ public sealed class PluginManagerViewModel : INotifyPropertyChanged
             var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == plugin.Id);
             if (runtime != null)
             {
-                plugin.UpdateState(runtime, _localizedStrings);
+                plugin.UpdateState(runtime, L);
             }
         }
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 
@@ -125,7 +118,7 @@ public sealed class PluginItemViewModel : INotifyPropertyChanged
     public PluginItemViewModel(
         PluginRuntime runtime,
         IReadOnlyDictionary<string, bool> enabledMap,
-        LocalizedStringsViewModel localizedStrings)
+        ILocalizationStrings localizedStrings)
     {
         Id = runtime.Info.Manifest.Id;
         Name = runtime.Info.Manifest.Name;
@@ -187,18 +180,18 @@ public sealed class PluginItemViewModel : INotifyPropertyChanged
         }
     }
 
-    public void RefreshStatus(LocalizedStringsViewModel localizedStrings)
+    public void RefreshStatus(ILocalizationStrings localizedStrings)
     {
         StatusText = State switch
         {
-            PluginLoadState.Loaded => localizedStrings.SettingsPluginsStatusLoaded,
-            PluginLoadState.Disabled => localizedStrings.SettingsPluginsStatusDisabled,
-            PluginLoadState.Failed => localizedStrings.SettingsPluginsStatusFailed,
-            _ => localizedStrings.SettingsPluginsStatusFailed
+            PluginLoadState.Loaded => localizedStrings["settings.plugins.status.loaded"],
+            PluginLoadState.Disabled => localizedStrings["settings.plugins.status.disabled"],
+            PluginLoadState.Failed => localizedStrings["settings.plugins.status.failed"],
+            _ => localizedStrings["settings.plugins.status.failed"]
         };
     }
 
-    public void UpdateState(PluginRuntime runtime, LocalizedStringsViewModel localizedStrings)
+    public void UpdateState(PluginRuntime runtime, ILocalizationStrings localizedStrings)
     {
         State = runtime.State;
         RefreshStatus(localizedStrings);

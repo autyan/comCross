@@ -20,7 +20,7 @@
             Padding="12,8">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0"
-                   Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadPanelTitle}"
+                   Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.panel.title]}"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource --text-0}"
@@ -48,7 +48,7 @@
         <TextBlock Foreground="{DynamicResource --text-1}"
                    FontSize="13">
           <Run Text="⏳ " />
-          <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadPanelLoading}" />
+          <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.panel.loading]}" />
         </TextBlock>
       </StackPanel>
     </Border>

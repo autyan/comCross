@@ -4,7 +4,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class NotificationCenterView : UserControl
+public partial class NotificationCenterView : BaseUserControl
 {
     public NotificationCenterView()
     {

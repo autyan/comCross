@@ -6,7 +6,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class WorkloadPanel : UserControl
+public partial class WorkloadPanel : BaseUserControl
 {
     public WorkloadPanel()
     {

@@ -7,7 +7,7 @@ using ComCross.Shared.Models;
 
 namespace ComCross.Shell.Views;
 
-public partial class ConnectDialog : Window
+public partial class ConnectDialog : BaseWindow
 {
     public ConnectDialog()
     {

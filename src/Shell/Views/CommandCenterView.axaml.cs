@@ -5,7 +5,7 @@ using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class CommandCenterView : UserControl
+public partial class CommandCenterView : BaseUserControl
 {
     public CommandCenterView()
     {
@@ -57,7 +57,7 @@ public partial class CommandCenterView : UserControl
 
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = vm.LocalizedStrings.ToolCommandsImport,
+                Title = GetLocalizedString(vm, "tool.commands.import"),
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
@@ -89,7 +89,7 @@ public partial class CommandCenterView : UserControl
 
             var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                Title = vm.LocalizedStrings.ToolCommandsExport,
+                Title = GetLocalizedString(vm, "tool.commands.export"),
                 SuggestedFileName = "commands.json",
                 DefaultExtension = "json",
                 FileTypeChoices =
@@ -106,5 +106,11 @@ public partial class CommandCenterView : UserControl
                 await vm.ExportAsync(file.Path.LocalPath);
             }
         }
+    }
+    
+    private static string GetLocalizedString(CommandCenterViewModel vm, string key)
+    {
+        // Access localization through Localization property
+        return vm.Localization.GetString(key);
     }
 }

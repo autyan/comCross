@@ -7,7 +7,7 @@
              x:Class="ComCross.Shell.Views.PluginManagerView"
              x:DataType="vm:SettingsViewModel">
     <StackPanel Spacing="8">
-        <TextBlock Text="{Binding LocalizedStrings.SettingsSectionPlugins}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
+        <TextBlock Text="{Binding L[settings.section.plugins]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
         <Border Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6">
             <ListBox ItemsSource="{Binding PluginManager.Plugins}" Background="#0F1417" BorderThickness="0">
                 <ListBox.ItemTemplate>
