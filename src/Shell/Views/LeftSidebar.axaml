@@ -3,176 +3,250 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
-             mc:Ignorable="d" d:DesignWidth="280" d:DesignHeight="800"
+             xmlns:views="using:ComCross.Shell.Views"
+             mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.LeftSidebar"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:MainWindowViewModel"
+             x:Name="LeftSidebarRoot">
     
-    <Grid RowDefinitions="Auto,Auto,*">
-        <!-- Devices Section -->
-        <StackPanel Grid.Row="0" Margin="16" Spacing="12">
-            <TextBlock Text="{Binding LocalizedStrings.SidebarDevices}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
-            <Grid ColumnDefinitions="*,Auto">
-                <ComboBox Grid.Column="0" ItemsSource="{Binding Devices}" 
-                          SelectedItem="{Binding SelectedDevice}"
-                          PlaceholderText="{Binding LocalizedStrings.SidebarSelectPort}"
-                          HorizontalAlignment="Stretch" Margin="0,0,8,0">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Port}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <Button Grid.Column="1" 
-                        Click="OnRefreshPortsClick"
-                        Width="36" Height="36"
-                        Padding="0"
-                        ToolTip.Tip="{Binding LocalizedStrings.SidebarRefreshPorts}"
-                        Background="#1B242A"
-                        BorderBrush="#25303A">
-                    <Path Data="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
-                          Fill="#B7C1CC" 
-                          Stretch="Uniform"
-                          Width="18" Height="18" />
-                </Button>
-            </Grid>
-        </StackPanel>
-        
-        <!-- Quick Connect Section -->
-        <Border Grid.Row="1" Background="#141B1F" Margin="16,0" Padding="12" CornerRadius="6">
-            <StackPanel Spacing="10">
-                <TextBlock Text="{Binding LocalizedStrings.SidebarQuickConnect}" FontSize="11" FontWeight="Bold" Foreground="#87909B" />
+    <!-- Vertical layout: Bus Adapter + Device Config + Sessions -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Margin="16">
+            
+            <!-- Section 1: Bus Adapter Selection -->
+            <views:BusAdapterSelector DataContext="{Binding BusAdapterSelectorViewModel}" />
+            
+            <!-- Section 2: Device Configuration (Serial) -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="{Binding LocalizedStrings.SidebarDeviceConfig}" 
+                           FontSize="11" 
+                           FontWeight="Bold" 
+                           Foreground="#87909B" />
                 
-                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                    <StackPanel Grid.Column="0" Grid.Row="0" Spacing="4" Margin="0,0,4,4">
-                        <TextBlock Text="{Binding LocalizedStrings.SidebarBaudRate}" FontSize="11" Foreground="#87909B" />
-                        <ComboBox SelectedIndex="4" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="9600" />
-                            <ComboBoxItem Content="19200" />
-                            <ComboBoxItem Content="38400" />
-                            <ComboBoxItem Content="57600" />
-                            <ComboBoxItem Content="115200" />
-                            <ComboBoxItem Content="230400" />
-                            <ComboBoxItem Content="460800" />
-                        </ComboBox>
-                    </StackPanel>
-                    
-                    <StackPanel Grid.Column="1" Grid.Row="0" Spacing="4" Margin="4,0,0,4">
-                        <TextBlock Text="{Binding LocalizedStrings.SidebarDataBits}" FontSize="11" Foreground="#87909B" />
-                        <ComboBox SelectedIndex="1" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="7" />
-                            <ComboBoxItem Content="8" />
-                        </ComboBox>
-                    </StackPanel>
-                    
-                    <StackPanel Grid.Column="0" Grid.Row="1" Spacing="4" Margin="0,4,4,0">
-                        <TextBlock Text="{Binding LocalizedStrings.SidebarParity}" FontSize="11" Foreground="#87909B" />
-                        <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityNone}" />
-                            <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityOdd}" />
-                            <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityEven}" />
-                        </ComboBox>
-                    </StackPanel>
-                    
-                    <StackPanel Grid.Column="1" Grid.Row="1" Spacing="4" Margin="4,4,0,0">
-                        <TextBlock Text="{Binding LocalizedStrings.SidebarStopBits}" FontSize="11" Foreground="#87909B" />
-                        <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="1" />
-                            <ComboBoxItem Content="1.5" />
-                            <ComboBoxItem Content="2" />
-                        </ComboBox>
-                    </StackPanel>
+                <!-- Port Selection -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <ComboBox Grid.Column="0" 
+                              ItemsSource="{Binding Devices}" 
+                              SelectedItem="{Binding SelectedDevice}"
+                              PlaceholderText="{Binding LocalizedStrings.SidebarSelectPort}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,8,0">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Port}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="1" 
+                            Click="OnRefreshPortsClick"
+                            Width="36" Height="36"
+                            Padding="0"
+                            ToolTip.Tip="{Binding LocalizedStrings.SidebarRefreshPorts}"
+                            Background="#1B242A"
+                            BorderBrush="#25303A">
+                        <Path Data="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+                              Fill="#B7C1CC" 
+                              Stretch="Uniform"
+                              Width="18" Height="18" />
+                    </Button>
                 </Grid>
                 
-                <Grid ColumnDefinitions="*,*" Margin="0,4,0,0">
-                    <Button Grid.Column="0" Content="{Binding LocalizedStrings.MenuConnect}" 
+                <!-- Serial Settings -->
+                <Border Background="#141B1F" Padding="12" CornerRadius="6">
+                    <Grid ColumnDefinitions="1.5*,*" RowDefinitions="Auto,Auto">
+                        <!-- Baud Rate -->
+                        <StackPanel Grid.Column="0" Grid.Row="0" Spacing="4" Margin="0,0,4,4">
+                            <TextBlock Text="{Binding LocalizedStrings.SidebarBaudRate}" 
+                                       FontSize="11" 
+                                       Foreground="#87909B" />
+                            <ComboBox SelectedIndex="4" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="9600" />
+                                <ComboBoxItem Content="19200" />
+                                <ComboBoxItem Content="38400" />
+                                <ComboBoxItem Content="57600" />
+                                <ComboBoxItem Content="115200" />
+                                <ComboBoxItem Content="230400" />
+                                <ComboBoxItem Content="460800" />
+                            </ComboBox>
+                        </StackPanel>
+                        
+                        <!-- Data Bits -->
+                        <StackPanel Grid.Column="1" Grid.Row="0" Spacing="4" Margin="4,0,0,4">
+                            <TextBlock Text="{Binding LocalizedStrings.SidebarDataBits}" 
+                                       FontSize="11" 
+                                       Foreground="#87909B" />
+                            <ComboBox SelectedIndex="1" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="7" />
+                                <ComboBoxItem Content="8" />
+                            </ComboBox>
+                        </StackPanel>
+                        
+                        <!-- Parity -->
+                        <StackPanel Grid.Column="0" Grid.Row="1" Spacing="4" Margin="0,4,4,0">
+                            <TextBlock Text="{Binding LocalizedStrings.SidebarParity}" 
+                                       FontSize="11" 
+                                       Foreground="#87909B" />
+                            <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityNone}" />
+                                <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityOdd}" />
+                                <ComboBoxItem Content="{Binding LocalizedStrings.SidebarParityEven}" />
+                            </ComboBox>
+                        </StackPanel>
+                        
+                        <!-- Stop Bits -->
+                        <StackPanel Grid.Column="1" Grid.Row="1" Spacing="4" Margin="4,4,0,0">
+                            <TextBlock Text="{Binding LocalizedStrings.SidebarStopBits}" 
+                                       FontSize="11" 
+                                       Foreground="#87909B" />
+                            <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="1" />
+                                <ComboBoxItem Content="1.5" />
+                                <ComboBoxItem Content="2" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                
+                <!-- Connect/Disconnect Buttons -->
+                <Grid ColumnDefinitions="*,*">
+                    <Button Grid.Column="0" 
+                            Content="{Binding LocalizedStrings.MenuConnect}" 
                             Classes="accent" 
                             Click="OnConnectClick"
-                            HorizontalAlignment="Stretch" 
+                            HorizontalAlignment="Stretch"
                             Margin="0,0,4,0" />
-                    <Button Grid.Column="1" Content="{Binding LocalizedStrings.MenuDisconnect}" 
+                    <Button Grid.Column="1" 
+                            Content="{Binding LocalizedStrings.MenuDisconnect}" 
                             Click="OnDisconnectClick"
                             IsEnabled="{Binding IsConnected}"
-                            HorizontalAlignment="Stretch" 
+                            HorizontalAlignment="Stretch"
                             Margin="4,0,0,0" />
                 </Grid>
             </StackPanel>
-        </Border>
-        
-        <!-- Sessions Section -->
-        <StackPanel Grid.Row="2" Margin="16">
-            <TextBlock Text="{Binding LocalizedStrings.SidebarSessions}" FontSize="12" FontWeight="Bold" Foreground="#87909B" Margin="0,16,0,12" />
-            <ListBox ItemsSource="{Binding Sessions}" 
-                     SelectedItem="{Binding ActiveSession}" 
-                     SelectionMode="Single"
-                     Background="Transparent" 
-                     BorderThickness="0">
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0" />
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="CornerRadius" Value="8" />
-                    </Style>
-                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-                        <Setter Property="Background" Value="#2A4A5A6A" />
-                        <Setter Property="CornerRadius" Value="8" />
-                    </Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-                        <Setter Property="Background" Value="#4A5A7A9A" />
-                        <Setter Property="CornerRadius" Value="8" />
-                    </Style>
-                    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
-                        <Setter Property="Background" Value="#5A6A8AAA" />
-                        <Setter Property="CornerRadius" Value="8" />
-                    </Style>
-                </ListBox.Styles>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Padding="12,8" CornerRadius="8" Margin="0,2">
-                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
-                                <Ellipse Grid.Row="0" Width="8" Height="8" Margin="0,0,8,0">
-                                    <Ellipse.Fill>
-                                        <SolidColorBrush Color="{Binding Status, Converter={StaticResource StatusColorConverter}}" />
-                                    </Ellipse.Fill>
-                                </Ellipse>
-                                <StackPanel Grid.Row="0" Grid.Column="1">
-                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Port}" FontSize="12" Foreground="#87909B" />
-                                </StackPanel>
-                                
-                                <!-- Settings Button -->
-                                <Button Grid.Row="0" Grid.Column="2" 
-                                        Grid.RowSpan="2"
-                                        Content="⚙️" 
-                                        FontSize="20"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="8"
-                                        Margin="4,0,0,0"
-                                        Click="OnSessionSettingsClick"
-                                        VerticalAlignment="Center"
-                                        HorizontalAlignment="Center" />
-                                
-                                <!-- TX/RX Stats -->
-                                <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" FontSize="10" Foreground="#87909B">
-                                        <Run Text="TX: " />
-                                        <Run Text="{Binding TxBytes}" FontWeight="SemiBold" Foreground="#4A9EFF" />
-                                    </TextBlock>
-                                    <TextBlock Grid.Column="1" FontSize="10" Foreground="#87909B">
-                                        <Run Text="RX: " />
-                                        <Run Text="{Binding RxBytes}" FontWeight="SemiBold" Foreground="#4AFF9E" />
-                                    </TextBlock>
+            
+            <!-- Separator -->
+            <Separator Background="#25303A" Height="1" />
+            
+            <!-- Section 3: Sessions Management -->
+            <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding LocalizedStrings.SidebarSessions}" 
+                               FontSize="11" 
+                               FontWeight="Bold" 
+                               Foreground="#87909B"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="＋"
+                            FontSize="16"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="8,4"
+                            ToolTip.Tip="{Binding LocalizedStrings.SidebarNewSession}"
+                            Click="OnConnectClick">
+                        <Button.Styles>
+                            <Style Selector="Button:pointerover">
+                                <Setter Property="Background" Value="#1A2530" />
+                            </Style>
+                        </Button.Styles>
+                    </Button>
+                </Grid>
+                
+                <!-- Sessions List -->
+                <ListBox ItemsSource="{Binding Sessions}" 
+                         SelectedItem="{Binding ActiveSession}" 
+                         SelectionMode="Single"
+                         Background="Transparent" 
+                         BorderThickness="0">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="CornerRadius" Value="8" />
+                        </Style>
+                        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#2A4A5A6A" />
+                            <Setter Property="CornerRadius" Value="8" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#4A5A7A9A" />
+                            <Setter Property="CornerRadius" Value="8" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#5A6A8AAA" />
+                            <Setter Property="CornerRadius" Value="8" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12,8" CornerRadius="8" Margin="0,2">
+                                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                    <!-- Status Indicator -->
+                                    <Ellipse Grid.Row="0" Width="8" Height="8" Margin="0,0,8,0">
+                                        <Ellipse.Fill>
+                                            <SolidColorBrush Color="{Binding Status, Converter={StaticResource StatusColorConverter}}" />
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                    
+                                    <!-- Session Info -->
+                                    <StackPanel Grid.Row="0" Grid.Column="1">
+                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Port}" FontSize="11" Foreground="#87909B" />
+                                    </StackPanel>
+                                    
+                                    <!-- Settings Button -->
+                                    <Button Grid.Row="0" Grid.Column="2" 
+                                            Grid.RowSpan="3"
+                                            Content="⚙️" 
+                                            FontSize="16"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="8"
+                                            Margin="4,0,0,0"
+                                            Click="OnSessionSettingsClick"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center" />
+                                    
+                                    <!-- TX/RX Stats -->
+                                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" FontSize="10" Foreground="#87909B" Margin="0,0,12,0">
+                                            <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.StatusTx, Mode=OneWay}" />
+                                            <Run Text=" " />
+                                            <Run Text="{Binding TxBytes}" FontWeight="SemiBold" Foreground="#4A9EFF" />
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="1" FontSize="10" Foreground="#87909B">
+                                            <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.StatusRx, Mode=OneWay}" />
+                                            <Run Text=" " />
+                                            <Run Text="{Binding RxBytes}" FontWeight="SemiBold" Foreground="#4AFF9E" />
+                                        </TextBlock>
+                                    </Grid>
+                                    
+                                    <!-- DB Store Checkbox -->
+                                    <CheckBox Grid.Row="2" Grid.Column="1" 
+                                              Margin="0,6,0,0"
+                                              IsChecked="{Binding EnableDatabaseStorage}"
+                                              FontSize="10">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding #LeftSidebarRoot.LocalizedStrings.SessionDatabaseEnable}" 
+                                                       VerticalAlignment="Center" />
+                                            <Border Background="#F5A524" CornerRadius="8" Width="14" Height="14" VerticalAlignment="Center"
+                                                    ToolTip.Tip="{Binding #LeftSidebarRoot.LocalizedStrings.SessionDatabaseTooltip}">
+                                                <TextBlock Text="!" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#141B1F" />
+                                            </Border>
+                                        </StackPanel>
+                                    </CheckBox>
                                 </Grid>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+            
         </StackPanel>
-    </Grid>
+    </ScrollViewer>
 </UserControl>

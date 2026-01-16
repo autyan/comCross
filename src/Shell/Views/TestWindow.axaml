@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ComCross.Shell.Views.TestWindow"
+        Title="Test Window"
+        Width="800" Height="600"
+        Background="#FF0000">
+    
+    <Grid>
+        <TextBlock Text="Test Window - Red Background"
+                   FontSize="24"
+                   Foreground="White"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+    </Grid>
+</Window>

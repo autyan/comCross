@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:conv="using:ComCross.Shell.Converters"
+             mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="600"
+             x:Class="ComCross.Shell.Views.WorkloadPanel"
+             x:DataType="vm:WorkloadPanelViewModel">
+
+  <Design.DataContext>
+    <!-- Design-time data context for previewing -->
+    <vm:WorkloadPanelViewModel />
+  </Design.DataContext>
+
+  <DockPanel>
+    <!-- Header -->
+    <Border DockPanel.Dock="Top"
+            Background="{DynamicResource --bg-2}"
+            Padding="12,8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0"
+                   Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadPanelTitle}"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource --text-0}"
+                   VerticalAlignment="Center" />
+
+        <Button Grid.Column="1"
+                Command="{Binding CreateWorkloadCommand}"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8,4"
+                ToolTip.Tip="创建新任务">
+          <TextBlock Text="＋" FontSize="16" Foreground="{DynamicResource --accent}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- Loading Indicator -->
+    <Border DockPanel.Dock="Top"
+            Height="40"
+            Background="{DynamicResource --bg-1}"
+            IsVisible="{Binding IsLoading}">
+      <StackPanel Orientation="Horizontal"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+        <TextBlock Foreground="{DynamicResource --text-1}"
+                   FontSize="13">
+          <Run Text="⏳ " />
+          <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadPanelLoading}" />
+        </TextBlock>
+      </StackPanel>
+    </Border>
+
+    <!-- Workload List (TreeView) -->
+    <ScrollViewer DockPanel.Dock="Top"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Workloads}"
+                    Margin="0,8,0,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:WorkloadItemViewModel">
+            <Border Margin="0,0,0,8">
+              <StackPanel>
+                <!-- Workload Header -->
+                <Border Background="{DynamicResource --bg-1}"
+                        BorderBrush="{DynamicResource --border}"
+                        BorderThickness="0,0,0,1"
+                        Padding="12,8"
+                        Cursor="Hand"
+                        PointerPressed="OnWorkloadHeaderPointerPressed">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <!-- Expand/Collapse Icon -->
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding IsExpanded, Converter={x:Static conv:BoolToExpandIconConverter.Instance}}"
+                               FontSize="12"
+                               Foreground="{DynamicResource --text-1}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                    <!-- Workload Icon + Name + Count -->
+                    <StackPanel Grid.Column="1" 
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Icon}"
+                                 FontSize="16"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,8,0" />
+                      <TextBlock Text="{Binding DisplayName}"
+                                 FontSize="13"
+                                 Foreground="{DynamicResource --text-0}"
+                                 VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- Context Menu Button -->
+                    <Button Grid.Column="2"
+                            Content="⋮"
+                            FontSize="16"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="4"
+                            VerticalAlignment="Center">
+                      <Button.Flyout>
+                        <MenuFlyout>
+                          <MenuItem Header="重命名"
+                                    Command="{Binding $parent[UserControl].((vm:WorkloadPanelViewModel)DataContext).RenameWorkloadCommand}"
+                                    CommandParameter="{Binding Id}">
+                            <MenuItem.Icon>
+                              <TextBlock Text="✏️" />
+                            </MenuItem.Icon>
+                          </MenuItem>
+                          <MenuItem Header="删除"
+                                    Command="{Binding $parent[UserControl].((vm:WorkloadPanelViewModel)DataContext).DeleteWorkloadCommand}"
+                                    CommandParameter="{Binding Id}"
+                                    IsEnabled="{Binding !IsDefault}">
+                            <MenuItem.Icon>
+                              <TextBlock Text="🗑️" />
+                            </MenuItem.Icon>
+                          </MenuItem>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                  </Grid>
+                </Border>
+
+                <!-- Sessions List (collapsible) -->
+                <ItemsControl ItemsSource="{Binding Sessions}"
+                              IsVisible="{Binding IsExpanded}"
+                              Margin="32,0,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SessionItemViewModel">
+                      <Border Background="Transparent"
+                              Padding="8,6"
+                              Margin="0,2,0,0"
+                              Cursor="Hand"
+                              PointerPressed="OnSessionPointerPressed">
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock Text="{Binding StatusIcon}"
+                                     FontSize="10"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,6,0" />
+                          <TextBlock Text="{Binding Name}"
+                                     FontSize="12"
+                                     Foreground="{DynamicResource --text-1}"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

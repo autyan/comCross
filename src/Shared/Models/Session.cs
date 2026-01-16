@@ -13,6 +13,7 @@ public sealed class Session : INotifyPropertyChanged
     private DateTime? _startTime;
     private long _rxBytes;
     private long _txBytes;
+    private bool _enableDatabaseStorage;
 
     public required string Id { get; init; }
     
@@ -31,6 +32,23 @@ public sealed class Session : INotifyPropertyChanged
     
     public required string Port { get; init; }
     public required int BaudRate { get; init; }
+    
+    /// <summary>
+    /// Enable database storage for this session (overrides global default)
+    /// Note: Historical data will not be converted. Switching may result in data loss.
+    /// </summary>
+    public bool EnableDatabaseStorage
+    {
+        get => _enableDatabaseStorage;
+        set
+        {
+            if (_enableDatabaseStorage != value)
+            {
+                _enableDatabaseStorage = value;
+                OnPropertyChanged();
+            }
+        }
+    }
     
     public SessionStatus Status
     {
@@ -85,6 +103,19 @@ public sealed class Session : INotifyPropertyChanged
     }
     
     public SerialSettings Settings { get; set; } = new();
+
+    // v0.4.0: Multi-protocol support
+    /// <summary>
+    /// List of protocol IDs enabled for this session.
+    /// Protocols can be switched dynamically during runtime.
+    /// </summary>
+    public List<string> ProtocolIds { get; set; } = new();
+
+    /// <summary>
+    /// Currently active protocol ID for parsing messages.
+    /// If null, raw bytes view is used.
+    /// </summary>
+    public string? ActiveProtocolId { get; set; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

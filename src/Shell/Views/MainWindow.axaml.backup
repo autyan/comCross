@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ComCross.Shell.Views.MainWindow"
+        Title="ComCross - Serial Toolbox"
+        Width="1440" Height="900"
+        MinWidth="1280" MinHeight="720"
+        Background="#0F1417">
+
+    <Grid>
+        <TextBlock Text="MainWindow - Testing Background"
+                   FontSize="24"
+                   Foreground="White"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+    </Grid>
+</Window>

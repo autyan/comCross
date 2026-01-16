@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
+        x:Class="ComCross.Shell.Views.CreateWorkloadDialog"
+        x:CompileBindings="False"
+        Title="创建新任务"
+        Width="400"
+        Height="250"
+        MinWidth="350"
+        MinHeight="200"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ExtendClientAreaToDecorationsHint="False">
+
+  <Grid RowDefinitions="*,Auto" Margin="20">
+    <!-- Form Fields -->
+    <StackPanel Grid.Row="0" Spacing="16">
+      <!-- Name Field -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.DialogCreateWorkloadName}"
+                   FontSize="13"
+                   FontWeight="Medium"
+                   Foreground="{DynamicResource --text-0}" />
+        <TextBox Name="NameTextBox"
+                 Watermark="输入任务名称 (例如: 测试项目A)"
+                 MaxLength="50"
+                 Text="{Binding WorkloadName, Mode=TwoWay}" />
+        <TextBlock Text="{Binding NameError}"
+                   FontSize="11"
+                   Foreground="#E53E3E"
+                   IsVisible="{Binding !!NameError}" />
+                   Foreground="#E53E3E"
+                   IsVisible="{Binding !!NameError, DataValidationErrors.Errors=None}" />
+      </StackPanel>
+
+      <!-- Description Field -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.DialogCreateWorkloadDescription}"
+                   FontSize="13"
+                   FontWeight="Medium"
+                   Foreground="{DynamicResource --text-0}" />
+        <TextBox Name="DescriptionTextBox"
+                 Watermark="输入任务描述 (可选)"
+                 MaxLength="200"
+                 Height="60"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 Text="{Binding WorkloadDescription, Mode=TwoWay}" />
+        <TextBlock FontSize="11"
+                   Foreground="{DynamicResource --text-2}">
+          <Run Text="{Binding DescriptionLength}" />
+          <Run Text="/ 200" />
+        </TextBlock>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Action Buttons -->
+    <StackPanel Grid.Row="1" 
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="12"
+                Margin="0,20,0,0">
+      <Button Content="取消"
+              Width="100"
+              Height="36"
+              Background="{DynamicResource --bg-2}"
+              Foreground="{DynamicResource --text-0}"
+              Click="OnCancelClick" />
+      <Button Content="创建"
+              Width="100"
+              Height="36"
+              Background="{DynamicResource --accent}"
+              Foreground="White"
+              IsEnabled="{Binding IsValid}"
+              Click="OnCreateClick" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -18,6 +18,7 @@ using ComCross.Core.Services;
 using ComCross.Shared.Events;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -40,6 +41,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     
     // Business services
     private readonly WorkspaceService _workspaceService;
+    private readonly WorkloadService _workloadService;
     private readonly ExportService _exportService;
     private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
     private Session? _activeSession;
@@ -50,9 +52,35 @@ public class MainWindowViewModel : INotifyPropertyChanged
     private bool _isNotificationsOpen;
     private ToolDockTab _selectedToolTab = ToolDockTab.Send;
 
+    // Timer for periodic updates
+    private readonly DispatcherTimer _statisticsUpdateTimer;
+    private readonly object _statisticsLock = new object();
+    private long _cachedTotalRxBytes;
+    private long _cachedTotalTxBytes;
+
     public ObservableCollection<Session> Sessions { get; } = new();
     public ObservableCollection<Device> Devices { get; } = new();
     public ObservableCollection<LogMessage> Messages { get; } = new();
+
+    /// <summary>
+    /// Workload panel ViewModel
+    /// </summary>
+    public WorkloadPanelViewModel WorkloadPanelViewModel { get; private set; } = null!;
+
+    /// <summary>
+    /// Workload tabs ViewModel (延迟加载)
+    /// </summary>
+    public WorkloadTabsViewModel? WorkloadTabsViewModel { get; private set; }
+
+    /// <summary>
+    /// Bus adapter selector ViewModel
+    /// </summary>
+    public BusAdapterSelectorViewModel BusAdapterSelectorViewModel { get; private set; } = null!;
+
+    /// <summary>
+    /// Workload service (exposed for initialization)
+    /// </summary>
+    public WorkloadService WorkloadService => _workloadService;
 
     public Device? SelectedDevice
     {
@@ -193,6 +221,34 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
     public int MessageFontSize => _settingsService.Current.Display.FontSize;
 
+    /// <summary>
+    /// Total received bytes across all sessions in current workload
+    /// </summary>
+    public long TotalRxBytes
+    {
+        get
+        {
+            lock (_statisticsLock)
+            {
+                return _cachedTotalRxBytes;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Total transmitted bytes across all sessions in current workload
+    /// </summary>
+    public long TotalTxBytes
+    {
+        get
+        {
+            lock (_statisticsLock)
+            {
+                return _cachedTotalTxBytes;
+            }
+        }
+    }
+
     public ILocalizationService Localization => _localization;
 
     public LocalizedStringsViewModel LocalizedStrings { get; }
@@ -242,79 +298,149 @@ public class MainWindowViewModel : INotifyPropertyChanged
         _pluginDiscoveryService = new PluginDiscoveryService();
         _pluginRuntimeService = new PluginRuntimeService();
 
-        // Business services (encapsulate business logic)
-        _workspaceService = new WorkspaceService(_deviceService, _messageStream, _logStorageService, _notificationService, _configService);
-        _exportService = new ExportService(_messageStream, _notificationService, _settingsService);
-
-        PluginManager = new PluginManagerViewModel(
-            _pluginDiscoveryService,
-            _pluginRuntimeService,
-            _settingsService,
+        // Business services
+        _workloadService = new WorkloadService(
+            NullLogger<WorkloadService>.Instance, 
+            _eventBus, 
+            _configService,
+            _localization);
+        var migrationService = new WorkspaceMigrationService(
+            NullLogger<WorkspaceMigrationService>.Instance);
+        _workspaceService = new WorkspaceService(
+            _deviceService, 
+            _messageStream, 
+            _logStorageService, 
+            _notificationService, 
+            _configService,
+            _workloadService,
+            migrationService);
+        
+        BusAdapterSelectorViewModel = new BusAdapterSelectorViewModel();
+        WorkloadTabsViewModel = new WorkloadTabsViewModel(_workloadService, _eventBus, LocalizedStrings);
+        
+        // Initialize ViewModels (order matters due to dependencies)
+        NotificationCenter = new NotificationCenterViewModel(
+            _notificationService,
+            _localization,
             LocalizedStrings);
-        Settings = new SettingsViewModel(_settingsService, _localization, LocalizedStrings, PluginManager);
-        Settings.LanguageChanged += OnLanguageChanged;
-        Settings.LinuxScanSettingsChanged += OnLinuxScanSettingsChanged;
-        NotificationCenter = new NotificationCenterViewModel(_notificationService, _localization, LocalizedStrings);
         CommandCenter = new CommandCenterViewModel(
             _commandService,
             _settingsService,
             _notificationService,
             LocalizedStrings);
-        CommandCenter.SendRequested += SendCommandAsync;
+        PluginManager = new PluginManagerViewModel(
+            _pluginDiscoveryService,
+            _pluginRuntimeService,
+            _settingsService,
+            LocalizedStrings);
+        Settings = new SettingsViewModel(
+            _settingsService,
+            _localization,
+            LocalizedStrings,
+            PluginManager);
+        
+        // Initialize statistics update timer (1 second interval)
+        _statisticsUpdateTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _statisticsUpdateTimer.Tick += OnStatisticsUpdateTick;
+        _statisticsUpdateTimer.Start();
+        
+        // Subscribe to workload change events to update statistics immediately
+        _eventBus.Subscribe<ActiveWorkloadChangedEvent>(e =>
+        {
+            UpdateStatistics();
+        });
+        
+        // _ = InitializeAsync();
+    }
 
-        _eventBus.Subscribe<DeviceDisconnectedEvent>(OnDeviceDisconnected);
+    private void OnStatisticsUpdateTick(object? sender, EventArgs e)
+    {
+        UpdateStatistics();
+    }
 
-        // Initialize commands
-        QuickConnectCommand = new AsyncRelayCommand(QuickConnectAsync, () => SelectedDevice != null);
-        DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => IsConnected);
-        ClearMessagesCommand = new RelayCommand(ClearMessages, () => IsConnected);
-        ExportMessagesCommand = new AsyncRelayCommand(() => ExportAsync(null), () => IsConnected);
-
-        _ = InitializeAsync();
+    /// <summary>
+    /// Update cached statistics from all sessions (thread-safe)
+    /// </summary>
+    public void UpdateStatistics()
+    {
+        lock (_statisticsLock)
+        {
+            _cachedTotalRxBytes = Sessions.Sum(s => s.RxBytes);
+            _cachedTotalTxBytes = Sessions.Sum(s => s.TxBytes);
+        }
+        
+        // Notify UI on main thread
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(TotalRxBytes));
+            OnPropertyChanged(nameof(TotalTxBytes));
+        });
     }
 
     private async Task InitializeAsync()
     {
-        await _database.InitializeAsync();
-        await _settingsService.InitializeAsync();
-        _appLogService.Initialize(_settingsService.Current.AppLogs);
-        _settingsService.SettingsChanged += OnSettingsChanged;
-        
-        // Initialize MessageBoxService with localization
-        Shell.Services.MessageBoxService.Initialize(_localization);
-        
-        Dispatcher.UIThread.Post(() =>
+        try
         {
-            Settings.ReloadFromSettings();
-            Settings.ApplySystemLanguageIfNeeded();
+            Console.WriteLine("[MainWindowViewModel] Starting initialization...");
             
-            // Trigger initial property notifications for tool tab state
-            OnPropertyChanged(nameof(IsSendTabActive));
-            OnPropertyChanged(nameof(IsCommandsTabActive));
-        });
+            await _database.InitializeAsync();
+            Console.WriteLine("[MainWindowViewModel] Database initialized");
+            
+            await _settingsService.InitializeAsync();
+            Console.WriteLine("[MainWindowViewModel] Settings initialized");
+            
+            _appLogService.Initialize(_settingsService.Current.AppLogs);
+            _settingsService.SettingsChanged += OnSettingsChanged;
+            
+            // Initialize MessageBoxService with localization
+            Shell.Services.MessageBoxService.Initialize(_localization);
+            
+            Dispatcher.UIThread.Post(() =>
+            {
+                Settings.ReloadFromSettings();
+                Settings.ApplySystemLanguageIfNeeded();
+                
+                // Trigger initial property notifications for tool tab state
+                OnPropertyChanged(nameof(IsSendTabActive));
+                OnPropertyChanged(nameof(IsCommandsTabActive));
+            });
 
-        // Configure SerialAdapter with Linux scan settings
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
-        }
+            // Configure SerialAdapter with Linux scan settings
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
+            }
 
-        // Load devices
-        var devices = await _deviceService.ListDevicesAsync();
-        foreach (var device in devices)
-        {
-            Devices.Add(device);
-        }
+            // Load devices
+            Console.WriteLine("[MainWindowViewModel] Loading devices...");
+            var devices = await _deviceService.ListDevicesAsync();
+            Console.WriteLine($"[MainWindowViewModel] Found {devices.Count} devices");
+            
+            foreach (var device in devices)
+            {
+                Devices.Add(device);
+            }
 
-        await NotificationCenter.LoadAsync();
-        await PluginManager.LoadAsync();
+            await NotificationCenter.LoadAsync();
+            Console.WriteLine("[MainWindowViewModel] Notifications loaded");
+            
+            await PluginManager.LoadAsync();
+            Console.WriteLine("[MainWindowViewModel] Plugins loaded");
 
-        // Load workspace state
-        var state = await _configService.LoadWorkspaceStateAsync();
-        if (state != null)
-        {
-            // Restore sessions (but don't auto-connect)
-            foreach (var sessionState in state.Sessions)
+            // Load workspace state (with automatic migration from v0.3 if needed)
+            var state = await _workspaceService.LoadStateAsync();
+            Console.WriteLine("[MainWindowViewModel] Workspace state loaded");
+            
+            // In v0.4, sessions are stored in Workloads
+            // For now, keep legacy restoration logic for Sessions (if any exist from migration)
+            // TODO v0.4: Implement proper Session persistence in SQLite with WorkloadId
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (state.Sessions != null && state.Sessions.Count > 0)
+            {
+                foreach (var sessionState in state.Sessions)
             {
                 var session = new Session
                 {
@@ -327,16 +453,30 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 };
                 Sessions.Add(session);
             }
+        }
+#pragma warning restore CS0618
 
-            // Restore UI state
-            if (state.UiState?.ActiveSessionId != null)
-            {
-                ActiveSession = Sessions.FirstOrDefault(s => s.Id == state.UiState.ActiveSessionId);
-            }
+        // Restore UI state
+        if (state.UiState?.ActiveSessionId != null)
+        {
+            ActiveSession = Sessions.FirstOrDefault(s => s.Id == state.UiState.ActiveSessionId);
         }
 
         CommandCenter.SetSession(ActiveSession?.Id, ActiveSession?.Name);
         _appLogService.Info("Application initialized.");
+            
+            Console.WriteLine("[MainWindowViewModel] Initialization complete");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MainWindowViewModel] FATAL ERROR during initialization: {ex.Message}");
+            Console.WriteLine($"[MainWindowViewModel] Stack trace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[MainWindowViewModel] Inner exception: {ex.InnerException.Message}");
+            }
+            _appLogService?.LogException(ex, "Fatal initialization error");
+        }
     }
 
     public async Task ConnectAsync(string port, int baudRate, string name)

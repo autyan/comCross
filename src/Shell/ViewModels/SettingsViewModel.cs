@@ -242,6 +242,41 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool LogDatabasePersistenceEnabled
+    {
+        get => _settingsService.Current.Logs.DatabasePersistenceEnabled;
+        set
+        {
+            if (_settingsService.Current.Logs.DatabasePersistenceEnabled == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Logs.DatabasePersistenceEnabled = value;
+            ScheduleSave();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDatabaseDirectoryEnabled));
+        }
+    }
+
+    public string? LogDatabaseDirectory
+    {
+        get => _settingsService.Current.Logs.DatabaseDirectory;
+        set
+        {
+            if (_settingsService.Current.Logs.DatabaseDirectory == value)
+            {
+                return;
+            }
+
+            _settingsService.Current.Logs.DatabaseDirectory = value;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsDatabaseDirectoryEnabled => LogDatabasePersistenceEnabled;
+
     public bool NotificationsStorageAlertsEnabled
     {
         get => _settingsService.Current.Notifications.StorageAlertsEnabled;

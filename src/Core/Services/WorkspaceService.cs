@@ -1,11 +1,13 @@
+using ComCross.Core.Models;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 
 namespace ComCross.Core.Services;
 
 /// <summary>
-/// Workspace service that handles all business logic for serial port operations
-/// Decouples business logic from UI layer (View/ViewModel)
+/// Workspace service that handles all business logic for serial port operations and workspace state management.
+/// Decouples business logic from UI layer (View/ViewModel).
+/// In v0.4+, manages Workload abstraction layer.
 /// </summary>
 public sealed class WorkspaceService
 {
@@ -14,19 +16,25 @@ public sealed class WorkspaceService
     private readonly LogStorageService _logStorageService;
     private readonly NotificationService _notificationService;
     private readonly ConfigService _configService;
+    private readonly WorkloadService _workloadService;
+    private readonly WorkspaceMigrationService _migrationService;
 
     public WorkspaceService(
         DeviceService deviceService,
         IMessageStreamService messageStream,
         LogStorageService logStorageService,
         NotificationService notificationService,
-        ConfigService configService)
+        ConfigService configService,
+        WorkloadService workloadService,
+        WorkspaceMigrationService migrationService)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
+        _migrationService = migrationService ?? throw new ArgumentNullException(nameof(migrationService));
     }
 
     /// <summary>
@@ -150,11 +158,50 @@ public sealed class WorkspaceService
     }
 
     /// <summary>
-    /// Save current workspace state to persistent storage
+    /// Save current workspace state to persistent storage.
+    /// In v0.4+, this includes Workload information.
     /// </summary>
     public async Task SaveCurrentStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll = true, CancellationToken cancellationToken = default)
     {
-        var state = BuildWorkspaceState(sessions, activeSession, autoScroll);
+        var state = await BuildWorkspaceStateAsync(sessions, activeSession, autoScroll);
+        await SaveStateAsync(state, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Load workspace state from persistent storage.
+    /// Performs migration if needed (v0.3 → v0.4).
+    /// </summary>
+    public async Task<WorkspaceState> LoadStateAsync(CancellationToken cancellationToken = default)
+    {
+        var state = await _configService.LoadWorkspaceStateAsync(cancellationToken);
+        
+        if (state == null)
+        {
+            // First run: create default workspace with default workload
+            state = new WorkspaceState();
+            state.EnsureDefaultWorkload();
+            await SaveStateAsync(state, cancellationToken);
+            return state;
+        }
+        
+        // Check if migration is needed
+        if (_migrationService.NeedsMigration(state))
+        {
+            state = _migrationService.Migrate(state);
+            await SaveStateAsync(state, cancellationToken);
+        }
+        
+        // Ensure default workload exists
+        state.EnsureDefaultWorkload();
+        
+        return state;
+    }
+    
+    /// <summary>
+    /// Save workspace state to persistent storage (internal method).
+    /// </summary>
+    public async Task SaveStateAsync(WorkspaceState state, CancellationToken cancellationToken = default)
+    {
         await _configService.SaveWorkspaceStateAsync(state, cancellationToken);
     }
 
@@ -172,29 +219,50 @@ public sealed class WorkspaceService
         ClearMessages(sessionId);
     }
 
-    private WorkspaceState BuildWorkspaceState(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll)
+    /// <summary>
+    /// Build workspace state from current sessions and workloads.
+    /// In v0.4+, includes Workload information with session associations.
+    /// </summary>
+    private async Task<WorkspaceState> BuildWorkspaceStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll)
     {
+        // Get current workloads from WorkloadService
+        var workloads = await _workloadService.GetAllWorkloadsAsync();
+        
+        // Build session state with WorkloadId for recovery
+        var sessionStates = sessions.Select(s => new SessionState
+        {
+            Id = s.Id,
+            Port = s.Port,
+            Name = s.Name,
+            Settings = s.Settings,
+            Connected = s.Status == SessionStatus.Connected,
+            Metrics = new MetricsState
+            {
+                Rx = s.RxBytes,
+                Tx = s.TxBytes
+            },
+            // Associate session with workload for data recovery
+            WorkloadId = FindWorkloadForSession(workloads, s.Id)
+        }).ToList();
+        
         return new WorkspaceState
         {
+            Version = "0.4.0",
             WorkspaceId = "default",
-            Sessions = sessions.Select(s => new SessionState
-            {
-                Id = s.Id,
-                Port = s.Port,
-                Name = s.Name,
-                Settings = s.Settings,
-                Connected = s.Status == SessionStatus.Connected,
-                Metrics = new MetricsState
-                {
-                    Rx = s.RxBytes,
-                    Tx = s.TxBytes
-                }
-            }).ToList(),
+            Workloads = workloads,
             UiState = new UiState
             {
                 ActiveSessionId = activeSession?.Id,
                 AutoScroll = autoScroll
             }
         };
+    }
+    
+    /// <summary>
+    /// Find which workload contains the given session ID.
+    /// </summary>
+    private string? FindWorkloadForSession(List<Workload> workloads, string sessionId)
+    {
+        return workloads.FirstOrDefault(w => w.SessionIds.Contains(sessionId))?.Id;
     }
 }

@@ -19,7 +19,7 @@ A modern, modular embedded development toolbox designed for serial communication
 
 ## 🎯 Release Goals
 
-### Completed (v0.3.0) ✅
+### Completed (v0.3.x) ✅
 
 - ✅ Serial device enumeration and connection
 - ✅ Real-time message reception and display
@@ -34,6 +34,23 @@ A modern, modular embedded development toolbox designed for serial communication
 - ✅ Plugin manager UI
 - ✅ Command system with hotkeys and import/export
 - ✅ Export tooling with range selection
+
+### 🗺️ Roadmap to v1.0
+
+ComCross is on a journey to become the **essential toolbox for embedded developers**. See our detailed roadmap:
+
+- 📖 [**v1.0 Roadmap Summary**](docs/V1.0-Roadmap-Summary.md) - Quick overview
+- 📋 [**Full Roadmap Document**](docs/specs/12-V1.0-Roadmap.md) - Detailed planning
+
+**Timeline**: v0.3 (Now) → v0.4 (Q1'26) → v0.5 (Q2'26) → v0.6 (Q3'26) → v1.0 (Q1'27)
+
+**v1.0 Vision**:
+- 🔌 Multi-bus support (Serial/TCP/UDP/CAN/I2C/SPI)
+- 🧩 10+ official plugins
+- 🤖 JavaScript scripting engine
+- 🔥 Plugin hot-swapping
+- 📚 Complete documentation
+- 🌍 Thriving community
 
 ## 🚀 Quick Start
 

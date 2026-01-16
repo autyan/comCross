@@ -40,7 +40,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="400" Margin="0,0,12,8">
                         <TextBlock Text="{Binding LocalizedStrings.SettingsLogsDirectory}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding LogDirectory}" />
+                        <TextBox Text="{Binding LogDirectory}" Watermark="Default: Logs" />
                     </StackPanel>
                     <StackPanel Width="160" Margin="0,0,12,8">
                         <TextBlock Text="{Binding LocalizedStrings.SettingsLogsMaxFileSize}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
@@ -62,6 +62,23 @@
                         </StackPanel>
                     </StackPanel>
                 </WrapPanel>
+                
+                <!-- Database Persistence -->
+                <Border Background="#1B242A" BorderBrush="#25303A" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,8,0,0">
+                    <StackPanel Spacing="8">
+                        <CheckBox Content="{Binding LocalizedStrings.SettingsLogsEnableDatabase}" 
+                                  IsChecked="{Binding LogDatabasePersistenceEnabled}" />
+                        <TextBlock Text="{Binding LocalizedStrings.SettingsLogsDatabaseWarning}" 
+                                   FontSize="11" 
+                                   Foreground="#87909B" 
+                                   TextWrapping="Wrap" 
+                                   Margin="24,0,0,0" />
+                        <StackPanel Width="400" HorizontalAlignment="Left" Margin="24,4,0,0" IsEnabled="{Binding IsDatabaseDirectoryEnabled}">
+                            <TextBlock Text="{Binding LocalizedStrings.SettingsLogsDatabaseDirectory}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding LogDatabaseDirectory}" Watermark="Default: AppData" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- App Logs -->
@@ -71,7 +88,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="400" Margin="0,0,12,8">
                         <TextBlock Text="{Binding LocalizedStrings.SettingsAppLogsDirectory}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding AppLogDirectory}" />
+                        <TextBox Text="{Binding AppLogDirectory}" Watermark="Default: AppLogs" />
                     </StackPanel>
                     <StackPanel Width="160" Margin="0,0,12,8">
                         <TextBlock Text="{Binding LocalizedStrings.SettingsAppLogsFormat}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />

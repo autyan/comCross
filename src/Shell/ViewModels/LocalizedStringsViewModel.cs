@@ -32,9 +32,26 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string DialogConnectCancel => _localization.GetString("dialog.connect.cancel");
     public string DialogConnectConnect => _localization.GetString("dialog.connect.connect");
 
+    // Workload
+    public string WorkloadNew => _localization.GetString("workload.new");
+    public string WorkloadClose => _localization.GetString("workload.close");
+    public string WorkloadRename => _localization.GetString("workload.rename");
+    public string WorkloadCopy => _localization.GetString("workload.copy");
+    public string WorkloadDelete => _localization.GetString("workload.delete");
+    public string GetDefaultWorkloadName(string username) => _localization.GetString("workload.default.name", username);
+    
+    // Main Actions
+    public string ActionSettings => _localization.GetString("action.settings");
+    public string ActionNotifications => _localization.GetString("action.notifications");
+    public string ActionSettingsTooltip => _localization.GetString("action.settings.tooltip");
+    public string ActionNotificationsTooltip => _localization.GetString("action.notifications.tooltip");
+
     // Sidebar
+    public string SidebarWorkloads => _localization.GetString("sidebar.workloads");
     public string SidebarDevices => _localization.GetString("sidebar.devices");
     public string SidebarSessions => _localization.GetString("sidebar.sessions");
+    public string SidebarBusAdapter => _localization.GetString("sidebar.busAdapter");
+    public string SidebarDeviceConfig => _localization.GetString("sidebar.deviceConfig");
     public string SidebarSelectPort => _localization.GetString("sidebar.selectPort");
     public string SidebarRefreshPorts => _localization.GetString("sidebar.refreshPorts");
     public string SidebarQuickConnect => _localization.GetString("sidebar.quickConnect");
@@ -45,6 +62,9 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SidebarParityNone => _localization.GetString("sidebar.parity.none");
     public string SidebarParityOdd => _localization.GetString("sidebar.parity.odd");
     public string SidebarParityEven => _localization.GetString("sidebar.parity.even");
+    public string SidebarNewSession => _localization.GetString("sidebar.newSession");
+    public string SessionDatabaseEnable => _localization.GetString("session.database.enable");
+    public string SessionDatabaseTooltip => _localization.GetString("session.database.tooltip");
 
     // Message Stream
     public string StreamSearchPlaceholder => _localization.GetString("stream.search.placeholder");
@@ -92,6 +112,25 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
 
     // Status Bar
     public string StatusReady => _localization.GetString("status.ready");
+    public string StatusRx => _localization.GetString("status.rx");
+    public string StatusTx => _localization.GetString("status.tx");
+    public string StatusCpu => _localization.GetString("status.cpu");
+    public string StatusMem => _localization.GetString("status.mem");
+
+    // Workload Panel
+    public string WorkloadPanelTitle => _localization.GetString("workload.panel.title");
+    public string WorkloadPanelLoading => _localization.GetString("workload.panel.loading");
+    
+    // Dialogs
+    public string DialogCreateWorkloadTitle => _localization.GetString("dialog.createWorkload.title");
+    public string DialogCreateWorkloadName => _localization.GetString("dialog.createWorkload.name");
+    public string DialogCreateWorkloadDescription => _localization.GetString("dialog.createWorkload.description");
+    public string DialogCreateWorkloadCancel => _localization.GetString("dialog.createWorkload.cancel");
+    public string DialogCreateWorkloadCreate => _localization.GetString("dialog.createWorkload.create");
+    public string DialogRenameWorkloadTitle => _localization.GetString("dialog.renameWorkload.title");
+    public string DialogRenameWorkloadName => _localization.GetString("dialog.renameWorkload.name");
+    public string DialogRenameWorkloadCancel => _localization.GetString("dialog.renameWorkload.cancel");
+    public string DialogRenameWorkloadRename => _localization.GetString("dialog.renameWorkload.rename");
 
     // Settings
     public string SettingsTitle => _localization.GetString("settings.title");
@@ -111,6 +150,10 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string SettingsLogsMaxTotalSize => _localization.GetString("settings.logs.maxTotalSize");
     public string SettingsLogsAutoDelete => _localization.GetString("settings.logs.autoDelete");
     public string SettingsLogsAutoDeleteRuleTip => _localization.GetString("settings.logs.autoDeleteRuleTip");
+    public string SettingsLogsEnableDatabase => _localization.GetString("settings.logs.enableDatabase");
+    public string SettingsLogsDatabaseWarning => _localization.GetString("settings.logs.databaseWarning");
+    public string SettingsLogsDatabaseDirectory => _localization.GetString("settings.logs.databaseDirectory");
+    public string SidebarBusAdapterComingSoon => _localization.GetString("sidebar.busAdapter.comingSoon");
     public string SettingsAppLogsEnabled => _localization.GetString("settings.appLogs.enabled");
     public string SettingsAppLogsDirectory => _localization.GetString("settings.appLogs.directory");
     public string SettingsAppLogsFormat => _localization.GetString("settings.appLogs.format");

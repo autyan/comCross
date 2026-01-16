@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="180"
+        x:Class="ComCross.Shell.Views.RenameWorkloadDialog"
+        x:CompileBindings="False"
+        Title="重命名任务"
+        Width="400"
+        Height="180"
+        MinWidth="350"
+        MinHeight="150"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ExtendClientAreaToDecorationsHint="False">
+
+  <Grid RowDefinitions="*,Auto" Margin="20">
+    <!-- Form Field -->
+    <StackPanel Grid.Row="0" Spacing="12">
+      <!-- Name Field -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.DialogRenameWorkloadName}"
+                   FontSize="13"
+                   FontWeight="Medium"
+                   Foreground="{DynamicResource --text-0}" />
+        <TextBox Name="NameTextBox"
+                 Watermark="输入新的任务名称"
+                 MaxLength="50"
+                 Text="{Binding WorkloadName, Mode=TwoWay}"
+                 SelectionStart="0"
+                 SelectionEnd="{Binding WorkloadName.Length}" />
+        <TextBlock Text="{Binding NameError}"
+                   FontSize="11"
+                   Foreground="#E53E3E"
+                   IsVisible="{Binding !!NameError}" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Action Buttons -->
+    <StackPanel Grid.Row="1" 
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="12"
+                Margin="0,20,0,0">
+      <Button Content="取消"
+              Width="100"
+              Height="36"
+              Background="{DynamicResource --bg-2}"
+              Foreground="{DynamicResource --text-0}"
+              Click="OnCancelClick" />
+      <Button Content="重命名"
+              Width="100"
+              Height="36"
+              Background="{DynamicResource --accent}"
+              Foreground="White"
+              IsEnabled="{Binding IsValid}"
+              Click="OnRenameClick" />
+    </StackPanel>
+  </Grid>
+</Window>

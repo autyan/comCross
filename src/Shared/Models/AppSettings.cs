@@ -29,6 +29,16 @@ public sealed class LogSettings
     public int MaxFileSizeMb { get; set; } = 10;
     public int MaxTotalSizeMb { get; set; } = 256;
     public bool AutoDeleteEnabled { get; set; }
+    
+    /// <summary>
+    /// Enable database persistence for message storage (default: enabled)
+    /// </summary>
+    public bool DatabasePersistenceEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Database directory (optional, defaults to AppData if not specified)
+    /// </summary>
+    public string? DatabaseDirectory { get; set; }
 }
 
 public sealed class NotificationSettings

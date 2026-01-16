@@ -1,19 +1,26 @@
 using System.IO.Ports;
+using ComCross.PluginSdk;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ComCross.Adapters.Serial;
 
 /// <summary>
-/// Serial port connection implementation
+/// Serial port connection implementation with shared memory integration
 /// </summary>
 public sealed class SerialConnection : IDeviceConnection
 {
     private SerialPort? _serialPort;
     private readonly string _port;
     private readonly ISerialPortAccessManager _accessManager;
+    private readonly ILogger<SerialConnection>? _logger;
     private CancellationTokenSource? _readCancellation;
     private Task? _readTask;
+    
+    // 共享内存集成
+    private ISharedMemoryWriter? _sharedMemorySegment;
+    private BackpressureLevel _backpressureLevel = BackpressureLevel.None;
 
     public string Port => _port;
     public bool IsOpen => _serialPort?.IsOpen ?? false;
@@ -22,13 +29,35 @@ public sealed class SerialConnection : IDeviceConnection
     public event EventHandler<byte[]>? DataReceived;
     public event EventHandler<string>? ErrorOccurred;
 
-    public SerialConnection(string port, ISerialPortAccessManager accessManager)
+    public SerialConnection(
+        string port, 
+        ISerialPortAccessManager accessManager,
+        ILogger<SerialConnection>? logger = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(port);
         ArgumentNullException.ThrowIfNull(accessManager);
         
         _port = port;
         _accessManager = accessManager;
+        _logger = logger;
+    }
+    
+    /// <summary>
+    /// 设置共享内存Segment（用于数据写入）
+    /// </summary>
+    public void SetSharedMemorySegment(ISharedMemoryWriter segment)
+    {
+        _sharedMemorySegment = segment;
+        _logger?.LogInformation("[{Port}] 共享内存已设置", _port);
+    }
+    
+    /// <summary>
+    /// 设置背压等级（由主进程通知）
+    /// </summary>
+    public void SetBackpressureLevel(BackpressureLevel level)
+    {
+        _backpressureLevel = level;
+        _logger?.LogDebug("[{Port}] 背压等级已更新：{Level}", _port, level);
     }
 
     public async Task OpenAsync(SerialSettings settings, CancellationToken cancellationToken = default)
@@ -190,18 +219,42 @@ public sealed class SerialConnection : IDeviceConnection
 
     private async void ReadLoop(CancellationToken cancellationToken)
     {
-        var buffer = new byte[4096];
+        // 根据背压等级调整缓冲区大小
+        int GetBufferSize() => _backpressureLevel switch
+        {
+            BackpressureLevel.High => 512,
+            BackpressureLevel.Medium => 2048,
+            _ => 4096
+        };
+        
+        var buffer = new byte[GetBufferSize()];
 
         while (!cancellationToken.IsCancellationRequested && _serialPort?.IsOpen == true)
         {
             try
             {
+                // 根据背压动态调整缓冲区
+                if (buffer.Length != GetBufferSize())
+                {
+                    buffer = new byte[GetBufferSize()];
+                }
+                
                 var bytesRead = await _serialPort.BaseStream.ReadAsync(buffer, cancellationToken);
                 if (bytesRead > 0)
                 {
                     var data = new byte[bytesRead];
                     Array.Copy(buffer, data, bytesRead);
-                    DataReceived?.Invoke(this, data);
+                    
+                    // 优先写入共享内存（如果已配置）
+                    if (_sharedMemorySegment != null)
+                    {
+                        await WriteToSharedMemoryAsync(data, cancellationToken);
+                    }
+                    else
+                    {
+                        // 兼容旧模式：触发DataReceived事件
+                        DataReceived?.Invoke(this, data);
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -214,6 +267,35 @@ public sealed class SerialConnection : IDeviceConnection
                 await Task.Delay(100, cancellationToken);
             }
         }
+    }
+    
+    /// <summary>
+    /// 写入数据到共享内存（带重试和背压处理）
+    /// </summary>
+    private async Task WriteToSharedMemoryAsync(byte[] data, CancellationToken cancellationToken)
+    {
+        int retryCount = 0;
+        const int maxRetries = 10;
+        
+        while (retryCount < maxRetries && !cancellationToken.IsCancellationRequested)
+        {
+            if (_sharedMemorySegment!.TryWriteFrame(data, out long frameId))
+            {
+                _logger?.LogTrace("[{Port}] 写入共享内存成功：FrameId={FrameId}, Size={Size}字节", 
+                    _port, frameId, data.Length);
+                return;
+            }
+            
+            // 写入失败，等待主进程消费
+            retryCount++;
+            _logger?.LogDebug("[{Port}] 共享内存满，等待主进程消费（重试{Retry}/{Max}）",
+                _port, retryCount, maxRetries);
+            
+            await Task.Delay(10 * retryCount, cancellationToken); // 指数退避
+        }
+        
+        // 超过重试次数，丢弃数据
+        _logger?.LogWarning("[{Port}] ⚠️ 共享内存持续满，丢弃{Size}字节数据", _port, data.Length);
     }
 
     public void Dispose()

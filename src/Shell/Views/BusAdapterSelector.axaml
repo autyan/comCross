@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:models="using:ComCross.Shell.Models"
+             x:Class="ComCross.Shell.Views.BusAdapterSelector"
+             x:DataType="vm:BusAdapterSelectorViewModel">
+
+  <StackPanel Spacing="12">
+    <!-- Section Header -->
+    <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.SidebarBusAdapter}" 
+               FontSize="11" 
+               FontWeight="Bold" 
+               Foreground="#87909B"
+               Margin="0,0,0,4" />
+    
+    <!-- Adapter Selection ComboBox -->
+    <ComboBox ItemsSource="{Binding AvailableAdapters}"
+              SelectedItem="{Binding SelectedAdapter}"
+              HorizontalAlignment="Stretch">
+      <ComboBox.ItemTemplate>
+        <DataTemplate x:DataType="models:BusAdapterInfo">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding Icon}" 
+                       FontSize="14" 
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Name}" 
+                       FontSize="13" 
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.SidebarBusAdapterComingSoon}" 
+                       FontSize="11" 
+                       Foreground="#87909B"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding !IsEnabled}" />
+          </StackPanel>
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+    
+    <!-- Adapter Description (if available) -->
+    <TextBlock Text="{Binding SelectedAdapter.Description}" 
+               FontSize="11" 
+               Foreground="#87909B"
+               TextWrapping="Wrap"
+               IsVisible="{Binding SelectedAdapter.Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    
+    <!-- Configuration Panel Placeholder -->
+    <!-- The actual config panel will be loaded dynamically based on selected adapter -->
+    <!-- For now, we'll use the existing LeftSidebar's device selection UI -->
+    <ContentControl Content="{Binding ConfigPanel}" />
+  </StackPanel>
+</UserControl>

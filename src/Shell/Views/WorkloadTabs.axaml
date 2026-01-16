@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             x:Class="ComCross.Shell.Views.WorkloadTabs"
+             x:DataType="vm:WorkloadTabsViewModel">
+
+  <Border Background="#1A1F24" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+    <Grid ColumnDefinitions="*,Auto">
+      <!-- Left: Workload Tabs (scrollable) -->
+      <ScrollViewer Grid.Column="0" 
+                    HorizontalScrollBarVisibility="Auto" 
+                    VerticalScrollBarVisibility="Disabled">
+        <StackPanel Orientation="Horizontal">
+          <!-- Workload Tabs -->
+          <ItemsControl ItemsSource="{Binding Tabs}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WorkloadTabItemViewModel">
+                <Border Name="TabBorder"
+                        Padding="16,10"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="0,0,0,3"
+                        ToolTip.Tip="{Binding FullName}">
+                  
+                  <Border.Styles>
+                    <!-- Active Tab Style -->
+                    <Style Selector="Border.active">
+                      <Setter Property="Background" Value="#2A3A4A" />
+                      <Setter Property="BorderBrush" Value="#4A9EFF" />
+                    </Style>
+                    
+                    <!-- Hover Effect (only for inactive tabs) -->
+                    <Style Selector="Border:not(.active):pointerover">
+                      <Setter Property="Background" Value="#1A2530" />
+                    </Style>
+                  </Border.Styles>
+                  
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <!-- Icon -->
+                    <TextBlock Text="{Binding Icon}" 
+                               FontSize="16" 
+                               VerticalAlignment="Center" />
+                    
+                    <!-- Name (truncated) -->
+                    <TextBlock Name="TabName"
+                               Text="{Binding DisplayName}" 
+                               FontSize="13" 
+                               FontWeight="Regular"
+                               VerticalAlignment="Center" />
+                    
+                    <!-- Close Button (only if CanClose) -->
+                    <Button Content="×" 
+                            FontSize="16"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="4,0"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding CanClose}"
+                            Command="{Binding CloseCommand}"
+                            CommandParameter="{Binding Id}"
+                            ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadClose}">
+                      <Button.Styles>
+                        <Style Selector="Button:pointerover">
+                          <Setter Property="Background" Value="#FF4444" />
+                          <Setter Property="Foreground" Value="White" />
+                        </Style>
+                      </Button.Styles>
+                    </Button>
+                  </StackPanel>
+                  
+                  <!-- Context Menu -->
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <!-- Rename (all workloads) -->
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadRename}" 
+                                IsEnabled="{Binding CanRename}"
+                                Command="{Binding RenameCommand}"
+                                CommandParameter="{Binding Id}">
+                        <MenuItem.Icon>
+                          <TextBlock Text="✏️" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      
+                      <!-- Copy (all workloads) -->
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadCopy}" 
+                                IsEnabled="{Binding CanCopy}"
+                                Command="{Binding CopyCommand}"
+                                CommandParameter="{Binding Id}">
+                        <MenuItem.Icon>
+                          <TextBlock Text="📋" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      
+                      <Separator IsVisible="{Binding CanDelete}" />
+                      
+                      <!-- Delete (except default) -->
+                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadDelete}" 
+                                IsEnabled="{Binding CanDelete}"
+                                Command="{Binding CloseCommand}"
+                                CommandParameter="{Binding Id}">
+                        <MenuItem.Icon>
+                          <TextBlock Text="🗑️" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          
+          <!-- New Workload Button -->
+          <Button Content="＋" 
+                  FontSize="16"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  Padding="16,10"
+                  VerticalAlignment="Center"
+                  Command="{Binding CreateWorkloadCommand}"
+                  ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.WorkloadNew}">
+            <Button.Styles>
+              <Style Selector="Button:pointerover">
+                <Setter Property="Background" Value="#1A2530" />
+              </Style>
+            </Button.Styles>
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
+      
+      <!-- Right: Action Buttons (fixed width, float right) -->
+      <StackPanel Grid.Column="1" 
+                  Orientation="Horizontal" 
+                  Spacing="4"
+                  Margin="8,0">
+        <!-- Notification Button -->
+        <Button Content="🔔" 
+                FontSize="20"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8"
+                Click="OnNotificationsClick"
+                ToolTip.Tip="{Binding LocalizedStrings.ActionNotificationsTooltip}">
+          <Button.Styles>
+            <Style Selector="Button:pointerover">
+              <Setter Property="Background" Value="#1A2530" />
+            </Style>
+          </Button.Styles>
+        </Button>
+        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NotificationCenter.UnreadCount, StringFormat=({0})}" 
+                   FontSize="11" 
+                   Foreground="#F5A524" 
+                   VerticalAlignment="Center" />
+        
+        <!-- Settings Button -->
+        <Button Content="⚙️" 
+                FontSize="20"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8"
+                Click="OnSettingsClick"
+                ToolTip.Tip="{Binding LocalizedStrings.ActionSettingsTooltip}">
+          <Button.Styles>
+            <Style Selector="Button:pointerover">
+              <Setter Property="Background" Value="#1A2530" />
+            </Style>
+          </Button.Styles>
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

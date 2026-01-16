@@ -15,14 +15,41 @@ namespace ComCross.Shell.Views;
 
 public partial class MainWindow : Window
 {
-    private bool _isClosing = false;
-    
     public MainWindow()
     {
         InitializeComponent();
         
-        // Subscribe to window closing event to trigger cleanup
+        // Subscribe to window closing event
         Closing += OnWindowClosing;
+        
+        // Initialize workload tabs when window loads
+        Loaded += OnWindowLoaded;
+    }
+
+    private async void OnWindowLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || vm.WorkloadTabsViewModel == null)
+        {
+            return;
+        }
+
+        // Load workloads asynchronously after window is loaded
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                // Ensure default workload exists
+                await vm.WorkloadService.EnsureDefaultWorkloadAsync();
+                
+                // Then load all workloads
+                await vm.WorkloadTabsViewModel.LoadWorkloadsAsync();
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't crash
+                System.Diagnostics.Debug.WriteLine($"Error loading workloads: {ex.Message}");
+            }
+        });
     }
 
     private async void OnSessionNameClick(object? sender, PointerPressedEventArgs e)
@@ -104,34 +131,10 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_isClosing)
-        {
-            return; // Already processing close
-        }
-
-        // Cancel the default close behavior
-        e.Cancel = true;
-        _isClosing = true;
-
-        // Run cleanup asynchronously
-        if (DataContext is MainWindowViewModel vm)
-        {
-            await Task.Run(async () =>
-            {
-                await vm.CleanupWithProgressAsync();
-            });
-        }
-
-        // Now actually close
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                desktop.Shutdown();
-            }
-        });
+        // Just let the App handle shutdown, don't interfere
+        // The App.axaml.cs OnShutdownRequested will handle cleanup
     }
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)

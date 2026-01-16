@@ -11,47 +11,21 @@
         Icon="/app-icon.ico"
         KeyDown="OnKeyDown"
         Width="1440" Height="900"
-        MinWidth="1280" MinHeight="720">
+        MinWidth="1280" MinHeight="720"
+        Background="#0F1417">
 
     <Grid RowDefinitions="Auto,*,Auto">
-        <!-- Top Bar -->
-        <Border Grid.Row="0" Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="16,12">
-            <StackPanel Orientation="Horizontal" Spacing="16">
-                <TextBlock Text="{Binding LocalizedStrings.AppTitle}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
-                <Border Background="#1B242A" 
-                        BorderBrush="#3AA0FF" 
-                        BorderThickness="1" 
-                        CornerRadius="4" 
-                        Padding="8,4"
-                        Cursor="Hand"
-                        ToolTip.Tip="Click to edit session name"
-                        PointerPressed="OnSessionNameClick"
-                        IsVisible="{Binding ActiveSession, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <Border.Styles>
-                        <Style Selector="Border:pointerover">
-                            <Setter Property="Background" Value="#25303A" />
-                        </Style>
-                    </Border.Styles>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="✏️" FontSize="12" VerticalAlignment="Center" Foreground="#3AA0FF" />
-                        <TextBlock Text="{Binding ActiveSession.Name}" 
-                                   FontSize="13" 
-                                   VerticalAlignment="Center" 
-                                   Foreground="#E6EDF3" 
-                                   FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </Border>
+        <!-- Workload Tabs (Top Bar) -->
+        <views:WorkloadTabs Grid.Row="0" DataContext="{Binding WorkloadTabsViewModel}" />
 
-        <!-- Main Content -->
-        <Grid Grid.Row="1" ColumnDefinitions="280,*,320">
+        <!-- Main Content: 3-Column Layout -->
+        <Grid Grid.Row="1" ColumnDefinitions="250,*,350">
             <!-- Left Sidebar -->
             <Border Grid.Column="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,1,0">
-                <views:LeftSidebar />
+                <views:LeftSidebar LocalizedStrings="{Binding LocalizedStrings}" />
             </Border>
 
-            <!-- Center Workspace -->
+            <!-- Center Workspace: Message Stream -->
             <Border Grid.Column="1" Background="#0F1417">
                 <views:MessageStreamView />
             </Border>
@@ -64,12 +38,55 @@
 
         <!-- Bottom Status Bar -->
         <Border Grid.Row="2" Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,1,0,0" Padding="16,8">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="{Binding LocalizedStrings.StatusReady}" FontSize="12" VerticalAlignment="Center" Foreground="#87909B" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
-                    <Button Content="{Binding LocalizedStrings.NotificationsTitle}" Classes="secondary" Click="OnNotificationsClick" />
-                    <TextBlock Text="{Binding NotificationCenter.UnreadCount, StringFormat=({0})}" FontSize="11" Foreground="#F5A524" VerticalAlignment="Center" />
-                    <Button Content="{Binding LocalizedStrings.SettingsTitle}" Classes="secondary" Click="OnSettingsClick" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <!-- Left: Status and Metrics -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="{Binding LocalizedStrings.StatusReady}" 
+                               FontSize="12" 
+                               VerticalAlignment="Center" 
+                               Foreground="#87909B" />
+                    
+                    <!-- RX/TX Statistics (Workload Total) -->
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding LocalizedStrings.StatusRx}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding TotalRxBytes, StringFormat={}{0:N0} B}" 
+                                       FontSize="11" 
+                                       Foreground="#2CB5A9" 
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="{Binding TotalRxBytes, StringFormat=Total received: {0:N0} bytes}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding LocalizedStrings.StatusTx}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding TotalTxBytes, StringFormat={}{0:N0} B}" 
+                                       FontSize="11" 
+                                       Foreground="#3AA0FF" 
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="{Binding TotalTxBytes, StringFormat=Total transmitted: {0:N0} bytes}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding LocalizedStrings.StreamMetricsLines}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Messages.Count}" 
+                                       FontSize="11" 
+                                       Foreground="#E6EDF3" 
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <!-- System Resources (Placeholder) -->
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding LocalizedStrings.StatusCpu}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="0%" FontSize="11" Foreground="#F5A524" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding LocalizedStrings.StatusMem}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
+                            <TextBlock Text="0 MB" FontSize="11" Foreground="#F5A524" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

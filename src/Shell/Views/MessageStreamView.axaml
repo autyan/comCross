@@ -22,20 +22,34 @@
 
         <!-- Metrics Bar -->
         <Border Grid.Row="1" Background="#141B1F" Padding="16,8" BorderBrush="#25303A" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="24">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsRx}" FontSize="10" Foreground="#87909B" />
-                    <TextBlock Text="{Binding ActiveSession.RxBytes}" FontSize="12" Foreground="#2CB5A9" FontWeight="Bold" />
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="24">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding LocalizedStrings.StreamMetricsRx}" FontSize="10" Foreground="#87909B" />
+                        <TextBlock Text="{Binding ActiveSession.RxBytes}" FontSize="12" Foreground="#2CB5A9" FontWeight="Bold" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding LocalizedStrings.StreamMetricsTx}" FontSize="10" Foreground="#87909B" />
+                        <TextBlock Text="{Binding ActiveSession.TxBytes}" FontSize="12" Foreground="#3AA0FF" FontWeight="Bold" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding LocalizedStrings.StreamMetricsLines}" FontSize="10" Foreground="#87909B" />
+                        <TextBlock Text="{Binding Messages.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" />
+                    </StackPanel>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsTx}" FontSize="10" Foreground="#87909B" />
-                    <TextBlock Text="{Binding ActiveSession.TxBytes}" FontSize="12" Foreground="#3AA0FF" FontWeight="Bold" />
+                
+                <!-- Database Storage Toggle -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <CheckBox IsChecked="{Binding ActiveSession.EnableDatabaseStorage}" 
+                              Content="{Binding LocalizedStrings.SessionDatabaseEnable}"
+                              FontSize="11"
+                              VerticalAlignment="Center" />
+                    <Border Background="#F5A524" CornerRadius="8" Width="16" Height="16" VerticalAlignment="Center"
+                            ToolTip.Tip="{Binding LocalizedStrings.SessionDatabaseTooltip}">
+                        <TextBlock Text="?" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#141B1F" />
+                    </Border>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding LocalizedStrings.StreamMetricsLines}" FontSize="10" Foreground="#87909B" />
-                    <TextBlock Text="{Binding Messages.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" />
-                </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <!-- Message List -->

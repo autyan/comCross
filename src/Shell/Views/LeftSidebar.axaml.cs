@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
 using System.Linq;
@@ -9,6 +10,15 @@ namespace ComCross.Shell.Views;
 
 public partial class LeftSidebar : UserControl
 {
+    public static readonly StyledProperty<LocalizedStringsViewModel?> LocalizedStringsProperty =
+        AvaloniaProperty.Register<LeftSidebar, LocalizedStringsViewModel?>(nameof(LocalizedStrings));
+
+    public LocalizedStringsViewModel? LocalizedStrings
+    {
+        get => GetValue(LocalizedStringsProperty);
+        set => SetValue(LocalizedStringsProperty, value);
+    }
+
     public LeftSidebar()
     {
         InitializeComponent();

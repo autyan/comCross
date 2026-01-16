@@ -1,0 +1,80 @@
+// AT Commands Protocol Definition
+// Standard: Hayes AT Command Set (GSM 07.07, 3GPP TS 27.007)
+// Encoding: ASCII text
+// Terminator: CR (0x0D) or CRLF (0x0D 0x0A)
+
+protocol ATCommands {
+    version "1.0.0";
+    description "AT command protocol for modems and cellular modules";
+
+    // Note: This CPDL models binary representation of AT commands
+    // Actual AT commands are ASCII strings like "AT+CGMI\r"
+    
+    // Basic AT command with no parameters
+    message BasicCommand {
+        uint8 A;  // 'A' = 0x41
+        uint8 T;  // 'T' = 0x54
+        uint8 cr; // '\r' = 0x0D
+    }
+
+    // AT command with query (e.g., AT+CGMI?)
+    message QueryCommand {
+        uint8 A;     // 'A' = 0x41
+        uint8 T;     // 'T' = 0x54
+        uint8 plus;  // '+' = 0x2B
+        uint8 C;
+        uint8 G;
+        uint8 M;
+        uint8 I;
+        uint8 question; // '?' = 0x3F
+        uint8 cr;       // '\r' = 0x0D
+    }
+
+    // Simple OK response
+    message OkResponse {
+        uint8 O;  // 'O' = 0x4F
+        uint8 K;  // 'K' = 0x4B
+        uint8 cr; // '\r' = 0x0D
+        uint8 lf; // '\n' = 0x0A
+    }
+
+    // Simple ERROR response
+    message ErrorResponse {
+        uint8 E;  // 'E' = 0x45
+        uint8 R;  // 'R' = 0x52
+        uint8 R2; // 'R' = 0x52
+        uint8 O;  // 'O' = 0x4F
+        uint8 R3; // 'R' = 0x52
+        uint8 cr; // '\r' = 0x0D
+        uint8 lf; // '\n' = 0x0A
+    }
+
+    // Response with data (e.g., +CGMI: SIMCOM_Ltd)
+    message DataResponse {
+        uint8 plus;     // '+' = 0x2B
+        uint8 C;
+        uint8 G;
+        uint8 M;
+        uint8 I;
+        uint8 colon;    // ':' = 0x3A
+        uint8 space;    // ' ' = 0x20
+        uint8 cr;       // '\r' = 0x0D
+        uint8 lf;       // '\n' = 0x0A
+    }
+
+    // Signal quality response (AT+CSQ)
+    message SignalQualityResponse {
+        uint8 plus;   // '+' = 0x2B
+        uint8 C;      // 'C' = 0x43
+        uint8 S;      // 'S' = 0x53
+        uint8 Q;      // 'Q' = 0x51
+        uint8 colon;  // ':' = 0x3A
+        uint8 space;  // ' ' = 0x20
+        uint8 rssi_tens;   // RSSI tens digit (ASCII)
+        uint8 rssi_ones;   // RSSI ones digit (ASCII)
+        uint8 comma;       // ',' = 0x2C
+        uint8 ber;         // BER digit (ASCII)
+        uint8 cr;          // '\r' = 0x0D
+        uint8 lf;          // '\n' = 0x0A
+    }
+}

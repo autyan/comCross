@@ -74,10 +74,14 @@ public sealed class LocalizationService : ILocalizationService
             return; // Already loaded
         }
 
-        // Use built-in translations (embedded in code for reliability)
-        _translations[cultureCode] = cultureCode == "zh-CN"
-            ? GetChineseTranslations()
-            : GetEnglishTranslations();
+        // English is hardcoded (always available)
+        // Other languages must be loaded from strings.json
+        if (cultureCode == "en-US")
+        {
+            _translations[cultureCode] = GetEnglishTranslations();
+        }
+        // For other cultures, they should have been loaded from JSON in constructor
+        // If not found, they will fallback to en-US automatically
     }
 
     private IReadOnlyList<LocaleCultureInfo> LoadResourceTranslations(
@@ -105,28 +109,21 @@ public sealed class LocalizationService : ILocalizationService
         foreach (var cultureProperty in culturesElement.EnumerateObject())
         {
             var cultureCode = cultureProperty.Name;
+            
+            // Skip en-US in JSON - we only use hardcoded English
+            if (cultureCode == "en-US")
+            {
+                continue;
+            }
+            
             var strings = new Dictionary<string, string>();
             foreach (var kvp in cultureProperty.Value.EnumerateObject())
             {
                 strings[kvp.Name] = kvp.Value.GetString() ?? string.Empty;
             }
 
-            if (cultureCode == "en-US")
-            {
-                foreach (var kvp in strings)
-                {
-                    defaultTranslations[kvp.Key] = kvp.Value;
-                }
-            }
-            else
-            {
-                _translations[cultureCode] = strings;
-            }
-
-            if (cultureCode != "en-US")
-            {
-                cultures.Add(CreateLocaleCultureInfo(cultureCode));
-            }
+            _translations[cultureCode] = strings;
+            cultures.Add(CreateLocaleCultureInfo(cultureCode));
         }
 
         return cultures;
@@ -165,9 +162,48 @@ public sealed class LocalizationService : ILocalizationService
             ["dialog.connect.cancel"] = "Cancel",
             ["dialog.connect.connect"] = "Connect",
             
+            // Workload
+            ["workload.new"] = "New Workload",
+            ["workload.close"] = "Close",
+            ["workload.rename"] = "Rename",
+            ["workload.copy"] = "Copy",
+            ["workload.delete"] = "Delete",
+            ["workload.default.name"] = "{0}'s Workspace",
+            ["workload.panel.title"] = "Workloads",
+            ["workload.panel.loading"] = "Loading...",
+            
+            // Workload Dialogs
+            ["dialog.createWorkload.title"] = "Create Workload",
+            ["dialog.createWorkload.name"] = "Workload Name *",
+            ["dialog.createWorkload.description"] = "Description (Optional)",
+            ["dialog.createWorkload.cancel"] = "Cancel",
+            ["dialog.createWorkload.create"] = "Create",
+            ["dialog.renameWorkload.title"] = "Rename Workload",
+            ["dialog.renameWorkload.name"] = "New Name *",
+            ["dialog.renameWorkload.cancel"] = "Cancel",
+            ["dialog.renameWorkload.rename"] = "Rename",
+            
+            // Main Actions
+            ["action.settings"] = "Settings",
+            ["action.notifications"] = "Notifications",
+            
             // Sidebar
+            ["sidebar.workloads"] = "WORKLOADS",
             ["sidebar.devices"] = "DEVICES",
             ["sidebar.sessions"] = "SESSIONS",
+            ["sidebar.busAdapter"] = "BUS ADAPTER",
+            ["sidebar.deviceConfig"] = "DEVICE CONFIGURATION",
+            ["sidebar.selectPort"] = "Select port",
+            ["sidebar.refreshPorts"] = "Refresh ports",
+            ["sidebar.quickConnect"] = "Quick Connect",
+            ["sidebar.baudRate"] = "Baud Rate",
+            ["sidebar.dataBits"] = "Data Bits",
+            ["sidebar.parity"] = "Parity",
+            ["sidebar.stopBits"] = "Stop Bits",
+            ["sidebar.parity.none"] = "None",
+            ["sidebar.parity.odd"] = "Odd",
+            ["sidebar.parity.even"] = "Even",
+            ["sidebar.newSession"] = "New Session",
             
             // Message Stream
             ["stream.search.placeholder"] = "Search messages...",
@@ -219,6 +255,10 @@ public sealed class LocalizationService : ILocalizationService
             ["status.disconnected"] = "Disconnected",
             ["status.rxbytes"] = "RX: {0} bytes",
             ["status.txbytes"] = "TX: {0} bytes",
+            ["status.rx"] = "RX:",
+            ["status.tx"] = "TX:",
+            ["status.cpu"] = "CPU:",
+            ["status.mem"] = "MEM:",
             
             // Settings
             ["settings.title"] = "Settings",
@@ -238,6 +278,14 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.logs.maxTotalSize"] = "Max total size (MB)",
             ["settings.logs.autoDelete"] = "Auto delete when exceeded",
             ["settings.logs.autoDeleteRuleTip"] = "When enabled, the oldest log files are deleted until the total size is below the limit.",
+            ["settings.logs.enableDatabase"] = "Enable database persistence (SQLite)",
+            ["settings.logs.databaseWarning"] = "Enabling database persistence will use more storage and may impact performance. Messages will be stored in SQLite for advanced search capabilities.",
+            ["settings.logs.databaseDirectory"] = "Database directory",
+            ["session.database.enable"] = "DB Store",
+            ["session.database.tooltip"] = "Store messages to database for advanced search. Note: Historical data is not converted. Switching will result in data loss unless manually imported.",
+            ["sidebar.busAdapter.comingSoon"] = "(Coming soon)",
+            ["action.notifications.tooltip"] = "Notifications",
+            ["action.settings.tooltip"] = "Settings",
             ["settings.appLogs.enabled"] = "Enable application logs",
             ["settings.appLogs.directory"] = "App log directory",
             ["settings.appLogs.format"] = "Log format",
@@ -277,141 +325,6 @@ public sealed class LocalizationService : ILocalizationService
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
             ["notification.connection.unknownReason"] = "unknown",
             ["notification.export.completed"] = "Export completed: {0}"
-        };
-    }
-
-    private static Dictionary<string, string> GetChineseTranslations()
-    {
-        return new Dictionary<string, string>
-        {
-            // Main Window
-            ["app.title"] = "ComCross - 串口工具箱",
-            ["menu.connect"] = "连接",
-            ["menu.disconnect"] = "断开",
-            ["menu.clear"] = "清空",
-            ["menu.export"] = "导出",
-            
-            // Connect Dialog
-            ["dialog.connect.title"] = "连接到设备",
-            ["dialog.connect.port"] = "端口",
-            ["dialog.connect.baudrate"] = "波特率",
-            ["dialog.connect.sessionname.placeholder"] = "我的会话",
-            ["dialog.connect.sessionname"] = "会话名称",
-            ["dialog.connect.cancel"] = "取消",
-            ["dialog.connect.connect"] = "连接",
-            
-            // Sidebar
-            ["sidebar.devices"] = "设备",
-            ["sidebar.sessions"] = "会话",
-            
-            // Message Stream
-            ["stream.search.placeholder"] = "搜索消息...",
-            ["stream.metrics.rx"] = "接收:",
-            ["stream.metrics.tx"] = "发送:",
-            ["stream.metrics.lines"] = "行数:",
-            
-            // Tool Dock
-            ["tool.send"] = "发送",
-            ["tool.filter"] = "过滤",
-            ["tool.highlight"] = "高亮",
-            ["tool.export"] = "导出",
-            ["tool.send.quickcommands"] = "快捷命令",
-            ["tool.send.message.placeholder"] = "输入消息...",
-            ["tool.send.message"] = "消息",
-            ["tool.send.hexmode"] = "十六进制模式",
-            ["tool.send.addcr"] = "添加 CR",
-            ["tool.send.addlf"] = "添加 LF",
-            ["tool.send.button"] = "发送",
-            ["tool.send.cmd.status"] = "状态",
-            ["tool.send.cmd.reset"] = "重置",
-            ["tool.send.cmd.getconfig"] = "获取配置",
-            ["tool.commands"] = "命令",
-            ["tool.commands.empty"] = "暂无命令",
-            ["tool.commands.send"] = "发送",
-            ["tool.commands.add"] = "新建",
-            ["tool.commands.save"] = "保存",
-            ["tool.commands.delete"] = "删除",
-            ["tool.commands.import"] = "导入",
-            ["tool.commands.export"] = "导出",
-            ["tool.commands.name"] = "名称",
-            ["tool.commands.payload"] = "内容",
-            ["tool.commands.type"] = "类型",
-            ["tool.commands.encoding"] = "编码",
-            ["tool.commands.group"] = "分组",
-            ["tool.commands.scope"] = "范围",
-            ["tool.commands.appendCr"] = "追加 CR",
-            ["tool.commands.appendLf"] = "追加 LF",
-            ["tool.commands.hotkey"] = "快捷键",
-            ["tool.commands.sortOrder"] = "排序",
-            ["tool.commands.scope.global"] = "全局",
-            ["tool.commands.scope.session"] = "会话",
-            ["tool.commands.type.text"] = "文本",
-            ["tool.commands.type.hex"] = "十六进制",
-            
-            // Status Bar
-            ["status.ready"] = "就绪",
-            ["status.connected"] = "已连接",
-            ["status.disconnected"] = "已断开",
-            ["status.rxbytes"] = "接收: {0} 字节",
-            ["status.txbytes"] = "发送: {0} 字节",
-            
-            // Settings
-            ["settings.title"] = "设置",
-            ["settings.section.general"] = "通用",
-            ["settings.section.logs"] = "日志",
-            ["settings.section.appLogs"] = "程序日志",
-            ["settings.section.notifications"] = "通知",
-            ["settings.section.connection"] = "连接",
-            ["settings.section.display"] = "显示",
-            ["settings.section.export"] = "导出",
-            ["settings.section.plugins"] = "插件",
-            ["settings.language"] = "语言",
-            ["settings.followSystemLanguage"] = "跟随系统语言",
-            ["settings.logs.autosave"] = "自动保存日志",
-            ["settings.logs.directory"] = "日志目录",
-            ["settings.logs.maxFileSize"] = "单文件上限 (MB)",
-            ["settings.logs.maxTotalSize"] = "总占用上限 (MB)",
-            ["settings.logs.autoDelete"] = "超限自动删除",
-            ["settings.logs.autoDeleteRuleTip"] = "开启后将按时间删除最旧日志，直到总占用低于上限。",
-            ["settings.appLogs.enabled"] = "启用程序日志",
-            ["settings.appLogs.directory"] = "程序日志目录",
-            ["settings.appLogs.format"] = "日志格式",
-            ["settings.appLogs.minLevel"] = "最低级别",
-            ["settings.plugins.enabled"] = "启用",
-            ["settings.plugins.name"] = "名称",
-            ["settings.plugins.permissions"] = "权限",
-            ["settings.plugins.path"] = "路径",
-            ["settings.plugins.status.loaded"] = "已加载",
-            ["settings.plugins.status.disabled"] = "已禁用",
-            ["settings.plugins.status.failed"] = "加载失败",
-            ["settings.notifications.storage"] = "存储超限提醒",
-            ["settings.notifications.connection"] = "连接异常提醒",
-            ["settings.notifications.export"] = "导出完成提醒",
-            ["settings.notifications.retentionDays"] = "保留天数",
-            ["settings.connection.defaultBaudRate"] = "默认波特率",
-            ["settings.connection.defaultEncoding"] = "默认编码",
-            ["settings.connection.defaultAddCr"] = "默认追加 CR",
-            ["settings.connection.defaultAddLf"] = "默认追加 LF",
-            ["settings.display.maxMessages"] = "内存消息上限",
-            ["settings.display.autoScroll"] = "自动滚动",
-            ["settings.display.timestampFormat"] = "时间戳格式",
-            ["settings.export.defaultFormat"] = "默认格式",
-            ["settings.export.defaultDirectory"] = "默认导出目录",
-            ["settings.export.range"] = "范围",
-            ["settings.export.range.all"] = "全部",
-            ["settings.export.range.latest"] = "最近",
-            ["settings.export.range.count"] = "条数",
-            ["settings.actions.close"] = "关闭",
-
-            // Notifications
-            ["notifications.title"] = "通知中心",
-            ["notifications.empty"] = "暂无通知",
-            ["notifications.markAllRead"] = "全部已读",
-            ["notification.storage.limitExceeded"] = "日志占用超限（{0} MB / {1} MB）。",
-            ["notification.storage.autoDeleteApplied"] = "自动删除了 {0} 个日志文件。",
-            ["notification.connection.disconnected"] = "会话 {0} 断开（{1}）。",
-            ["notification.connection.unknownReason"] = "未知",
-            ["notification.export.completed"] = "导出完成：{0}"
         };
     }
 }
