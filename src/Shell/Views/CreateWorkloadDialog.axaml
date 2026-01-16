@@ -6,7 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
         x:Class="ComCross.Shell.Views.CreateWorkloadDialog"
         x:CompileBindings="False"
-        Title="创建新任务"
+        Title="{Binding LocalizedStrings.DialogCreateWorkloadTitle}"
         Width="400"
         Height="250"
         MinWidth="350"
@@ -20,30 +20,28 @@
     <StackPanel Grid.Row="0" Spacing="16">
       <!-- Name Field -->
       <StackPanel Spacing="8">
-        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.DialogCreateWorkloadName}"
+        <TextBlock Text="{Binding LocalizedStrings.DialogCreateWorkloadName}"
                    FontSize="13"
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />
         <TextBox Name="NameTextBox"
-                 Watermark="输入任务名称 (例如: 测试项目A)"
+                 Watermark="{Binding LocalizedStrings.DialogCreateWorkloadNamePlaceholder}"
                  MaxLength="50"
                  Text="{Binding WorkloadName, Mode=TwoWay}" />
         <TextBlock Text="{Binding NameError}"
                    FontSize="11"
                    Foreground="#E53E3E"
                    IsVisible="{Binding !!NameError}" />
-                   Foreground="#E53E3E"
-                   IsVisible="{Binding !!NameError, DataValidationErrors.Errors=None}" />
       </StackPanel>
 
       <!-- Description Field -->
       <StackPanel Spacing="8">
-        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LocalizedStrings.DialogCreateWorkloadDescription}"
+        <TextBlock Text="{Binding LocalizedStrings.DialogCreateWorkloadDescription}"
                    FontSize="13"
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />
         <TextBox Name="DescriptionTextBox"
-                 Watermark="输入任务描述 (可选)"
+                 Watermark="{Binding LocalizedStrings.DialogCreateWorkloadDescriptionPlaceholder}"
                  MaxLength="200"
                  Height="60"
                  TextWrapping="Wrap"
@@ -52,7 +50,7 @@
         <TextBlock FontSize="11"
                    Foreground="{DynamicResource --text-2}">
           <Run Text="{Binding DescriptionLength}" />
-          <Run Text="/ 200" />
+          <Run Text="{Binding LocalizedStrings.DialogCreateWorkloadDescriptionCounter}" />
         </TextBlock>
       </StackPanel>
     </StackPanel>
@@ -63,13 +61,13 @@
                 HorizontalAlignment="Right"
                 Spacing="12"
                 Margin="0,20,0,0">
-      <Button Content="取消"
+      <Button Content="{Binding LocalizedStrings.DialogCreateWorkloadCancel}"
               Width="100"
               Height="36"
               Background="{DynamicResource --bg-2}"
               Foreground="{DynamicResource --text-0}"
               Click="OnCancelClick" />
-      <Button Content="创建"
+      <Button Content="{Binding LocalizedStrings.DialogCreateWorkloadCreate}"
               Width="100"
               Height="36"
               Background="{DynamicResource --accent}"

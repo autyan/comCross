@@ -2,7 +2,6 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using System.Reactive.Disposables;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -12,7 +11,6 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 using ComCross.Shell.Views;
-using ReactiveUI;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -23,7 +21,6 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly WorkloadService _workloadService;
     private readonly EventBus _eventAggregator;
-    private readonly CompositeDisposable _disposables = new();
     private WorkloadTabItemViewModel? _activeTab;
 
     public LocalizedStringsViewModel LocalizedStrings { get; }
@@ -36,17 +33,12 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
 
         Tabs = new ObservableCollection<WorkloadTabItemViewModel>();
 
-        CreateWorkloadCommand = ReactiveCommand.Create(
-            () => Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(CreateWorkloadAsync),
-            outputScheduler: RxApp.MainThreadScheduler);
-        ActivateWorkloadCommand = ReactiveCommand.CreateFromTask<string>(async workloadId => 
-        {
-            await Task.CompletedTask;
-            ActivateWorkload(workloadId);
-        });
-        CloseWorkloadCommand = ReactiveCommand.CreateFromTask<string>(CloseWorkloadAsync);
-        RenameWorkloadCommand = ReactiveCommand.CreateFromTask<string>(RenameWorkloadAsync);
-        CopyWorkloadCommand = ReactiveCommand.CreateFromTask<string>(CopyWorkloadAsync);
+        // Create commands using AsyncRelayCommand and RelayCommand (same as MainWindowViewModel)
+        CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
+        ActivateWorkloadCommand = new RelayCommand<string>(ActivateWorkload);
+        CloseWorkloadCommand = new AsyncRelayCommand<string>(CloseWorkloadAsync);
+        RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
+        CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
 
         _eventAggregator.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
         _eventAggregator.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
@@ -121,7 +113,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private async Task CreateWorkloadAsync()
     {
-        var dialog = new CreateWorkloadDialog();
+        var dialog = new CreateWorkloadDialog(LocalizedStrings);
         var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
             ? desktop.MainWindow 
             : null;
@@ -129,18 +121,18 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
         if (mainWindow == null)
             return;
 
-        var result = await dialog.ShowDialog<string?>(mainWindow);
+        var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
 
-        if (!string.IsNullOrWhiteSpace(result))
+        if (result != null)
         {
-            await _workloadService.CreateWorkloadAsync(result);
+            await _workloadService.CreateWorkloadAsync(result.Name, result.Description);
         }
     }
 
     /// <summary>
     /// Activate a workload (switch to it)
     /// </summary>
-    private void ActivateWorkload(string workloadId)
+    private void ActivateWorkload(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
@@ -159,7 +151,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>
     /// Close a workload tab
     /// </summary>
-    private async Task CloseWorkloadAsync(string workloadId)
+    private async Task CloseWorkloadAsync(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
@@ -181,12 +173,14 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
                 ActivateWorkload(defaultTab.Id);
             }
         }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
     /// Rename a workload
     /// </summary>
-    private async Task RenameWorkloadAsync(string workloadId)
+    private async Task RenameWorkloadAsync(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
@@ -202,10 +196,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
         if (mainWindow == null)
             return;
 
-        var dialog = new RenameWorkloadDialog
-        {
-            DataContext = new { CurrentName = tab.Name }
-        };
+        var dialog = new RenameWorkloadDialog(LocalizedStrings, tab.Name);
 
         var result = await dialog.ShowDialog<string?>(mainWindow);
 
@@ -218,7 +209,7 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>
     /// Copy a workload (state + data)
     /// </summary>
-    private async Task CopyWorkloadAsync(string workloadId)
+    private async Task CopyWorkloadAsync(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
@@ -235,13 +226,13 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
             return;
 
         // Show dialog to input new name
-        var dialog = new CreateWorkloadDialog();
-        var newName = await dialog.ShowDialog<string?>(mainWindow);
+        var dialog = new CreateWorkloadDialog(LocalizedStrings);
+        var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
 
-        if (!string.IsNullOrWhiteSpace(newName))
+        if (result != null)
         {
             // Copy workload with new name
-            await _workloadService.CopyWorkloadAsync(workloadId, newName);
+            await _workloadService.CopyWorkloadAsync(workloadId, result.Name);
         }
     }
 
@@ -301,6 +292,6 @@ public sealed class WorkloadTabsViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
-        _disposables.Dispose();
+        // Cleanup if needed
     }
 }

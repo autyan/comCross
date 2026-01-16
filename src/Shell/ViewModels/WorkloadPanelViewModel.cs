@@ -21,6 +21,7 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
     private readonly ILogger<WorkloadPanelViewModel> _logger;
+    private readonly LocalizedStringsViewModel _localizedStrings;
     private WorkloadItemViewModel? _selectedWorkload;
     private bool _isLoading;
     
@@ -32,18 +33,20 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
     public WorkloadPanelViewModel(
         WorkloadService workloadService,
         IEventBus eventBus,
-        ILogger<WorkloadPanelViewModel> logger)
+        ILogger<WorkloadPanelViewModel> logger,
+        LocalizedStringsViewModel localizedStrings)
     {
         _workloadService = workloadService;
         _eventBus = eventBus;
         _logger = logger;
+        _localizedStrings = localizedStrings;
 
         Workloads = new ObservableCollection<WorkloadItemViewModel>();
 
         // 初始化命令
-        CreateWorkloadCommand = new RelayCommand(async () => await CreateWorkloadAsync());
-        RenameWorkloadCommand = new RelayCommand(async () => await RenameWorkloadAsync());
-        DeleteWorkloadCommand = new RelayCommand(async () => await DeleteWorkloadAsync());
+        CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
+        RenameWorkloadCommand = new AsyncRelayCommand(RenameWorkloadAsync);
+        DeleteWorkloadCommand = new AsyncRelayCommand(DeleteWorkloadAsync);
         // MoveSessionCommand暂时不实现，Week 9不支持Session拖放
 
         // 订阅事件
@@ -160,12 +163,16 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
         {
             _logger.LogInformation("Creating new workload...");
 
-            // 显示创建对话框
-            var dialog = new ComCross.Shell.Views.CreateWorkloadDialog();
-            var result = await dialog.ShowDialog<ComCross.Shell.Views.CreateWorkloadResult?>(
-                Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                    ? desktop.MainWindow
-                    : null);
+            // 显示创建对话框 - 必须在UI线程上执行
+            ComCross.Shell.Views.CreateWorkloadResult? result = null;
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var dialog = new ComCross.Shell.Views.CreateWorkloadDialog(_localizedStrings);
+                result = await dialog.ShowDialog<ComCross.Shell.Views.CreateWorkloadResult?>(
+                    Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                        ? desktop.MainWindow!
+                        : null!);
+            });
 
             if (result != null)
             {
@@ -198,12 +205,16 @@ public sealed class WorkloadPanelViewModel : INotifyPropertyChanged, IDisposable
 
             _logger.LogInformation("Renaming workload: {Id}", workloadId);
 
-            // 显示重命名对话框
-            var dialog = new ComCross.Shell.Views.RenameWorkloadDialog(currentName);
-            var newName = await dialog.ShowDialog<string?>(
-                Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                    ? desktop.MainWindow
-                    : null);
+            // 显示重命名对话框 - 必须在UI线程上执行
+            string? newName = null;
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var dialog = new ComCross.Shell.Views.RenameWorkloadDialog(_localizedStrings, currentName);
+                newName = await dialog.ShowDialog<string?>(
+                    Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                        ? desktop.MainWindow!
+                        : null!);
+            });
 
             if (!string.IsNullOrEmpty(newName))
             {

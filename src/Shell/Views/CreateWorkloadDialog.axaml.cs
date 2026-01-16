@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
@@ -13,11 +14,22 @@ public partial class CreateWorkloadDialog : Window, INotifyPropertyChanged
     private string _workloadDescription = string.Empty;
     private string? _nameError;
 
-    public CreateWorkloadDialog()
+    // 无参构造函数用于Avalonia XAML设计器
+    public CreateWorkloadDialog() : this(new LocalizedStringsViewModel(new ComCross.Core.Services.LocalizationService()))
     {
+    }
+
+    public CreateWorkloadDialog(LocalizedStringsViewModel localizedStrings)
+    {
+        LocalizedStrings = localizedStrings ?? throw new ArgumentNullException(nameof(localizedStrings));
         InitializeComponent();
         DataContext = this;
     }
+
+    /// <summary>
+    /// 本地化字符串
+    /// </summary>
+    public LocalizedStringsViewModel LocalizedStrings { get; }
 
     private void InitializeComponent()
     {
@@ -92,15 +104,15 @@ public partial class CreateWorkloadDialog : Window, INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(WorkloadName))
         {
-            NameError = "任务名称不能为空";
+            NameError = LocalizedStrings.DialogCreateWorkloadErrorEmpty;
         }
         else if (WorkloadName.Length < 2)
         {
-            NameError = "任务名称至少需要2个字符";
+            NameError = LocalizedStrings.DialogCreateWorkloadErrorMinLength;
         }
         else if (WorkloadName.Length > 50)
         {
-            NameError = "任务名称不能超过50个字符";
+            NameError = LocalizedStrings.DialogCreateWorkloadErrorMaxLength;
         }
         else
         {

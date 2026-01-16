@@ -42,7 +42,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     // Business services
     private readonly WorkspaceService _workspaceService;
     private readonly WorkloadService _workloadService;
-    private readonly ExportService _exportService;
+    private readonly ExportService? _exportService;
     private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
     private Session? _activeSession;
     private Device? _selectedDevice;
@@ -338,6 +338,12 @@ public class MainWindowViewModel : INotifyPropertyChanged
             _localization,
             LocalizedStrings,
             PluginManager);
+        
+        // Initialize commands
+        QuickConnectCommand = new AsyncRelayCommand(QuickConnectAsync, () => SelectedDevice != null);
+        DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => IsConnected);
+        ClearMessagesCommand = new RelayCommand(() => Messages.Clear());
+        ExportMessagesCommand = new AsyncRelayCommand(ExportMessagesAsync);
         
         // Initialize statistics update timer (1 second interval)
         _statisticsUpdateTimer = new DispatcherTimer
@@ -714,6 +720,15 @@ public class MainWindowViewModel : INotifyPropertyChanged
         {
             _appLogService.LogException(ex, "Delete session failed");
         }
+    }
+
+    public async Task ExportMessagesAsync()
+    {
+        // TODO: Implement export functionality with ExportService
+        await Task.CompletedTask;
+        await Shell.Services.MessageBoxService.ShowInfoAsync(
+            "Export",
+            "Export functionality will be implemented in a future version.");
     }
 
     private async Task ReconnectSessionAsync(Session oldSession)

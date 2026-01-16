@@ -125,8 +125,14 @@ public class LocalizedStringsViewModel : INotifyPropertyChanged
     public string DialogCreateWorkloadTitle => _localization.GetString("dialog.createWorkload.title");
     public string DialogCreateWorkloadName => _localization.GetString("dialog.createWorkload.name");
     public string DialogCreateWorkloadDescription => _localization.GetString("dialog.createWorkload.description");
+    public string DialogCreateWorkloadNamePlaceholder => _localization.GetString("dialog.createWorkload.namePlaceholder");
+    public string DialogCreateWorkloadDescriptionPlaceholder => _localization.GetString("dialog.createWorkload.descriptionPlaceholder");
+    public string DialogCreateWorkloadDescriptionCounter => _localization.GetString("dialog.createWorkload.descriptionCounter");
     public string DialogCreateWorkloadCancel => _localization.GetString("dialog.createWorkload.cancel");
     public string DialogCreateWorkloadCreate => _localization.GetString("dialog.createWorkload.create");
+    public string DialogCreateWorkloadErrorEmpty => _localization.GetString("dialog.createWorkload.error.empty");
+    public string DialogCreateWorkloadErrorMinLength => _localization.GetString("dialog.createWorkload.error.minLength");
+    public string DialogCreateWorkloadErrorMaxLength => _localization.GetString("dialog.createWorkload.error.maxLength");
     public string DialogRenameWorkloadTitle => _localization.GetString("dialog.renameWorkload.title");
     public string DialogRenameWorkloadName => _localization.GetString("dialog.renameWorkload.name");
     public string DialogRenameWorkloadCancel => _localization.GetString("dialog.renameWorkload.cancel");

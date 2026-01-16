@@ -225,21 +225,6 @@
                                             <Run Text="{Binding RxBytes}" FontWeight="SemiBold" Foreground="#4AFF9E" />
                                         </TextBlock>
                                     </Grid>
-                                    
-                                    <!-- DB Store Checkbox -->
-                                    <CheckBox Grid.Row="2" Grid.Column="1" 
-                                              Margin="0,6,0,0"
-                                              IsChecked="{Binding EnableDatabaseStorage}"
-                                              FontSize="10">
-                                        <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <TextBlock Text="{Binding #LeftSidebarRoot.LocalizedStrings.SessionDatabaseEnable}" 
-                                                       VerticalAlignment="Center" />
-                                            <Border Background="#F5A524" CornerRadius="8" Width="14" Height="14" VerticalAlignment="Center"
-                                                    ToolTip.Tip="{Binding #LeftSidebarRoot.LocalizedStrings.SessionDatabaseTooltip}">
-                                                <TextBlock Text="!" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#141B1F" />
-                                            </Border>
-                                        </StackPanel>
-                                    </CheckBox>
                                 </Grid>
                             </Border>
                         </DataTemplate>
