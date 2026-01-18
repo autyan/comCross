@@ -10,6 +10,7 @@ namespace ComCross.Adapters.Serial;
 /// Serial port connection implementation with shared memory integration
 /// </summary>
 public sealed class SerialConnection : IDeviceConnection
+    , ISharedMemoryCapableConnection
 {
     private SerialPort? _serialPort;
     private readonly string _port;

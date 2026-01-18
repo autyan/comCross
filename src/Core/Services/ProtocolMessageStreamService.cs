@@ -16,6 +16,14 @@ public sealed class ProtocolMessageStreamService
     private readonly ProtocolFrameCacheService _frameCache;
     private readonly ConcurrentDictionary<string, SessionProtocolStream> _streams = new();
 
+    private static void ThrowIfInvalidSessionId(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
+    }
+
     public ProtocolMessageStreamService(
         ProtocolRegistry protocolRegistry,
         ProtocolFrameCacheService frameCacheService)
@@ -29,7 +37,7 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public void AppendPhysicalFrame(string sessionId, PhysicalFrame frame)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(frame);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionProtocolStream(_protocolRegistry, _frameCache));
@@ -45,7 +53,7 @@ public sealed class ProtocolMessageStreamService
         int skip = 0, 
         int take = 100)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
         {
@@ -63,7 +71,7 @@ public sealed class ProtocolMessageStreamService
         int skip = 0,
         int take = 100)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
         {
@@ -78,7 +86,7 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public void SetActiveProtocol(string sessionId, string protocolId)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentException.ThrowIfNullOrEmpty(protocolId);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
@@ -94,6 +102,8 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public string? GetActiveProtocol(string sessionId)
     {
+        ThrowIfInvalidSessionId(sessionId);
+
         if (!_streams.TryGetValue(sessionId, out var stream))
         {
             return null;
@@ -107,7 +117,7 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public void Clear(string sessionId)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (_streams.TryGetValue(sessionId, out var stream))
         {
@@ -120,7 +130,7 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public IDisposable SubscribeToPhysicalFrames(string sessionId, Action<PhysicalFrame> handler)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(handler);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionProtocolStream(_protocolRegistry, _frameCache));
@@ -132,7 +142,7 @@ public sealed class ProtocolMessageStreamService
     /// </summary>
     public IDisposable SubscribeToProtocolMessages(string sessionId, string protocolId, Action<ProtocolMessage> handler)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentException.ThrowIfNullOrEmpty(protocolId);
         ArgumentNullException.ThrowIfNull(handler);
 

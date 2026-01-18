@@ -1,9 +1,9 @@
 using System;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
+using ComCross.Platform;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
@@ -38,7 +38,7 @@ public sealed class SettingsViewModel : BaseViewModel
         RefreshConnectionBehaviorOptions();
     }
     public PluginManagerViewModel PluginManager => _pluginManager;
-    public bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    public bool IsLinux => PlatformInfo.IsLinux;
 
     public IReadOnlyList<LocaleCultureInfo> AvailableLanguages => _availableLanguages;
     public IReadOnlyList<string> AppLogFormats => _logFormats;

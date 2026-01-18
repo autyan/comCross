@@ -1,0 +1,35 @@
+{
+  "id": "serial.adapter",
+  "name": "Serial Adapter",
+  "version": "0.3.2",
+  "targetCoreVersion": "0.3",
+  "entryPoint": "ComCross.Plugins.Serial.SerialBusAdapterPlugin",
+  "toolGroup": "adapters",
+  "permissions": ["serial.read", "serial.write", "workspace.read"],
+  "i18n": {
+    "en-US": {
+      "serial.adapter.connect.title": "Connect (Serial)",
+      "serial.adapter.connect.port": "Port",
+      "serial.adapter.connect.baudRate": "Baud Rate",
+      "serial.adapter.connect.dataBits": "Data Bits",
+      "serial.adapter.connect.parity": "Parity",
+      "serial.adapter.connect.stopBits": "Stop Bits",
+      "serial.adapter.connect.flowControl": "Flow Control",
+      "serial.adapter.connect.encoding": "Encoding",
+      "serial.adapter.connect.sessionName": "Session Name",
+      "serial.adapter.connect.action.connect": "Connect"
+    },
+    "zh-CN": {
+      "serial.adapter.connect.title": "连接（串口）",
+      "serial.adapter.connect.port": "端口",
+      "serial.adapter.connect.baudRate": "波特率",
+      "serial.adapter.connect.dataBits": "数据位",
+      "serial.adapter.connect.parity": "校验",
+      "serial.adapter.connect.stopBits": "停止位",
+      "serial.adapter.connect.flowControl": "流控",
+      "serial.adapter.connect.encoding": "编码",
+      "serial.adapter.connect.sessionName": "会话名称",
+      "serial.adapter.connect.action.connect": "连接"
+    }
+  }
+}

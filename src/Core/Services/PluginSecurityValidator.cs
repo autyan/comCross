@@ -80,6 +80,38 @@ public sealed class PluginSecurityValidator
     /// </summary>
     private void ValidateBusAdapter(IDevicePlugin plugin, PluginValidationResult result)
     {
+        // If the plugin supports schema-driven capability description, validate it.
+        if (plugin is IPluginCapabilityProvider provider)
+        {
+            try
+            {
+                var capabilities = provider.GetCapabilities();
+                if (capabilities is null || capabilities.Count == 0)
+                {
+                    result.AddError("BusAdapter", "BusAdapter 插件必须至少声明一个 capability");
+                    return;
+                }
+
+                foreach (var capability in capabilities)
+                {
+                    if (string.IsNullOrWhiteSpace(capability.Id) || string.IsNullOrWhiteSpace(capability.Name))
+                    {
+                        result.AddError("BusAdapter", "Capability 必须包含 Id 与 Name");
+                        return;
+                    }
+
+                    capability.SharedMemoryRequest?.Validate();
+                }
+
+                result.AddInfo("BusAdapter", $"Capabilities 已声明：{capabilities.Count} 个");
+            }
+            catch (Exception ex)
+            {
+                result.AddError("BusAdapter", $"Capabilities 声明无效: {ex.Message}");
+                return;
+            }
+        }
+
         // 验证初始化方法存在性
         var initMethod = plugin.GetType().GetMethod(nameof(IDevicePlugin.SetSharedMemoryWriter));
         if (initMethod == null)

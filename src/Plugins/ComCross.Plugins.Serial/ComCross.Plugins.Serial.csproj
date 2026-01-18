@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Version>0.3.2</Version>
+  </PropertyGroup>
+
+  <!--
+    Compile-time platform trimming:
+    - If building on Windows, or targeting a Windows RID, compile only *.Windows.cs.
+    - Otherwise compile only *.Unix.cs.
+  -->
+  <PropertyGroup>
+    <IsWindowsBuild Condition="'$(OS)' == 'Windows_NT'">true</IsWindowsBuild>
+    <IsWindowsBuild Condition="'$(IsWindowsBuild)' != 'true' and '$(RuntimeIdentifier)' != '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">true</IsWindowsBuild>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsWindowsBuild)' == 'true'">
+    <Compile Remove="**/*.Unix.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsWindowsBuild)' != 'true'">
+    <Compile Remove="**/*.Windows.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\ComCross.Plugin.Manifest.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PluginSdk\ComCross.PluginSdk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
+  </ItemGroup>
+</Project>

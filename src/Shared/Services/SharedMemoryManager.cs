@@ -1,4 +1,6 @@
 using ComCross.PluginSdk;
+using ComCross.Platform.SharedMemory;
+using ComCross.Shared.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ComCross.Shared.Services;
@@ -12,19 +14,25 @@ public class SharedMemoryManager : IDisposable
     private readonly ILogger<SharedMemoryManager> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly SharedMemoryConfig _config;
+    private readonly ISharedMemoryMapFactory _mapFactory;
     
     private SegmentedSharedMemory? _sharedMemory;
     private readonly Dictionary<string, SessionMemoryInfo> _sessionInfos = new();
+    private readonly object _sessionInfosLock = new();
     private readonly CancellationTokenSource _cancellationSource = new();
     private Task? _monitorTask;
     private bool _disposed;
+
+    public event Action<string, BackpressureLevel>? BackpressureDetected;
     
     public SharedMemoryManager(
         SharedMemoryConfig config,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        ISharedMemoryMapFactory mapFactory)
     {
         _config = config;
         _loggerFactory = loggerFactory;
+        _mapFactory = mapFactory;
         _logger = loggerFactory.CreateLogger<SharedMemoryManager>();
     }
     
@@ -34,12 +42,18 @@ public class SharedMemoryManager : IDisposable
     public void Initialize()
     {
         if (_sharedMemory != null)
-            throw new InvalidOperationException("SharedMemoryManager已初始化");
+        {
+            return;
+        }
         
         _sharedMemory = new SegmentedSharedMemory(
             _config.Name,
             _config.MaxTotalMemory,
-            _loggerFactory.CreateLogger<SegmentedSharedMemory>());
+            _loggerFactory.CreateLogger<SegmentedSharedMemory>(),
+            _mapFactory,
+            unixFilePath: _config.UnixFilePath,
+            useFileBackedOnUnix: _config.UseFileBackedOnUnix,
+            deleteUnixFileOnDispose: _config.DeleteUnixFileOnDispose);
         
         // 启动监控线程
         _monitorTask = Task.Run(MonitorSegmentsAsync);
@@ -47,6 +61,43 @@ public class SharedMemoryManager : IDisposable
         _logger.LogInformation(
             "SharedMemoryManager已初始化：MaxTotal={MaxTotal}MB",
             _config.MaxTotalMemory / (1024 * 1024));
+    }
+
+    public void EnsureInitialized()
+    {
+        if (_sharedMemory is null)
+        {
+            Initialize();
+        }
+    }
+
+    public bool TryGetSegmentDescriptor(string sessionId, out SharedMemorySegmentDescriptor descriptor)
+    {
+        descriptor = default!;
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return false;
+        }
+
+        if (_sharedMemory is null)
+        {
+            return false;
+        }
+
+        if (!_sharedMemory.TryGetSegmentInfo(sessionId, out var offset, out var segmentSize))
+        {
+            return false;
+        }
+
+        var map = _sharedMemory.MapDescriptor;
+        descriptor = new SharedMemorySegmentDescriptor(
+            MapName: map.Name,
+            MapCapacityBytes: map.CapacityBytes,
+            UnixFilePath: map.UnixFilePath,
+            SegmentOffset: offset,
+            SegmentSize: segmentSize);
+        return true;
     }
     
     /// <summary>
@@ -58,6 +109,11 @@ public class SharedMemoryManager : IDisposable
     {
         if (_sharedMemory == null)
             throw new InvalidOperationException("SharedMemoryManager未初始化");
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
         
         // 检查是否超过总限制，可能降级
         var stats = _sharedMemory.GetUsageStats();
@@ -79,12 +135,16 @@ public class SharedMemoryManager : IDisposable
         var segment = _sharedMemory.AllocateSegment(sessionId, actualSize, segmentLogger);
         
         // 记录Session信息
-        _sessionInfos[sessionId] = new SessionMemoryInfo
+        lock (_sessionInfosLock)
         {
-            SessionId = sessionId,
-            AllocatedSize = actualSize,
-            LastActivityTime = DateTime.UtcNow
-        };
+            _sessionInfos[sessionId] = new SessionMemoryInfo
+            {
+                SessionId = sessionId,
+                AllocatedSize = actualSize,
+                LastActivityTime = DateTime.UtcNow,
+                BackpressureLevel = BackpressureLevel.None
+            };
+        }
         
         return segment;
     }
@@ -94,8 +154,16 @@ public class SharedMemoryManager : IDisposable
     /// </summary>
     public void ReleaseSegment(string sessionId)
     {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
+
         _sharedMemory?.ReleaseSegment(sessionId);
-        _sessionInfos.Remove(sessionId);
+        lock (_sessionInfosLock)
+        {
+            _sessionInfos.Remove(sessionId);
+        }
         
         _logger.LogInformation("已释放SessionSegment：{SessionId}", sessionId);
     }
@@ -105,6 +173,11 @@ public class SharedMemoryManager : IDisposable
     /// </summary>
     public SessionSegment? GetSegment(string sessionId)
     {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
+
         return _sharedMemory?.GetSegment(sessionId);
     }
     
@@ -133,6 +206,59 @@ public class SharedMemoryManager : IDisposable
                         continue;
                     
                     double usageRatio = segment.GetUsageRatio();
+
+                    var desiredLevel = BackpressureLevel.None;
+                    if (usageRatio > _config.WarningThreshold)
+                    {
+                        desiredLevel = BackpressureLevel.High;
+                    }
+                    else if (usageRatio > 0.6)
+                    {
+                        desiredLevel = BackpressureLevel.Medium;
+                    }
+
+                    SessionMemoryInfo? info;
+                    lock (_sessionInfosLock)
+                    {
+                        _sessionInfos.TryGetValue(sessionId, out info);
+                    }
+
+                    if (info is not null)
+                    {
+                        if (info.BackpressureLevel != desiredLevel)
+                        {
+                            lock (_sessionInfosLock)
+                            {
+                                if (_sessionInfos.TryGetValue(sessionId, out var current))
+                                {
+                                    current.BackpressureLevel = desiredLevel;
+                                    current.LastActivityTime = DateTime.UtcNow;
+                                }
+                            }
+                            OnBackpressureDetected(sessionId, desiredLevel);
+                        }
+                    }
+                    else
+                    {
+                        lock (_sessionInfosLock)
+                        {
+                            if (!_sessionInfos.TryGetValue(sessionId, out info))
+                            {
+                                _sessionInfos[sessionId] = new SessionMemoryInfo
+                                {
+                                    SessionId = sessionId,
+                                    AllocatedSize = 0,
+                                    LastActivityTime = DateTime.UtcNow,
+                                    BackpressureLevel = desiredLevel
+                                };
+                            }
+                        }
+
+                        if (desiredLevel != BackpressureLevel.None)
+                        {
+                            OnBackpressureDetected(sessionId, desiredLevel);
+                        }
+                    }
                     
                     // 高水位警告（80%）
                     if (usageRatio > _config.WarningThreshold)
@@ -140,13 +266,6 @@ public class SharedMemoryManager : IDisposable
                         _logger.LogWarning(
                             "⚠️ Session内存高水位：{SessionId}, 使用率{UsageRatio:P0}",
                             sessionId, usageRatio);
-                        
-                        // TODO: 触发背压通知（通知插件降速）
-                        OnBackpressureDetected(sessionId, BackpressureLevel.High);
-                    }
-                    else if (usageRatio > 0.6)
-                    {
-                        OnBackpressureDetected(sessionId, BackpressureLevel.Medium);
                     }
                     
                     // 临界水位（95%）
@@ -187,8 +306,15 @@ public class SharedMemoryManager : IDisposable
     /// </summary>
     private void OnBackpressureDetected(string sessionId, BackpressureLevel level)
     {
-        // TODO: 通过IPC通知插件降速
-        // 可以通过PluginHostClient发送背压通知
+        // Consumers (built-in connections, PluginHost IPC bridge, etc.) can subscribe to react to pressure.
+
+        try
+        {
+            BackpressureDetected?.Invoke(sessionId, level);
+        }
+        catch
+        {
+        }
     }
     
     /// <summary>
@@ -224,6 +350,24 @@ public class SharedMemoryConfig
     /// 共享内存名称
     /// </summary>
     public string Name { get; set; } = "ComCross_SharedMemory";
+
+    /// <summary>
+    /// Optional backing file path for Unix-like systems.
+    /// When set (or when UseFileBackedOnUnix is true), SegmentedSharedMemory will use a file-backed mapping,
+    /// enabling cross-process access by reopening the same file.
+    /// </summary>
+    public string? UnixFilePath { get; set; }
+
+    /// <summary>
+    /// Whether to use file-backed mappings on Unix-like systems.
+    /// Named memory maps are not supported reliably on Linux in .NET, so file-backed is preferred.
+    /// </summary>
+    public bool UseFileBackedOnUnix { get; set; } = true;
+
+    /// <summary>
+    /// Whether to delete the backing file on dispose (Unix-only).
+    /// </summary>
+    public bool DeleteUnixFileOnDispose { get; set; } = true;
     
     /// <summary>
     /// 最大总内存（字节）
@@ -264,14 +408,7 @@ public class SessionMemoryInfo
     public required string SessionId { get; set; }
     public int AllocatedSize { get; set; }
     public DateTime LastActivityTime { get; set; }
+    public BackpressureLevel BackpressureLevel { get; set; } = BackpressureLevel.None;
 }
 
-/// <summary>
-/// 背压等级
-/// </summary>
-public enum BackpressureLevel
-{
-    None,
-    Medium,
-    High
-}
+

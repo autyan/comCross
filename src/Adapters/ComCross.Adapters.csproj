@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Core\ComCross.Core.csproj" />
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
     <ProjectReference Include="..\PluginSdk\ComCross.PluginSdk.csproj" />
+    <ProjectReference Include="..\Platform\ComCross.Platform.csproj" />
   </ItemGroup>
 
   <ItemGroup>

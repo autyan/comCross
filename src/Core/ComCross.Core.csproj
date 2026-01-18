@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
     <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />
+    <ProjectReference Include="..\Platform\ComCross.Platform.csproj" />
   </ItemGroup>
 
   <ItemGroup>

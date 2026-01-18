@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.MemoryMappedFiles;
+using ComCross.Platform.SharedMemory;
 using Microsoft.Extensions.Logging;
 
 namespace ComCross.Shared.Services;
@@ -10,8 +11,9 @@ namespace ComCross.Shared.Services;
 /// </summary>
 public class SegmentedSharedMemory : IDisposable
 {
+    private readonly SharedMemoryMapHandle _mapHandle;
     private readonly MemoryMappedFile _mmf;
-    private readonly ConcurrentDictionary<string, SessionSegment> _segments = new();
+    private readonly ConcurrentDictionary<string, SegmentEntry> _segments = new();
     private readonly ILogger<SegmentedSharedMemory> _logger;
     private readonly string _name;
     private readonly long _totalSize;
@@ -21,24 +23,39 @@ public class SegmentedSharedMemory : IDisposable
     
     // GlobalHeader大小
     private const int GLOBAL_HEADER_SIZE = 4096; // 4KB
+
+    private sealed record SegmentEntry(SessionSegment Segment, long Offset, int SegmentSize);
+
+    public SharedMemoryMapDescriptor MapDescriptor => _mapHandle.Descriptor;
     
     public SegmentedSharedMemory(
         string name,
         long totalSize,
-        ILogger<SegmentedSharedMemory> logger)
+        ILogger<SegmentedSharedMemory> logger,
+        ISharedMemoryMapFactory mapFactory,
+        string? unixFilePath = null,
+        bool useFileBackedOnUnix = true,
+        bool deleteUnixFileOnDispose = true)
     {
         _name = name;
         _totalSize = totalSize;
         _logger = logger;
         _currentOffset = GLOBAL_HEADER_SIZE;
-        
-        // 创建MemoryMappedFile
-        // Linux不支持Named maps，使用匿名映射
-        _mmf = MemoryMappedFile.CreateNew(null, totalSize);
+
+        _mapHandle = (mapFactory ?? throw new ArgumentNullException(nameof(mapFactory))).Create(
+            new SharedMemoryMapOptions(
+                Name: name,
+                CapacityBytes: totalSize,
+                UnixFilePath: unixFilePath,
+                UseFileBackedOnUnix: useFileBackedOnUnix,
+                DeleteUnixFileOnDispose: deleteUnixFileOnDispose));
+        _mmf = _mapHandle.Map;
         
         _logger.LogInformation(
-            "共享内存已创建：Name={Name}, TotalSize={TotalSize}MB",
-            name, totalSize / (1024 * 1024));
+            "共享内存已创建：Name={Name}, TotalSize={TotalSize}MB, UnixFile={UnixFile}",
+            name,
+            totalSize / (1024 * 1024),
+            _mapHandle.Descriptor.UnixFilePath);
     }
     
     /// <summary>
@@ -75,8 +92,8 @@ public class SegmentedSharedMemory : IDisposable
         var accessor = _mmf.CreateViewAccessor(offset, segmentSize, MemoryMappedFileAccess.ReadWrite);
         
         // 创建SessionSegment
-        var segment = new SessionSegment(sessionId, accessor, segmentSize, segmentLogger);
-        _segments[sessionId] = segment;
+        var segment = new SessionSegment(sessionId, accessor, segmentSize, segmentLogger, initializeHeader: true);
+        _segments[sessionId] = new SegmentEntry(segment, offset, segmentSize);
         
         _logger.LogInformation(
             "已分配Segment：SessionId={SessionId}, Size={Size}KB, Offset={Offset}",
@@ -84,14 +101,27 @@ public class SegmentedSharedMemory : IDisposable
         
         return segment;
     }
+
+    public bool TryGetSegmentInfo(string sessionId, out long offset, out int segmentSize)
+    {
+        if (_segments.TryGetValue(sessionId, out var entry))
+        {
+            offset = entry.Offset;
+            segmentSize = entry.SegmentSize;
+            return true;
+        }
+
+        offset = 0;
+        segmentSize = 0;
+        return false;
+    }
     
     /// <summary>
     /// 获取Session的Segment
     /// </summary>
     public SessionSegment? GetSegment(string sessionId)
     {
-        _segments.TryGetValue(sessionId, out var segment);
-        return segment;
+        return _segments.TryGetValue(sessionId, out var entry) ? entry.Segment : null;
     }
     
     /// <summary>
@@ -99,9 +129,9 @@ public class SegmentedSharedMemory : IDisposable
     /// </summary>
     public void ReleaseSegment(string sessionId)
     {
-        if (_segments.TryRemove(sessionId, out var segment))
+        if (_segments.TryRemove(sessionId, out var entry))
         {
-            segment.Dispose();
+            entry.Segment.Dispose();
             
             _logger.LogInformation(
                 "已释放Segment：SessionId={SessionId}",
@@ -127,7 +157,7 @@ public class SegmentedSharedMemory : IDisposable
         
         foreach (var segment in _segments.Values)
         {
-            totalUsed += segment.GetUsedSpace();
+            totalUsed += segment.Segment.GetUsedSpace();
         }
         
         return new MemoryUsageStats
@@ -147,12 +177,12 @@ public class SegmentedSharedMemory : IDisposable
             // 释放所有Segment
             foreach (var segment in _segments.Values)
             {
-                segment.Dispose();
+                segment.Segment.Dispose();
             }
             _segments.Clear();
             
             // 释放MemoryMappedFile
-            _mmf.Dispose();
+            _mapHandle.Dispose();
             _disposed = true;
             
             _logger.LogInformation("共享内存已释放：Name={Name}", _name);

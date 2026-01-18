@@ -6,7 +6,7 @@ using ComCross.Shell.ViewModels;
 using ComCross.Shell.Views;
 using ComCross.Adapters.Serial;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using ComCross.Platform.SharedMemory;
 
 namespace ComCross.Shell.Extensions;
 
@@ -17,11 +17,14 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddComCrossServices(this IServiceCollection services)
     {
-        // Logging (minimal default)
-        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        // Logging (bridged to AppLogService; settings-controlled)
+        services.AddSingleton<ILoggerFactory, AppLogLoggerFactory>();
+        services.AddSingleton(typeof(ILogger<>), typeof(AppLogLogger<>));
 
         // Core Services (Singleton)
-        services.AddSingleton<ILocalizationService, LocalizationService>();
+        services.AddSingleton<LocalizationService>();
+        services.AddSingleton<ILocalizationService>(sp => sp.GetRequiredService<LocalizationService>());
+        services.AddSingleton<IExtensibleLocalizationService>(sp => sp.GetRequiredService<LocalizationService>());
         services.AddSingleton<EventBus>();
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<EventBus>());
         services.AddSingleton<ConfigService>();
@@ -43,6 +46,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CommandService>();
         services.AddSingleton<PluginDiscoveryService>();
         services.AddSingleton<PluginRuntimeService>();
+            services.AddSingleton<PluginHostProtocolService>();
+
+        // Shared memory (ADR-010)
+        services.AddSingleton(new SharedMemoryConfig());
+        services.AddSingleton<ISharedMemoryMapFactory, SharedMemoryMapFactory>();
+        services.AddSingleton<SharedMemoryManager>();
+        services.AddSingleton<SharedMemoryReader>();
+        services.AddSingleton<SharedMemorySessionService>();
         
         // ViewModels (Transient)
         services.AddTransient<MainWindowViewModel>();

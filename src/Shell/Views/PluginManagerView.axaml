@@ -13,16 +13,24 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Border Padding="10" BorderBrush="#25303A" BorderThickness="0,0,0,1">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                 <CheckBox IsChecked="{Binding IsEnabled}" Click="OnTogglePluginClick" VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2">
                                     <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#E6EDF3" />
                                     <TextBlock Text="{Binding Permissions}" FontSize="11" Foreground="#87909B" />
+                                    <TextBlock Text="{Binding CapabilitiesText}" FontSize="11" Foreground="#87909B" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Version}" FontSize="11" Foreground="#87909B" HorizontalAlignment="Right" />
                                     <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#87909B" HorizontalAlignment="Right" />
                                 </StackPanel>
+                                <Button Grid.Column="3"
+                                        Content="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).L[settings.plugins.action.testConnect]}"
+                                        Classes="accent"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding CanConnect}"
+                                        Click="OnTestConnectClick"
+                                        Margin="12,0,0,0" />
                             </Grid>
                         </Border>
                     </DataTemplate>

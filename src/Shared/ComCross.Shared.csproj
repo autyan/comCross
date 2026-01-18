@@ -15,5 +15,6 @@
   
   <ItemGroup>
     <ProjectReference Include="..\PluginSdk\ComCross.PluginSdk.csproj" />
+    <ProjectReference Include="..\Platform\ComCross.Platform.csproj" />
   </ItemGroup>
 </Project>

@@ -7,53 +7,30 @@
         x:Class="ComCross.Shell.Views.ConnectDialog"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding L[dialog.connect.title]}"
-        Width="450" Height="350"
+        Width="520" Height="520"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
     <Grid RowDefinitions="*,Auto" Margin="24">
         <StackPanel Grid.Row="0" Spacing="16">
-            <!-- Port Selection -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding L[dialog.connect.port]}" FontWeight="SemiBold" />
-                <ComboBox x:Name="PortComboBox" 
-                          ItemsSource="{Binding Devices}"
-                          SelectedIndex="0">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Port}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-            </StackPanel>
+            <!-- Plugin-driven connect UI -->
+            <StackPanel x:Name="PluginPanel" Spacing="12">
+                <TextBlock Text="{Binding L[dialog.connect.plugin.capability]}" FontWeight="SemiBold" />
+                <ComboBox x:Name="PluginCapabilityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch" />
 
-            <!-- Baud Rate -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding L[dialog.connect.baudrate]}" FontWeight="SemiBold" />
-                <ComboBox x:Name="BaudRateComboBox" SelectedIndex="5">
-                    <ComboBoxItem Content="9600" />
-                    <ComboBoxItem Content="19200" />
-                    <ComboBoxItem Content="38400" />
-                    <ComboBoxItem Content="57600" />
-                    <ComboBoxItem Content="74880" />
-                    <ComboBoxItem Content="115200" />
-                    <ComboBoxItem Content="230400" />
-                    <ComboBoxItem Content="460800" />
-                    <ComboBoxItem Content="921600" />
-                </ComboBox>
-            </StackPanel>
+                <TextBlock x:Name="SchemaHintText"
+                           IsVisible="False"
+                           Foreground="#C05050"
+                           TextWrapping="Wrap" />
 
-            <!-- Session Name -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding L[dialog.connect.sessionname]}" FontWeight="SemiBold" />
-                <TextBox x:Name="SessionNameTextBox" Watermark="{Binding L[dialog.connect.sessionname.placeholder]}" />
+                <StackPanel x:Name="DynamicFieldsPanel" Spacing="10" />
             </StackPanel>
         </StackPanel>
 
         <!-- Buttons -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
             <Button Content="{Binding L[dialog.connect.cancel]}" Width="100" Click="OnCancelClick" />
-            <Button Content="{Binding L[dialog.connect.connect]}" Width="100" Classes="accent" Click="OnConnectClick" />
+            <Button x:Name="ConnectButton" Content="{Binding L[dialog.connect.connect]}" Width="120" Classes="accent" Click="OnConnectClick" />
         </StackPanel>
     </Grid>
 </Window>

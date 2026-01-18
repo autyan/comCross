@@ -9,7 +9,7 @@ namespace ComCross.Core.Services;
 /// <summary>
 /// JSON-based localization service implementation
 /// </summary>
-public sealed class LocalizationService : ILocalizationService
+public sealed class LocalizationService : IExtensibleLocalizationService
 {
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _translations = new();
     private readonly ConcurrentDictionary<string, byte> _missingKeyLogged = new();
@@ -46,6 +46,76 @@ public sealed class LocalizationService : ILocalizationService
 
         // Load default culture
         LoadCulture(_currentCulture);
+    }
+
+    public void RegisterTranslations(
+        string source,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> bundlesByCulture,
+        out IReadOnlyList<string> duplicateKeys,
+        out IReadOnlyList<string> invalidKeys,
+        Func<string, bool>? validateKey = null)
+    {
+        var duplicates = new List<string>();
+        var invalid = new List<string>();
+
+        if (bundlesByCulture is null || bundlesByCulture.Count == 0)
+        {
+            duplicateKeys = Array.Empty<string>();
+            invalidKeys = Array.Empty<string>();
+            return;
+        }
+
+        foreach (var cultureEntry in bundlesByCulture)
+        {
+            var cultureCode = cultureEntry.Key;
+            if (string.IsNullOrWhiteSpace(cultureCode))
+            {
+                continue;
+            }
+
+            var bundle = cultureEntry.Value;
+            if (bundle is null || bundle.Count == 0)
+            {
+                continue;
+            }
+
+            // Ensure culture dictionary exists.
+            var cultureDict = _translations.GetOrAdd(cultureCode, _ => new Dictionary<string, string>());
+
+            foreach (var kvp in bundle)
+            {
+                var key = kvp.Key;
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                if (validateKey is not null && !validateKey(key))
+                {
+                    invalid.Add($"{cultureCode}:{key}");
+                    continue;
+                }
+
+                if (cultureDict.ContainsKey(key))
+                {
+                    duplicates.Add($"{cultureCode}:{key}");
+                    continue;
+                }
+
+                cultureDict[key] = kvp.Value ?? string.Empty;
+            }
+        }
+
+        duplicateKeys = duplicates;
+        invalidKeys = invalid;
+
+        // Refresh bindings so UI can pick up newly registered keys.
+        _strings.RefreshAll();
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] Registered plugin translations source='{source}', duplicates={duplicates.Count}, invalid={invalid.Count}");
+        }
     }
 
     public void SetCulture(string cultureCode)
@@ -223,6 +293,20 @@ public sealed class LocalizationService : ILocalizationService
             ["dialog.connect.sessionname.placeholder"] = "My Session",
             ["dialog.connect.cancel"] = "Cancel",
             ["dialog.connect.connect"] = "Connect",
+                ["dialog.connect.plugin"] = "Plugin...",
+                ["dialog.connect.plugin.title"] = "Plugin Connect",
+                ["dialog.connect.plugin.noPlugins"] = "No loaded plugin capabilities are available. Enable/load plugins in Settings → Plugins.",
+                ["dialog.connect.plugin.capability"] = "Capability",
+                ["dialog.connect.plugin.parameters"] = "Parameters (JSON)",
+                ["dialog.connect.plugin.connect"] = "Connect",
+                ["dialog.connect.plugin.cancel"] = "Cancel",
+                ["dialog.connect.plugin.invalidJson"] = "Invalid JSON parameters: {0}",
+                ["dialog.connect.plugin.success"] = "Connect request sent: {0}/{1}",
+                ["dialog.connect.plugin.failed"] = "Connect failed: {0}",
+
+            // Notifications
+            ["notification.plugin.i18n.duplicateKey"] = "Plugin i18n key is duplicated and was not registered: {0}",
+            ["notification.plugin.i18n.invalidKeyPrefix"] = "Plugin i18n key is invalid (missing domain prefix) and was not registered: {0}",
 
             // Session Edit
             ["session.edit.title"] = "Edit Session",
@@ -401,6 +485,18 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.plugins.status.loaded"] = "Loaded",
             ["settings.plugins.status.disabled"] = "Disabled",
             ["settings.plugins.status.failed"] = "Failed",
+            ["settings.plugins.capabilities"] = "Capabilities: {0}",
+            ["settings.plugins.capabilities.error"] = "Capabilities: {0} (failed)",
+            ["settings.plugins.action.testConnect"] = "Test Connect",
+            ["settings.plugins.connectTest.title"] = "Plugin Connect Test",
+            ["settings.plugins.connectTest.dialog.title"] = "Plugin Connect Test",
+            ["settings.plugins.connectTest.dialog.capability"] = "Capability",
+            ["settings.plugins.connectTest.dialog.parameters"] = "Parameters (JSON)",
+            ["settings.plugins.connectTest.dialog.connect"] = "Connect",
+            ["settings.plugins.connectTest.dialog.cancel"] = "Cancel",
+            ["settings.plugins.connectTest.dialog.invalidJson"] = "Invalid JSON parameters: {0}",
+            ["settings.plugins.connectTest.success"] = "Connect request sent: {0}/{1}",
+            ["settings.plugins.connectTest.failed"] = "Connect failed: {0}",
             ["settings.notifications.storage"] = "Storage limit alerts",
             ["settings.notifications.connection"] = "Connection alerts",
             ["settings.notifications.export"] = "Export alerts",

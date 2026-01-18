@@ -1,6 +1,9 @@
 using ComCross.Shared.Services;
+using ComCross.Shared.Models;
+using ComCross.Platform.SharedMemory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using System.IO;
 
 namespace ComCross.Tests.Core;
 
@@ -10,6 +13,7 @@ namespace ComCross.Tests.Core;
 /// </summary>
 public class SharedMemoryTests : IDisposable
 {
+    private static readonly ISharedMemoryMapFactory MapFactory = new SharedMemoryMapFactory();
     private readonly SegmentedSharedMemory _sharedMemory;
     
     public SharedMemoryTests()
@@ -17,7 +21,8 @@ public class SharedMemoryTests : IDisposable
         _sharedMemory = new SegmentedSharedMemory(
             "ComCross_Test_SharedMemory",
             10 * 1024 * 1024, // 10MB
-            NullLogger<SegmentedSharedMemory>.Instance);
+            NullLogger<SegmentedSharedMemory>.Instance,
+            MapFactory);
     }
     
     [Fact]
@@ -122,6 +127,86 @@ public class SharedMemoryTests : IDisposable
         Assert.True(result);
         Assert.Equal(originalData.Length, readData.Length);
         Assert.Equal(originalData, readData);
+    }
+
+    [Fact]
+    public void MapDescriptor_AndSegmentInfo_CanReopenExistingSegmentWithoutReinit()
+    {
+        // Arrange
+        var backingFile = Path.Combine(Path.GetTempPath(), "comcross-tests", $"{Guid.NewGuid():N}.mmf");
+        var name = $"ComCross_Test_SharedMemory_{Guid.NewGuid():N}";
+        var totalSize = 2 * 1024 * 1024;
+        var segmentSize = 64 * 1024;
+        var sessionId = "session1";
+
+        using var sharedMemory = new SegmentedSharedMemory(
+            name,
+            totalSize,
+            NullLogger<SegmentedSharedMemory>.Instance,
+            MapFactory,
+            unixFilePath: backingFile,
+            useFileBackedOnUnix: true,
+            deleteUnixFileOnDispose: true);
+
+        var segment1 = sharedMemory.AllocateSegment(sessionId, segmentSize);
+        byte[] originalData = new byte[128];
+        new Random().NextBytes(originalData);
+        Assert.True(segment1.TryWriteFrame(originalData, out var writtenFrameId));
+        Assert.Equal(1, writtenFrameId);
+
+        Assert.True(sharedMemory.TryGetSegmentInfo(sessionId, out var offset, out var actualSegmentSize));
+        Assert.Equal(segmentSize, actualSegmentSize);
+        var map = sharedMemory.MapDescriptor;
+        Assert.NotNull(map.UnixFilePath);
+
+        // Act: reopen the underlying mapping (simulating another process) and open the same segment range.
+        var reopenFactory = new SharedMemoryMapFactory();
+        using var reopenedHandle = reopenFactory.Create(
+            new SharedMemoryMapOptions(
+                Name: map.Name,
+                CapacityBytes: map.CapacityBytes,
+                UnixFilePath: map.UnixFilePath,
+                UseFileBackedOnUnix: true,
+                DeleteUnixFileOnDispose: false));
+
+        using var accessor2 = reopenedHandle.Map.CreateViewAccessor(offset, actualSegmentSize);
+        using var segment2 = new SessionSegment(sessionId, accessor2, actualSegmentSize, logger: null, initializeHeader: false);
+
+        // Assert: reading via reopened segment sees the data and updates the shared header positions.
+        Assert.True(segment2.TryReadFrame(out var readData));
+        Assert.Equal(originalData, readData);
+        Assert.False(segment1.TryReadFrame(out _));
+    }
+
+    [Fact]
+    public async Task SharedMemoryManager_TryGetSegmentDescriptor_ReturnsExpectedValues()
+    {
+        // Arrange
+        var backingFile = Path.Combine(Path.GetTempPath(), "comcross-tests", $"{Guid.NewGuid():N}.mmf");
+        var config = new SharedMemoryConfig
+        {
+            Name = $"ComCross_Test_Manager_{Guid.NewGuid():N}",
+            UnixFilePath = backingFile,
+            UseFileBackedOnUnix = true,
+            DeleteUnixFileOnDispose = true,
+            MaxTotalMemory = 4 * 1024 * 1024,
+            MinSegmentSize = 256 * 1024,
+        };
+
+        using var manager = new SharedMemoryManager(config, NullLoggerFactory.Instance, new SharedMemoryMapFactory());
+        manager.Initialize();
+
+        // Act
+        await manager.AllocateSegmentAsync("session1", requestedSize: 512 * 1024);
+        var ok = manager.TryGetSegmentDescriptor("session1", out SharedMemorySegmentDescriptor descriptor);
+
+        // Assert
+        Assert.True(ok);
+        Assert.Equal(config.Name, descriptor.MapName);
+        Assert.Equal(config.MaxTotalMemory, descriptor.MapCapacityBytes);
+        Assert.Equal(config.UnixFilePath, descriptor.UnixFilePath);
+        Assert.True(descriptor.SegmentOffset > 0);
+        Assert.True(descriptor.SegmentSize > 0);
     }
     
     [Fact]
@@ -255,7 +340,8 @@ public class SharedMemoryTests : IDisposable
         var largeSharedMemory = new SegmentedSharedMemory(
             "ComCross_Test_Large_SharedMemory",
             20 * 1024 * 1024, // 20MB，足够测试使用
-            NullLogger<SegmentedSharedMemory>.Instance);
+            NullLogger<SegmentedSharedMemory>.Instance,
+            MapFactory);
             
         var segment = largeSharedMemory.AllocateSegment("session1", 10 * 1024 * 1024); // 10MB
         const int totalFrames = 1000;

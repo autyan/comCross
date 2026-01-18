@@ -31,6 +31,12 @@
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
     <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />
     <ProjectReference Include="..\PluginHost\ComCross.PluginHost.csproj" ReferenceOutputAssembly="false" />
+
+    <!-- Built-in plugins: built but not referenced by Shell at runtime -->
+    <ProjectReference Include="..\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Plugins\ComCross.Plugins.Serial\ComCross.Plugins.Serial.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,7 +54,19 @@
     <PluginHostFiles Include="..\PluginHost\bin\$(Configuration)\$(TargetFramework)\ComCross.PluginHost*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Flow\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Flow*" />
+    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Protocol\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Protocol*" />
+    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Stats\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Stats*" />
+    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Serial\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Serial*" />
+  </ItemGroup>
+
   <Target Name="CopyPluginHost" AfterTargets="Build">
     <Copy SourceFiles="@(PluginHostFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyBuiltInPlugins" AfterTargets="Build">
+    <MakeDir Directories="$(OutputPath)plugins" />
+    <Copy SourceFiles="@(BuiltInPluginFiles)" DestinationFolder="$(OutputPath)plugins" SkipUnchangedFiles="true" />
   </Target>
 </Project>

@@ -18,10 +18,7 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     private readonly int _segmentSize;
     private readonly int _dataOffset;
     private readonly int _dataSize;
-    
-    private long _writePosition;
-    private long _readPosition;
-    private long _frameIdSequence;
+
     private bool _disposed;
     
     // SessionHeader布局（256字节）
@@ -36,7 +33,8 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         string sessionId,
         MemoryMappedViewAccessor accessor,
         int segmentSize,
-        ILogger<SessionSegment>? logger = null)
+        ILogger<SessionSegment>? logger = null,
+        bool initializeHeader = true)
     {
         _sessionId = sessionId;
         _accessor = accessor;
@@ -46,8 +44,10 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         _dataOffset = HEADER_SIZE;
         _dataSize = segmentSize - HEADER_SIZE;
         
-        // 初始化Header
-        WriteHeader();
+        if (initializeHeader)
+        {
+            WriteHeader();
+        }
     }
     
     /// <summary>
@@ -76,8 +76,13 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
             return false;
         }
         
+        // Refresh positions from shared header (cross-process safe).
+        long writePosition = ReadWritePosition();
+        long readPosition = ReadReadPosition();
+
         // ✅ 边界检查2：检查环形缓冲区是否有足够空间
-        long freeSpace = GetFreeSpace();
+        long used = writePosition - readPosition;
+        long freeSpace = _dataSize - used;
         if (frameSize > freeSpace)
         {
             _logger?.LogDebug(
@@ -85,25 +90,28 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
                 _sessionId, frameSize, freeSpace);
             return false;
         }
-        
-        // 分配FrameId
-        frameId = Interlocked.Increment(ref _frameIdSequence);
-        
+
+        // 分配FrameId（single-writer assumption; cross-process atomicity is out of scope for MVP）
+        var seq = ReadFrameSequence();
+        seq++;
+        WriteFrameSequence(seq);
+        frameId = seq;
+
         // 写入Length（4字节）
-        int logicalWritePos = (int)(_writePosition % _dataSize);
+        int logicalWritePos = (int)(writePosition % _dataSize);
         WriteInt32Wrapped(logicalWritePos, data.Length);
         
         // 写入Data（处理环绕）
-        int dataWritePos = (int)((_writePosition + 4) % _dataSize);
+        int dataWritePos = (int)((writePosition + 4) % _dataSize);
         WriteDataWrapped(dataWritePos, data);
         
         // 更新WritePosition
-        _writePosition += frameSize;
-        UpdateHeader();
+        writePosition += frameSize;
+        WriteWritePosition(writePosition);
         
         _logger?.LogTrace(
             "[{SessionId}] 写入帧#{FrameId}，大小{Size}字节，WritePos={WritePos}",
-            _sessionId, frameId, data.Length, _writePosition);
+            _sessionId, frameId, data.Length, writePosition);
         
         return true;
     }
@@ -118,12 +126,15 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         if (_disposed)
             return false;
         
+        long writePosition = ReadWritePosition();
+        long readPosition = ReadReadPosition();
+
         // 检查是否有数据可读
-        if (_readPosition >= _writePosition)
+        if (readPosition >= writePosition)
             return false;
         
         // 读取Length
-        int logicalReadPos = (int)(_readPosition % _dataSize);
+        int logicalReadPos = (int)(readPosition % _dataSize);
         int dataLength = ReadInt32Wrapped(logicalReadPos);
         
         // 验证长度合法性
@@ -136,16 +147,16 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         }
         
         // 读取Data
-        int dataReadPos = (int)((_readPosition + 4) % _dataSize);
+        int dataReadPos = (int)((readPosition + 4) % _dataSize);
         data = ReadDataWrapped(dataReadPos, dataLength);
         
         // 更新ReadPosition
-        _readPosition += 4 + dataLength;
-        UpdateHeader();
+        readPosition += 4 + dataLength;
+        WriteReadPosition(readPosition);
         
         _logger?.LogTrace(
             "[{SessionId}] 读取帧，大小{Size}字节，ReadPos={ReadPos}",
-            _sessionId, dataLength, _readPosition);
+            _sessionId, dataLength, readPosition);
         
         return true;
     }
@@ -155,7 +166,9 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     /// </summary>
     public long GetFreeSpace()
     {
-        long used = _writePosition - _readPosition;
+        long writePosition = ReadWritePosition();
+        long readPosition = ReadReadPosition();
+        long used = writePosition - readPosition;
         return _dataSize - used;
     }
     
@@ -164,7 +177,9 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     /// </summary>
     public long GetUsedSpace()
     {
-        return _writePosition - _readPosition;
+        long writePosition = ReadWritePosition();
+        long readPosition = ReadReadPosition();
+        return writePosition - readPosition;
     }
     
     /// <summary>
@@ -187,23 +202,25 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         _accessor.Write(OFFSET_SESSION_ID + copyLength, (byte)0); // null-terminated
         
         // WritePosition, ReadPosition, FrameIdSequence
-        _accessor.Write(OFFSET_WRITE_POS, _writePosition);
-        _accessor.Write(OFFSET_READ_POS, _readPosition);
-        _accessor.Write(OFFSET_FRAME_SEQ, _frameIdSequence);
+        _accessor.Write(OFFSET_WRITE_POS, 0L);
+        _accessor.Write(OFFSET_READ_POS, 0L);
+        _accessor.Write(OFFSET_FRAME_SEQ, 0L);
         
         // SegmentSize
         _accessor.Write(OFFSET_SEGMENT_SIZE, _segmentSize);
     }
-    
-    /// <summary>
-    /// 更新Header（仅更新变化的字段）
-    /// </summary>
-    private void UpdateHeader()
-    {
-        _accessor.Write(OFFSET_WRITE_POS, _writePosition);
-        _accessor.Write(OFFSET_READ_POS, _readPosition);
-        _accessor.Write(OFFSET_FRAME_SEQ, _frameIdSequence);
-    }
+
+    private long ReadWritePosition() => _accessor.ReadInt64(OFFSET_WRITE_POS);
+
+    private long ReadReadPosition() => _accessor.ReadInt64(OFFSET_READ_POS);
+
+    private long ReadFrameSequence() => _accessor.ReadInt64(OFFSET_FRAME_SEQ);
+
+    private void WriteWritePosition(long value) => _accessor.Write(OFFSET_WRITE_POS, value);
+
+    private void WriteReadPosition(long value) => _accessor.Write(OFFSET_READ_POS, value);
+
+    private void WriteFrameSequence(long value) => _accessor.Write(OFFSET_FRAME_SEQ, value);
     
     /// <summary>
     /// 写入Int32（处理环绕）

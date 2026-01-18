@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
@@ -11,24 +13,28 @@ namespace ComCross.Shell.ViewModels;
 /// </summary>
 public sealed class BusAdapterSelectorViewModel : BaseViewModel
 {
+    private const string PluginAdapterPrefix = "plugin:";
     private BusAdapterInfo? _selectedAdapter;
     private UserControl? _configPanel;
+    private readonly BusAdapterInfo _serialAdapter;
 
     public BusAdapterSelectorViewModel(ILocalizationService localization)
         : base(localization)
     {
         // Initialize available adapters
+        _serialAdapter = new BusAdapterInfo
+        {
+            Id = "serial",
+            Name = "Serial (RS232)",
+            Icon = "🔌",
+            Description = "Serial port communication (RS232/RS485/RS422)",
+            IsEnabled = true,
+            ConfigPanelType = null // Will use device selector in LeftSidebar
+        };
+
         AvailableAdapters = new ObservableCollection<BusAdapterInfo>
         {
-            new BusAdapterInfo
-            {
-                Id = "serial",
-                Name = "Serial (RS232)",
-                Icon = "🔌",
-                Description = "Serial port communication (RS232/RS485/RS422)",
-                IsEnabled = true,
-                ConfigPanelType = null // Will use device selector in LeftSidebar
-            },
+            _serialAdapter,
             // Future adapters (disabled for now)
             new BusAdapterInfo
             {
@@ -67,6 +73,53 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     /// Available bus adapters
     /// </summary>
     public ObservableCollection<BusAdapterInfo> AvailableAdapters { get; }
+
+    public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
+    {
+        var previouslySelectedId = SelectedAdapter?.Id;
+
+        // Remove existing plugin-backed adapters.
+        for (var index = AvailableAdapters.Count - 1; index >= 0; index--)
+        {
+            var existing = AvailableAdapters[index];
+            if (existing.Id.StartsWith(PluginAdapterPrefix, StringComparison.Ordinal))
+            {
+                AvailableAdapters.RemoveAt(index);
+            }
+        }
+
+        if (options.Count > 0)
+        {
+            foreach (var option in options)
+            {
+                AvailableAdapters.Add(new BusAdapterInfo
+                {
+                    Id = $"{PluginAdapterPrefix}{option.PluginId}:{option.CapabilityId}",
+                    Name = $"{option.PluginName} / {option.CapabilityName}",
+                    Icon = "🧩",
+                    Description = option.CapabilityDescription,
+                    IsEnabled = true,
+                    ConfigPanelType = null,
+                    PluginId = option.PluginId,
+                    CapabilityId = option.CapabilityId,
+                    DefaultParametersJson = option.DefaultParametersJson
+                });
+            }
+        }
+
+        // Restore selection if possible; otherwise fall back to Serial.
+        if (!string.IsNullOrWhiteSpace(previouslySelectedId))
+        {
+            var match = AvailableAdapters.FirstOrDefault(a => string.Equals(a.Id, previouslySelectedId, StringComparison.Ordinal));
+            if (match is not null)
+            {
+                SelectedAdapter = match;
+                return;
+            }
+        }
+
+        SelectedAdapter = _serialAdapter;
+    }
 
     /// <summary>
     /// Currently selected bus adapter

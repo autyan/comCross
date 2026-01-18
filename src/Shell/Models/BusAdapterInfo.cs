@@ -42,4 +42,19 @@ public sealed class BusAdapterInfo
     /// Display text for ComboBox (Icon + Name)
     /// </summary>
     public string DisplayText => $"{Icon} {Name}";
+
+    /// <summary>
+    /// Optional plugin id backing this adapter (when adapter is provided by a plugin capability).
+    /// </summary>
+    public string? PluginId { get; init; }
+
+    /// <summary>
+    /// Optional capability id backing this adapter (when adapter is provided by a plugin capability).
+    /// </summary>
+    public string? CapabilityId { get; init; }
+
+    /// <summary>
+    /// Optional default parameters JSON for the capability.
+    /// </summary>
+    public string? DefaultParametersJson { get; init; }
 }

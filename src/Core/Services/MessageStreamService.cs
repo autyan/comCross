@@ -12,9 +12,17 @@ public sealed class MessageStreamService : IMessageStreamService
 {
     private readonly ConcurrentDictionary<string, SessionStream> _streams = new();
 
+    private static void ThrowIfInvalidSessionId(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
+    }
+
     public void Append(string sessionId, LogMessage message)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(message);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionStream());
@@ -23,7 +31,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IReadOnlyList<LogMessage> GetMessages(string sessionId, int skip = 0, int take = 100)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
         {
@@ -35,7 +43,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IReadOnlyList<LogMessage> Search(string sessionId, string query, bool isRegex = false)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentException.ThrowIfNullOrEmpty(query);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
@@ -48,7 +56,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public void Clear(string sessionId)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (_streams.TryGetValue(sessionId, out var stream))
         {
@@ -58,7 +66,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IDisposable Subscribe(string sessionId, Action<LogMessage> handler)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(handler);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionStream());

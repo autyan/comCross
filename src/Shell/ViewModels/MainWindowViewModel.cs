@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -256,6 +257,8 @@ public class MainWindowViewModel : BaseViewModel
 
     public PluginManagerViewModel PluginManager { get; }
 
+    public event Action<string, PluginHostUiStateInvalidatedEvent>? PluginUiStateInvalidated;
+
     // Commands
     public ICommand QuickConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
@@ -314,9 +317,27 @@ public class MainWindowViewModel : BaseViewModel
         CommandCenter = commandCenterViewModel;
         PluginManager = pluginManagerViewModel;
         Settings = settingsViewModel;
+
+        BusAdapterSelectorViewModel.PropertyChanged += (_, args) =>
+        {
+            if (string.Equals(args.PropertyName, nameof(BusAdapterSelectorViewModel.SelectedAdapter), StringComparison.Ordinal))
+            {
+                (QuickConnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (QuickConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        };
+
+        PluginManager.PluginsReloaded += (_, _) =>
+        {
+            BusAdapterSelectorViewModel.UpdatePluginAdapters(PluginManager.GetAllCapabilityOptions());
+        };
+
+        _pluginRuntimeService.PluginEventReceived += HandlePluginEventReceived;
         
         // Initialize commands
-        QuickConnectCommand = new AsyncRelayCommand(QuickConnectAsync, () => SelectedDevice != null);
+        QuickConnectCommand = new AsyncRelayCommand(
+            QuickConnectAsync,
+            () => SelectedDevice != null && string.Equals(BusAdapterSelectorViewModel.SelectedAdapter?.Id, "serial", StringComparison.Ordinal));
         DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => IsConnected);
         ClearMessagesCommand = new RelayCommand(() => Messages.Clear());
         ExportMessagesCommand = new AsyncRelayCommand(ExportMessagesAsync);
@@ -336,6 +357,38 @@ public class MainWindowViewModel : BaseViewModel
         });
         
         _ = InitializeAsync();
+    }
+
+    private void HandlePluginEventReceived(PluginRuntime runtime, PluginHostEvent evt)
+    {
+        if (!string.Equals(evt.Type, PluginHostEventTypes.UiStateInvalidated, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (evt.Payload is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var invalidated = evt.Payload.Value.Deserialize<PluginHostUiStateInvalidatedEvent>(new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (invalidated is null)
+            {
+                return;
+            }
+
+            PluginUiStateInvalidated?.Invoke(runtime.Info.Manifest.Id, invalidated);
+        }
+        catch
+        {
+            // Ignore malformed events.
+        }
     }
 
     private void OnStatisticsUpdateTick(object? sender, EventArgs e)
@@ -412,6 +465,8 @@ public class MainWindowViewModel : BaseViewModel
             await PluginManager.LoadAsync();
             Console.WriteLine("[MainWindowViewModel] Plugins loaded");
 
+            BusAdapterSelectorViewModel.UpdatePluginAdapters(PluginManager.GetAllCapabilityOptions());
+
             // Load workspace state (with automatic migration from v0.3 if needed)
             var state = await _workspaceService.LoadStateAsync();
             Console.WriteLine("[MainWindowViewModel] Workspace state loaded");
@@ -463,10 +518,142 @@ public class MainWindowViewModel : BaseViewModel
 
     public async Task ConnectAsync(string port, int baudRate, string name)
     {
+        var settings = new SerialSettings { BaudRate = baudRate };
+        await ConnectWithSettingsAsync(port, settings, name);
+    }
+
+    public async Task<bool> TryConnectPluginAdapterAsync(string pluginId, string capabilityId, string? parametersJson)
+    {
+        try
+        {
+            await PluginManager.ConnectByIdsAsync(pluginId, capabilityId, parametersJson);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(
+                L["dialog.connect.plugin.title"],
+                string.Format(L["dialog.connect.plugin.failed"], ex.Message));
+            return false;
+        }
+    }
+
+    public async Task<bool> ExecuteHostActionAsync(string hostAction, JsonElement parameters)
+    {
+        try
+        {
+            return hostAction switch
+            {
+                "comcross.session.connect" => await ExecuteHostConnectSessionAsync(parameters),
+                _ => await ShowUnknownHostActionAsync(hostAction)
+            };
+        }
+        catch (Exception ex)
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(
+                L["dialog.connect.title"],
+                ex.Message);
+            return false;
+        }
+    }
+
+    private async Task<bool> ShowUnknownHostActionAsync(string hostAction)
+    {
+        await Shell.Services.MessageBoxService.ShowErrorAsync(
+            L["dialog.connect.title"],
+            $"Unknown host action: {hostAction}");
+        return false;
+    }
+
+    private sealed record HostConnectSessionParameters(
+        string? Adapter,
+        string? Port,
+        int? BaudRate,
+        int? DataBits,
+        string? Parity,
+        string? StopBits,
+        string? FlowControl,
+        string? Encoding,
+        string? SessionName);
+
+    private async Task<bool> ExecuteHostConnectSessionAsync(JsonElement parameters)
+    {
+        if (parameters.ValueKind != JsonValueKind.Object)
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Parameters must be a JSON object.");
+            return false;
+        }
+
+        HostConnectSessionParameters? payload;
+        try
+        {
+            payload = parameters.Deserialize<HostConnectSessionParameters>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], ex.Message);
+            return false;
+        }
+
+        if (payload is null || string.IsNullOrWhiteSpace(payload.Adapter))
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Missing required parameter: adapter");
+            return false;
+        }
+
+        if (!string.Equals(payload.Adapter, "serial", StringComparison.Ordinal))
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], $"Unsupported adapter: {payload.Adapter}");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.Port))
+        {
+            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Missing required parameter: port");
+            return false;
+        }
+
+        var settings = new SerialSettings();
+        if (payload.BaudRate is { } baud)
+        {
+            settings.BaudRate = baud;
+        }
+
+        if (payload.DataBits is { } dataBits)
+        {
+            settings.DataBits = dataBits;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.Parity) && Enum.TryParse<Parity>(payload.Parity, ignoreCase: true, out var parity))
+        {
+            settings.Parity = parity;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.StopBits) && Enum.TryParse<StopBits>(payload.StopBits, ignoreCase: true, out var stopBits))
+        {
+            settings.StopBits = stopBits;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.FlowControl) && Enum.TryParse<Handshake>(payload.FlowControl, ignoreCase: true, out var handshake))
+        {
+            settings.FlowControl = handshake;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.Encoding))
+        {
+            settings.Encoding = payload.Encoding;
+        }
+
+        var sessionName = string.IsNullOrWhiteSpace(payload.SessionName) ? payload.Port : payload.SessionName;
+        await ConnectWithSettingsAsync(payload.Port, settings, sessionName);
+        return true;
+    }
+
+    private async Task ConnectWithSettingsAsync(string port, SerialSettings settings, string name)
+    {
         try
         {
             var sessionId = $"session-{Guid.NewGuid()}";
-            var settings = new SerialSettings { BaudRate = baudRate };
 
             var session = await _deviceService.ConnectAsync(sessionId, port, name, settings);
             Sessions.Add(session);
@@ -911,13 +1098,13 @@ public class MainWindowViewModel : BaseViewModel
             });
     }
 
-    private void OnLanguageChanged(object? sender, string cultureCode)
+    private async void OnLanguageChanged(object? sender, string cultureCode)
     {
         OnPropertyChanged(nameof(Title));
         NotificationCenter.RefreshLocalizedText();
         CommandCenter.RefreshLocalizedOptions();
         PluginManager.RefreshLocalizedText();
-        PluginManager.NotifyLanguageChanged(cultureCode, (runtime, ex, restarted) =>
+        await PluginManager.NotifyLanguageChangedAsync(cultureCode, (runtime, ex, restarted) =>
         {
             var message = restarted
                 ? $"Plugin '{runtime.Info.Manifest.Id}' notification failed; plugin restarted."
@@ -990,6 +1177,15 @@ public class MainWindowViewModel : BaseViewModel
                 {
                     _appLogService.Warn($"Error disconnecting session {session.Id}: {ex.Message}");
                 }
+            }
+
+            try
+            {
+                PluginManager.ShutdownAllAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _appLogService.Warn($"Error stopping plugins: {ex.Message}");
             }
             
             // Dispose all subscriptions
@@ -1114,6 +1310,16 @@ public class MainWindowViewModel : BaseViewModel
                 
                 // Small delay to ensure cleanup completes
                 await Task.Delay(100);
+            }
+
+            progressDialog.UpdateStatus(L["shutdown.stoppingPlugins"]);
+            try
+            {
+                await PluginManager.ShutdownAllAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                _appLogService.Warn($"Error stopping plugins: {ex.Message}");
             }
             
             // Save workspace state
