@@ -20,12 +20,12 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     private readonly PluginDiscoveryService _discoveryService;
     private readonly PluginRuntimeService _runtimeService;
+    private readonly PluginManagerService _pluginManagerService;
     private readonly PluginHostProtocolService _protocolService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
     private readonly IExtensibleLocalizationService? _extensibleLocalization;
     private string _pluginsDirectory;
-    private List<PluginRuntime> _runtimes = new();
 
     public event EventHandler? PluginsReloaded;
 
@@ -33,6 +33,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         ILocalizationService localization,
         PluginDiscoveryService discoveryService,
         PluginRuntimeService runtimeService,
+        PluginManagerService pluginManagerService,
         PluginHostProtocolService protocolService,
         SettingsService settingsService,
         NotificationService notificationService)
@@ -40,6 +41,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         _discoveryService = discoveryService;
         _runtimeService = runtimeService;
+        _pluginManagerService = pluginManagerService;
         _protocolService = protocolService;
         _settingsService = settingsService;
         _notificationService = notificationService;
@@ -66,44 +68,52 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task LoadAsync()
     {
-        foreach (var runtime in _runtimes)
-        {
-            runtime.DisposeHost();
-        }
-
-        _runtimes.Clear();
         Plugins.Clear();
-        var items = _discoveryService.Discover(_pluginsDirectory);
+        
+        var runtimes = _pluginManagerService.GetAllRuntimes();
 
-        // Register plugin-provided i18n bundles as early as possible.
-        TryRegisterPluginI18n(items);
-
-        _runtimes = _runtimeService.LoadPlugins(items, _settingsService.Current.Plugins.Enabled).ToList();
-
-        foreach (var runtime in _runtimes)
+        foreach (var runtime in runtimes)
         {
             Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, L));
         }
 
         PluginsReloaded?.Invoke(this, EventArgs.Empty);
-        await Task.CompletedTask;
     }
 
     public async Task ShutdownAllAsync(TimeSpan timeoutPerHost)
     {
         try
         {
-            await _runtimeService.ShutdownAsync(_runtimes, timeoutPerHost);
+            await _pluginManagerService.ShutdownAsync();
         }
         catch
         {
             // best-effort
         }
 
-        foreach (var runtime in _runtimes)
+        foreach (var runtime in _pluginManagerService.GetAllRuntimes())
         {
             runtime.DisposeHost();
         }
+    }
+
+    /// <summary>
+    /// 获取特定插件的运行时
+    /// </summary>
+    public PluginRuntime? GetRuntime(string pluginId) => _pluginManagerService.GetRuntime(pluginId);
+
+    /// <summary>
+    /// 向插件发送请求
+    /// </summary>
+    public async Task<PluginHostResponse?> SendRequestAsync(string pluginId, PluginHostRequest request)
+    {
+        var runtime = GetRuntime(pluginId);
+        if (runtime?.Client == null)
+        {
+            return null;
+        }
+
+        return await runtime.Client.SendAsync(request, TimeSpan.FromSeconds(5));
     }
 
     private void TryRegisterPluginI18n(IReadOnlyList<PluginInfo> plugins)
@@ -175,7 +185,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task TestConnectAsync(PluginItemViewModel plugin)
     {
-        var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == plugin.Id);
+        var runtime = _pluginManagerService.GetRuntime(plugin.Id);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], "Runtime not found.");
@@ -246,7 +256,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task TestConnectAsync(PluginItemViewModel plugin, string capabilityId, string? parametersJson)
     {
-        var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == plugin.Id);
+        var runtime = _pluginManagerService.GetRuntime(plugin.Id);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], "Runtime not found.");
@@ -335,7 +345,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public IReadOnlyList<CapabilityOption> GetCapabilityOptions(string pluginId)
     {
-        var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == pluginId);
+        var runtime = _pluginManagerService.GetRuntime(pluginId);
         if (runtime is null || runtime.State != PluginLoadState.Loaded)
         {
             return Array.Empty<CapabilityOption>();
@@ -348,7 +358,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public IReadOnlyList<PluginCapabilityLaunchOption> GetAllCapabilityOptions()
     {
-        return _runtimes
+        return _pluginManagerService.GetAllRuntimes()
             .Where(r => r.State == PluginLoadState.Loaded)
             .SelectMany(r => r.Capabilities.Select(c => new PluginCapabilityLaunchOption(
                 r.Info.Manifest.Id,
@@ -371,7 +381,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         try
         {
-            var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == pluginId);
+            var runtime = _pluginManagerService.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 return null;
@@ -402,7 +412,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         try
         {
-            var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == pluginId);
+            var runtime = _pluginManagerService.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 // If runtime isn't available, we cannot validate; be conservative and reject.
@@ -446,7 +456,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task ConnectByIdsAsync(string pluginId, string capabilityId, string? parametersJson)
     {
-        var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == pluginId);
+        var runtime = _pluginManagerService.GetRuntime(pluginId);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(L["dialog.connect.plugin.title"], "Runtime not found.");
@@ -515,23 +525,25 @@ public sealed class PluginManagerViewModel : BaseViewModel
         string? viewId,
         TimeSpan timeout)
     {
-        var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == pluginId);
+        var runtime = _pluginManagerService.GetRuntime(pluginId);
         if (runtime is null || runtime.State != PluginLoadState.Loaded)
         {
             return null;
         }
 
-        var (ok, _, snapshot) = await _protocolService.GetUiStateAsync(
+        var result = await _protocolService.GetUiStateAsync(
             runtime,
             capabilityId,
             sessionId,
             viewId,
             timeout);
 
-        if (!ok || snapshot is null)
+        if (!result.Ok || result.Snapshot is null)
         {
             return null;
         }
+
+        var snapshot = result.Snapshot;
 
         try
         {
@@ -600,7 +612,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task NotifyPluginsAsync(PluginNotification notification, Action<PluginRuntime, Exception, bool>? onError = null)
     {
-        await _runtimeService.NotifyAsync(_runtimes, notification, onError);
+        await _runtimeService.NotifyAsync(_pluginManagerService.GetAllRuntimes().ToList(), notification, onError);
         RefreshRuntimeStates();
     }
 
@@ -608,7 +620,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         foreach (var plugin in Plugins)
         {
-            var runtime = _runtimes.FirstOrDefault(item => item.Info.Manifest.Id == plugin.Id);
+            var runtime = _pluginManagerService.GetRuntime(plugin.Id);
             if (runtime != null)
             {
                 plugin.UpdateState(runtime, L);

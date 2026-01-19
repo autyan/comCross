@@ -16,6 +16,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ComCross.Adapters.Serial;
 using ComCross.Core.Services;
+using ComCross.PluginSdk.UI;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -38,6 +39,9 @@ public class MainWindowViewModel : BaseViewModel
     private readonly CommandService _commandService;
     private readonly PluginDiscoveryService _pluginDiscoveryService;
     private readonly PluginRuntimeService _pluginRuntimeService;
+    private readonly PluginManagerService _pluginManagerService;
+    private readonly PluginUiStateManager _pluginUiStateManager;
+    private readonly ICapabilityDispatcher _dispatcher;
     
     // Business services
     private readonly WorkspaceService _workspaceService;
@@ -46,6 +50,10 @@ public class MainWindowViewModel : BaseViewModel
     private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
     private Session? _activeSession;
     private Device? _selectedDevice;
+    private int _baudRate = 115200;
+    private int _dataBits = 8;
+    private Parity _parity = Parity.None;
+    private StopBits _stopBits = StopBits.One;
     private string _searchQuery = string.Empty;
     private bool _isConnected;
     private bool _isSettingsOpen;
@@ -82,6 +90,30 @@ public class MainWindowViewModel : BaseViewModel
     /// </summary>
     public WorkloadService WorkloadService => _workloadService;
 
+    public int BaudRate
+    {
+        get => _baudRate;
+        set => SetProperty(ref _baudRate, value);
+    }
+
+    public int DataBits
+    {
+        get => _dataBits;
+        set => SetProperty(ref _dataBits, value);
+    }
+
+    public Parity Parity
+    {
+        get => _parity;
+        set => SetProperty(ref _parity, value);
+    }
+
+    public StopBits StopBits
+    {
+        get => _stopBits;
+        set => SetProperty(ref _stopBits, value);
+    }
+
     public Device? SelectedDevice
     {
         get => _selectedDevice;
@@ -109,6 +141,10 @@ public class MainWindowViewModel : BaseViewModel
                 LoadMessages();
                 CommandCenter.SetSession(_activeSession?.Id, _activeSession?.Name);
                 
+                // Sync UI context management (ADR-010 / Plugin UI v0.4.0)
+                _pluginUiStateManager.SwitchContext(_activeSession?.Id);
+                BusAdapterSelectorViewModel.SetActiveSession(_activeSession);
+
                 // Sync device selection and connection state
                 if (_activeSession != null)
                 {
@@ -117,7 +153,18 @@ public class MainWindowViewModel : BaseViewModel
                     {
                         SelectedDevice = device;
                     }
+                    
+                    // Sync serial settings to UI
+                    BaudRate = _activeSession.Settings.BaudRate;
+                    DataBits = _activeSession.Settings.DataBits;
+                    Parity = _activeSession.Settings.Parity;
+                    StopBits = _activeSession.Settings.StopBits;
+
                     IsConnected = _activeSession.Status == SessionStatus.Connected;
+                }
+                else
+                {
+                    IsConnected = false;
                 }
             }
         }
@@ -257,8 +304,6 @@ public class MainWindowViewModel : BaseViewModel
 
     public PluginManagerViewModel PluginManager { get; }
 
-    public event Action<string, PluginHostUiStateInvalidatedEvent>? PluginUiStateInvalidated;
-
     // Commands
     public ICommand QuickConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
@@ -280,6 +325,9 @@ public class MainWindowViewModel : BaseViewModel
         CommandService commandService,
         PluginDiscoveryService pluginDiscoveryService,
         PluginRuntimeService pluginRuntimeService,
+        PluginManagerService pluginManagerService,
+        PluginUiStateManager pluginUiStateManager,
+        ICapabilityDispatcher dispatcher,
         WorkspaceService workspaceService,
         WorkloadService workloadService,
         ExportService exportService,
@@ -305,6 +353,9 @@ public class MainWindowViewModel : BaseViewModel
         _commandService = commandService;
         _pluginDiscoveryService = pluginDiscoveryService;
         _pluginRuntimeService = pluginRuntimeService;
+        _pluginManagerService = pluginManagerService;
+        _pluginUiStateManager = pluginUiStateManager;
+        _dispatcher = dispatcher;
         _workspaceService = workspaceService;
         _workloadService = workloadService;
         _exportService = exportService;
@@ -332,8 +383,6 @@ public class MainWindowViewModel : BaseViewModel
             BusAdapterSelectorViewModel.UpdatePluginAdapters(PluginManager.GetAllCapabilityOptions());
         };
 
-        _pluginRuntimeService.PluginEventReceived += HandlePluginEventReceived;
-        
         // Initialize commands
         QuickConnectCommand = new AsyncRelayCommand(
             QuickConnectAsync,
@@ -355,39 +404,72 @@ public class MainWindowViewModel : BaseViewModel
         {
             UpdateStatistics();
         });
+
+        _eventBus.Subscribe<SessionCreatedEvent>(e => 
+        {
+            Dispatcher.UIThread.Post(() => 
+            {
+                if (!Sessions.Any(s => s.Id == e.Session.Id))
+                {
+                    Sessions.Add(e.Session);
+                    ActiveSession = e.Session;
+                    IsConnected = true;
+                    
+                    CommandCenter.SetSession(e.Session.Id, e.Session.Name);
+                    _logStorageService.StartSession(e.Session);
+                    
+                    // Subscribe to messages for this session
+                    SubscribeToSessionMessages(e.Session.Id);
+                }
+            });
+        });
+
+        _eventBus.Subscribe<SessionClosedEvent>(e => 
+        {
+            Dispatcher.UIThread.Post(() => 
+            {
+                var session = Sessions.FirstOrDefault(s => s.Id == e.SessionId);
+                if (session != null)
+                {
+                    session.Status = SessionStatus.Disconnected;
+                    if (ActiveSession?.Id == e.SessionId)
+                    {
+                        IsConnected = false;
+                        CommandCenter.SetSession(null, null);
+                    }
+                    
+                    // Cleanup subscriptions
+                    if (_messageSubscriptions.TryGetValue(e.SessionId, out var sub))
+                    {
+                        sub.Dispose();
+                        _messageSubscriptions.Remove(e.SessionId);
+                    }
+                    
+                    // Optionally remove from list or keep it as "Disconnected"
+                    // Sessions.Remove(session); 
+                }
+            });
+        });
         
         _ = InitializeAsync();
     }
 
-    private void HandlePluginEventReceived(PluginRuntime runtime, PluginHostEvent evt)
+    private void SubscribeToSessionMessages(string sessionId)
     {
-        if (!string.Equals(evt.Type, PluginHostEventTypes.UiStateInvalidated, StringComparison.Ordinal))
+        if (!_messageSubscriptions.ContainsKey(sessionId))
         {
-            return;
-        }
-
-        if (evt.Payload is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var invalidated = evt.Payload.Value.Deserialize<PluginHostUiStateInvalidatedEvent>(new JsonSerializerOptions
+            var subscription = _messageStream.Subscribe(sessionId, message =>
             {
-                PropertyNameCaseInsensitive = true
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ActiveSession?.Id == sessionId)
+                    {
+                        Messages.Add(message);
+                        TrimMessages();
+                    }
+                });
             });
-
-            if (invalidated is null)
-            {
-                return;
-            }
-
-            PluginUiStateInvalidated?.Invoke(runtime.Info.Manifest.Id, invalidated);
-        }
-        catch
-        {
-            // Ignore malformed events.
+            _messageSubscriptions[sessionId] = subscription;
         }
     }
 
@@ -458,9 +540,18 @@ public class MainWindowViewModel : BaseViewModel
             {
                 Devices.Add(device);
             }
+            
+            // Sync initial ports to Plugin UI State for system.serial
+            _pluginUiStateManager.UpdateState(null, "system.serial.ports", devices.Select(d => d.Port).ToList());
 
             await NotificationCenter.LoadAsync();
             Console.WriteLine("[MainWindowViewModel] Notifications loaded");
+            
+            await NotificationCenter.LoadAsync();
+            Console.WriteLine("[MainWindowViewModel] Notifications loaded");
+            
+            // Initialize Core plugin manager
+            await _pluginManagerService.InitializeAsync();
             
             await PluginManager.LoadAsync();
             Console.WriteLine("[MainWindowViewModel] Plugins loaded");
@@ -653,32 +744,17 @@ public class MainWindowViewModel : BaseViewModel
     {
         try
         {
-            var sessionId = $"session-{Guid.NewGuid()}";
-
-            var session = await _deviceService.ConnectAsync(sessionId, port, name, settings);
-            Sessions.Add(session);
-            ActiveSession = session;
-            IsConnected = true;
-
-            CommandCenter.SetSession(session.Id, session.Name);
-            _logStorageService.StartSession(session);
-
-            // Subscribe to messages (only if not already subscribed)
-            if (!_messageSubscriptions.ContainsKey(sessionId))
+            // NEW: Use the unified dispatcher instead of calling services directly.
+            // This ensures logic stays in the Core and Shell remains passive.
+            await _dispatcher.DispatchAsync("system.serial", null, "connect", new
             {
-                var subscription = _messageStream.Subscribe(sessionId, message =>
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        if (ActiveSession?.Id == sessionId)
-                        {
-                            Messages.Add(message);
-                            TrimMessages();
-                        }
-                    });
-                });
-                _messageSubscriptions[sessionId] = subscription;
-            }
+                port = port,
+                baudRate = settings.BaudRate,
+                dataBits = settings.DataBits,
+                parity = settings.Parity,
+                stopBits = settings.StopBits,
+                name = name
+            });
         }
         catch (SerialPortAccessDeniedException ex)
         {
@@ -769,7 +845,13 @@ public class MainWindowViewModel : BaseViewModel
             }
         }
 
-        var settings = new SerialSettings { BaudRate = 115200 };
+        var settings = new SerialSettings 
+        { 
+            BaudRate = BaudRate,
+            DataBits = DataBits,
+            Parity = Parity,
+            StopBits = StopBits
+        };
         var name = port;
 
         try
@@ -810,13 +892,8 @@ public class MainWindowViewModel : BaseViewModel
 
         try
         {
-            await _workspaceService.DisconnectAsync(ActiveSession.Id);
-            ActiveSession.Status = SessionStatus.Disconnected;
-            IsConnected = false;
-            CommandCenter.SetSession(null, null);
-
-            // Save workspace state
-            await SaveWorkspaceStateAsync();
+            var pluginId = ActiveSession.PluginId ?? "system.serial";
+            await _dispatcher.DispatchAsync(pluginId, ActiveSession.Id, "disconnect", null);
         }
         catch (Exception ex)
         {
@@ -899,35 +976,20 @@ public class MainWindowViewModel : BaseViewModel
     {
         try
         {
-            var newSession = await _workspaceService.ConnectAsync(oldSession.Port, oldSession.Settings, oldSession.Name);
+            // NEW: Delegate to dispatcher. 
+            // The EventBus handler will take care of updating the UI state when the new session is ready.
+            var pluginId = oldSession.PluginId ?? "system.serial";
             
-            // Replace old session with new connected session
-            var index = Sessions.IndexOf(oldSession);
-            if (index >= 0)
+            // First disconnect old session if it's still alive (UI might think it's disconnected but Core might have state)
+            await _dispatcher.DispatchAsync(pluginId, oldSession.Id, "disconnect", null);
+
+            // Then connect again
+            await _dispatcher.DispatchAsync(pluginId, null, "connect", new
             {
-                Sessions[index] = newSession;
-                ActiveSession = newSession;
-                IsConnected = true;
-            }
-            
-            // Subscribe to messages (only if not already subscribed)
-            if (!_messageSubscriptions.ContainsKey(newSession.Id))
-            {
-                var subscription = _workspaceService.SubscribeToMessages(newSession.Id, message =>
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        if (ActiveSession?.Id == newSession.Id)
-                        {
-                            Messages.Add(message);
-                            TrimMessages();
-                        }
-                    });
-                });
-                _messageSubscriptions[newSession.Id] = subscription;
-            }
-            
-            await SaveWorkspaceStateAsync();
+                port = oldSession.Port,
+                baudRate = oldSession.Settings.BaudRate,
+                name = oldSession.Name
+            });
         }
         catch (SerialPortAccessDeniedException ex)
         {

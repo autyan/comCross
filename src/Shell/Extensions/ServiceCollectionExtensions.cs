@@ -46,7 +46,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CommandService>();
         services.AddSingleton<PluginDiscoveryService>();
         services.AddSingleton<PluginRuntimeService>();
-            services.AddSingleton<PluginHostProtocolService>();
+        services.AddSingleton<PluginManagerService>();
+        services.AddSingleton<PluginHostProtocolService>();
+        services.AddSingleton<ICapabilityDispatcher, CapabilityDispatcher>();
+
+        // Plugin UI Rendering System (New v0.4.0)
+        services.AddSingleton<ComCross.PluginSdk.UI.PluginUiStateManager>();
+        services.AddSingleton<ComCross.PluginSdk.UI.IPluginUiControlFactory, ComCross.Shell.Plugins.UI.AvaloniaPluginUiControlFactory>();
+        services.AddSingleton<ComCross.PluginSdk.UI.PluginUiRenderer, ComCross.Shell.Plugins.UI.AvaloniaPluginUiRenderer>();
+        services.AddSingleton<ComCross.PluginSdk.UI.IPluginCommunicationLink, ComCross.Shell.Plugins.UI.ShellPluginCommunicationLink>();
+        services.AddSingleton<ComCross.PluginSdk.UI.PluginActionExecutor>();
 
         // Shared memory (ADR-010)
         services.AddSingleton(new SharedMemoryConfig());
@@ -78,6 +87,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<WorkloadPanel>();
         services.AddTransient<WorkloadTabs>();
         services.AddTransient<BusAdapterSelector>();
+        services.AddTransient<SerialConfigPanel>();
         services.AddTransient<TestWindow>();
         services.AddTransient<CreateWorkloadDialog>();
         services.AddTransient<RenameWorkloadDialog>();

@@ -2,127 +2,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:ComCross.Shell.ViewModels"
-             xmlns:views="using:ComCross.Shell.Views"
+             xmlns:vm="clr-namespace:ComCross.Shell.ViewModels"
+             xmlns:views="clr-namespace:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.LeftSidebar"
              x:DataType="vm:MainWindowViewModel"
+             x:CompileBindings="False"
              x:Name="LeftSidebarRoot">
     
     <!-- Vertical layout: Bus Adapter + Device Config + Sessions -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="16" Margin="16">
             
-            <!-- Section 1: Bus Adapter Selection -->
+            <!-- Section 1: Bus Adapter Selection & Configuration -->
             <views:BusAdapterSelector DataContext="{Binding BusAdapterSelectorViewModel}" />
-            
-            <!-- Section 2: Device Configuration (Serial) -->
-            <StackPanel Spacing="12">
-                <TextBlock Text="{Binding L[sidebar.deviceConfig]}" 
-                           FontSize="11" 
-                           FontWeight="Bold" 
-                           Foreground="#87909B" />
-                
-                <!-- Port Selection -->
-                <Grid ColumnDefinitions="*,Auto">
-                    <ComboBox Grid.Column="0" 
-                              ItemsSource="{Binding Devices}" 
-                              SelectedItem="{Binding SelectedDevice}"
-                              PlaceholderText="{Binding L[sidebar.selectPort]}"
-                              HorizontalAlignment="Stretch" 
-                              Margin="0,0,8,0">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Port}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <Button Grid.Column="1" 
-                            Click="OnRefreshPortsClick"
-                            Width="36" Height="36"
-                            Padding="0"
-                            ToolTip.Tip="{Binding L[sidebar.refreshPorts]}"
-                            Background="#1B242A"
-                            BorderBrush="#25303A">
-                        <Path Data="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
-                              Fill="#B7C1CC" 
-                              Stretch="Uniform"
-                              Width="18" Height="18" />
-                    </Button>
-                </Grid>
-                
-                <!-- Serial Settings -->
-                <Border Background="#141B1F" Padding="12" CornerRadius="6">
-                    <Grid ColumnDefinitions="1.5*,*" RowDefinitions="Auto,Auto">
-                        <!-- Baud Rate -->
-                        <StackPanel Grid.Column="0" Grid.Row="0" Spacing="4" Margin="0,0,4,4">
-                            <TextBlock Text="{Binding L[sidebar.baudRate]}" 
-                                       FontSize="11" 
-                                       Foreground="#87909B" />
-                            <ComboBox SelectedIndex="4" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="9600" />
-                                <ComboBoxItem Content="19200" />
-                                <ComboBoxItem Content="38400" />
-                                <ComboBoxItem Content="57600" />
-                                <ComboBoxItem Content="115200" />
-                                <ComboBoxItem Content="230400" />
-                                <ComboBoxItem Content="460800" />
-                            </ComboBox>
-                        </StackPanel>
-                        
-                        <!-- Data Bits -->
-                        <StackPanel Grid.Column="1" Grid.Row="0" Spacing="4" Margin="4,0,0,4">
-                            <TextBlock Text="{Binding L[sidebar.dataBits]}" 
-                                       FontSize="11" 
-                                       Foreground="#87909B" />
-                            <ComboBox SelectedIndex="1" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="7" />
-                                <ComboBoxItem Content="8" />
-                            </ComboBox>
-                        </StackPanel>
-                        
-                        <!-- Parity -->
-                        <StackPanel Grid.Column="0" Grid.Row="1" Spacing="4" Margin="0,4,4,0">
-                            <TextBlock Text="{Binding L[sidebar.parity]}" 
-                                       FontSize="11" 
-                                       Foreground="#87909B" />
-                            <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="{Binding L[sidebar.parity.none]}" />
-                                <ComboBoxItem Content="{Binding L[sidebar.parity.odd]}" />
-                                <ComboBoxItem Content="{Binding L[sidebar.parity.even]}" />
-                            </ComboBox>
-                        </StackPanel>
-                        
-                        <!-- Stop Bits -->
-                        <StackPanel Grid.Column="1" Grid.Row="1" Spacing="4" Margin="4,4,0,0">
-                            <TextBlock Text="{Binding L[sidebar.stopBits]}" 
-                                       FontSize="11" 
-                                       Foreground="#87909B" />
-                            <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="1" />
-                                <ComboBoxItem Content="1.5" />
-                                <ComboBoxItem Content="2" />
-                            </ComboBox>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-                
-                <!-- Connect/Disconnect Buttons -->
-                <Grid ColumnDefinitions="*,*">
-                    <Button Grid.Column="0" 
-                            Content="{Binding L[menu.connect]}" 
-                            Classes="accent" 
-                            Click="OnConnectClick"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,4,0" />
-                    <Button Grid.Column="1" 
-                            Content="{Binding L[menu.disconnect]}" 
-                            Click="OnDisconnectClick"
-                            IsEnabled="{Binding IsConnected}"
-                            HorizontalAlignment="Stretch"
-                            Margin="4,0,0,0" />
-                </Grid>
-            </StackPanel>
             
             <!-- Separator -->
             <Separator Background="#25303A" Height="1" />
@@ -215,12 +108,12 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" FontSize="10" Foreground="#87909B" Margin="0,0,12,0">
-                                            <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[status.tx], Mode=OneWay}" />
+                                            <Run Text="{Binding $parent[Window].DataContext.L[status.tx], Mode=OneWay}" />
                                             <Run Text=" " />
                                             <Run Text="{Binding TxBytes}" FontWeight="SemiBold" Foreground="#4A9EFF" />
                                         </TextBlock>
                                         <TextBlock Grid.Column="1" FontSize="10" Foreground="#87909B">
-                                            <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[status.rx], Mode=OneWay}" />
+                                            <Run Text="{Binding $parent[Window].DataContext.L[status.rx], Mode=OneWay}" />
                                             <Run Text=" " />
                                             <Run Text="{Binding RxBytes}" FontWeight="SemiBold" Foreground="#4AFF9E" />
                                         </TextBlock>

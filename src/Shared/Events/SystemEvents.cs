@@ -11,6 +11,23 @@ public abstract record SystemEvent
 }
 
 /// <summary>
+/// Session create request (e.g. from plugin UI "Connect" action)
+/// </summary>
+public sealed record SessionCreateRequestEvent(
+    string PluginId,
+    string CapabilityId,
+    string? SessionId,
+    IDictionary<string, object>? Parameters
+) : SystemEvent;
+
+/// <summary>
+/// Session was successfully created/registered in the core
+/// </summary>
+public sealed record SessionCreatedEvent(
+    Session Session
+) : SystemEvent;
+
+/// <summary>
 /// Connection status changed event
 /// </summary>
 public sealed record ConnectionStatusChangedEvent(
@@ -35,7 +52,13 @@ public sealed record DeviceDisconnectedEvent(
     string Port,
     string? Reason
 ) : SystemEvent;
-
+/// <summary>
+/// Session was closed/terminated
+/// </summary>
+public sealed record SessionClosedEvent(
+    string SessionId,
+    string? Reason = null
+) : SystemEvent;
 /// <summary>
 /// Data received event
 /// </summary>

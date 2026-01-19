@@ -74,6 +74,7 @@ public sealed class DeviceService : IDisposable
             Name = name,
             Port = port,
             BaudRate = settings.BaudRate,
+            AdapterId = "serial",
             Status = SessionStatus.Connecting,
             Settings = settings
         };
@@ -99,6 +100,7 @@ public sealed class DeviceService : IDisposable
             session.StartTime = DateTime.UtcNow;
 
             _sessions[sessionId] = new SessionState(session, connection);
+            _eventBus.Publish(new SessionCreatedEvent(session));
             _eventBus.Publish(new DeviceConnectedEvent(sessionId, port));
 
             return session;
@@ -149,7 +151,9 @@ public sealed class DeviceService : IDisposable
             await _sharedMemoryReader.StopReadingAsync(sessionId);
             _sharedMemoryManager.ReleaseSegment(sessionId);
 
+            _eventBus.Publish(new ConnectionStatusChangedEvent(sessionId, state.Session.Status, SessionStatus.Disconnected));
             _eventBus.Publish(new DeviceDisconnectedEvent(sessionId, state.Session.Port, reason));
+            _eventBus.Publish(new SessionClosedEvent(sessionId, reason));
         }
     }
 

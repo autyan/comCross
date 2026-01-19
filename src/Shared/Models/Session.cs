@@ -34,6 +34,26 @@ public sealed class Session : INotifyPropertyChanged
     public required int BaudRate { get; init; }
     
     /// <summary>
+    /// Adapter ID used for this session (e.g., "serial", "plugin:com.example:tcp")
+    /// </summary>
+    public string AdapterId { get; set; } = "serial";
+    
+    /// <summary>
+    /// Plugin ID if this is a plugin-backed session
+    /// </summary>
+    public string? PluginId { get; set; }
+
+    /// <summary>
+    /// Capability ID if this is a plugin-backed session
+    /// </summary>
+    public string? CapabilityId { get; set; }
+
+    /// <summary>
+    /// Additional parameters used to create this session (JSON)
+    /// </summary>
+    public string? ParametersJson { get; set; }
+
+    /// <summary>
     /// Enable database storage for this session (overrides global default)
     /// Note: Historical data will not be converted. Switching may result in data loss.
     /// </summary>

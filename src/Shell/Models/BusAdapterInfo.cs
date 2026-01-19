@@ -57,4 +57,14 @@ public sealed class BusAdapterInfo
     /// Optional default parameters JSON for the capability.
     /// </summary>
     public string? DefaultParametersJson { get; init; }
+
+    /// <summary>
+    /// JSON schema for parameters.
+    /// </summary>
+    public string? JsonSchema { get; init; }
+
+    /// <summary>
+    /// UI schema for the configuration panel.
+    /// </summary>
+    public string? UiSchema { get; init; }
 }

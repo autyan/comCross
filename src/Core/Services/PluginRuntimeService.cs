@@ -100,7 +100,7 @@ public sealed class PluginRuntimeService
             try
             {
                 response = await runtime.Client?.SendAsync(
-                    new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Notify, notification),
+                    new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Notify, null, notification),
                     RequestTimeout)!;
             }
             catch (Exception ex)
@@ -147,7 +147,7 @@ public sealed class PluginRuntimeService
                 : (timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1));
 
             _ = await runtime.Client?.SendAsync(
-                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Shutdown),
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Shutdown, null),
                 requestTimeout)!;
         }
         catch (Exception ex)

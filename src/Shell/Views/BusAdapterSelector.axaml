@@ -1,13 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:ComCross.Shell.ViewModels"
-             xmlns:models="using:ComCross.Shell.Models"
+             xmlns:vm="clr-namespace:ComCross.Shell.ViewModels"
+             xmlns:models="clr-namespace:ComCross.Shell.Models"
              x:Class="ComCross.Shell.Views.BusAdapterSelector"
-             x:DataType="vm:BusAdapterSelectorViewModel">
+             x:CompileBindings="False">
 
   <StackPanel Spacing="12">
     <!-- Section Header -->
-    <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[sidebar.busAdapter]}" 
+    <TextBlock Text="{Binding $parent[Window].DataContext.L[sidebar.busAdapter]}" 
                FontSize="11" 
                FontWeight="Bold" 
                Foreground="#87909B"
@@ -26,7 +26,7 @@
             <TextBlock Text="{Binding Name}" 
                        FontSize="13" 
                        VerticalAlignment="Center" />
-            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[sidebar.busAdapter.comingSoon]}" 
+            <TextBlock Text="{Binding $parent[Window].DataContext.L[sidebar.busAdapter.comingSoon]}" 
                        FontSize="11" 
                        Foreground="#87909B"
                        VerticalAlignment="Center"
@@ -45,7 +45,6 @@
     
     <!-- Configuration Panel Placeholder -->
     <!-- The actual config panel will be loaded dynamically based on selected adapter -->
-    <!-- For now, we'll use the existing LeftSidebar's device selection UI -->
     <ContentControl Content="{Binding ConfigPanel}" />
   </StackPanel>
 </UserControl>

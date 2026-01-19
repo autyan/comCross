@@ -3,8 +3,12 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using ComCross.Shared.Models;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
+using ComCross.PluginSdk.UI;
+using ComCross.Shell.Plugins.UI;
+using ComCross.Shell.Views;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -15,12 +19,17 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 {
     private const string PluginAdapterPrefix = "plugin:";
     private BusAdapterInfo? _selectedAdapter;
-    private UserControl? _configPanel;
+    private Control? _configPanel; // Changed from UserControl to Control
+    private string? _activeSessionId;
     private readonly BusAdapterInfo _serialAdapter;
+    private readonly PluginUiRenderer _uiRenderer;
+    private readonly PluginUiStateManager _stateManager;
 
-    public BusAdapterSelectorViewModel(ILocalizationService localization)
+    public BusAdapterSelectorViewModel(ILocalizationService localization, PluginUiRenderer uiRenderer, PluginUiStateManager stateManager)
         : base(localization)
     {
+        _uiRenderer = uiRenderer;
+        _stateManager = stateManager;
         // Initialize available adapters
         _serialAdapter = new BusAdapterInfo
         {
@@ -29,7 +38,18 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             Icon = "🔌",
             Description = "Serial port communication (RS232/RS485/RS422)",
             IsEnabled = true,
-            ConfigPanelType = null // Will use device selector in LeftSidebar
+            PluginId = "system.serial",
+            CapabilityId = "serial",
+            UiSchema = "{\"fields\":[" +
+                "{\"key\":\"port\",\"labelKey\":\"sidebar.selectPort\",\"type\":\"select\",\"optionsStatePath\":\"system.serial.ports\"}," +
+                "{\"key\":\"baudRate\",\"labelKey\":\"sidebar.baudRate\",\"type\":\"select\",\"options\":[\"9600\",\"19200\",\"38400\",\"57600\",\"115200\",\"230400\",\"460800\"]}," +
+                "{\"key\":\"dataBits\",\"labelKey\":\"sidebar.dataBits\",\"type\":\"select\",\"options\":[\"7\",\"8\"]}," +
+                "{\"key\":\"parity\",\"labelKey\":\"sidebar.parity\",\"type\":\"select\",\"options\":[\"None\",\"Odd\",\"Even\"]}," +
+                "{\"key\":\"stopBits\",\"labelKey\":\"sidebar.stopBits\",\"type\":\"select\",\"options\":[\"1\",\"1.5\",\"2\"]}" +
+                "],\"actions\":[" +
+                "{\"id\":\"refresh\",\"labelKey\":\"sidebar.refreshPorts\",\"icon\":\"refresh\"}," +
+                "{\"id\":\"connect\",\"labelKey\":\"menu.connect\"}" +
+                "]}"
         };
 
         AvailableAdapters = new ObservableCollection<BusAdapterInfo>
@@ -102,7 +122,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                     ConfigPanelType = null,
                     PluginId = option.PluginId,
                     CapabilityId = option.CapabilityId,
-                    DefaultParametersJson = option.DefaultParametersJson
+                    DefaultParametersJson = option.DefaultParametersJson,
+                    JsonSchema = option.JsonSchema,
+                    UiSchema = option.UiSchema
                 });
             }
         }
@@ -119,6 +141,17 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         SelectedAdapter = _serialAdapter;
+    }
+
+    public void SelectAdapterById(string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        
+        var adapter = AvailableAdapters.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.Ordinal));
+        if (adapter != null)
+        {
+            SelectedAdapter = adapter;
+        }
     }
 
     /// <summary>
@@ -141,7 +174,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     /// <summary>
     /// Configuration panel for the selected adapter
     /// </summary>
-    public UserControl? ConfigPanel
+    public Control? ConfigPanel
     {
         get => _configPanel;
         private set
@@ -151,6 +184,28 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 _configPanel = value;
                 OnPropertyChanged();
             }
+        }
+    }
+
+    public void SetActiveSession(Session? session)
+    {
+        _activeSessionId = session?.Id;
+        
+        if (session != null && !string.IsNullOrEmpty(session.AdapterId))
+        {
+            // Restore adapter selection
+            SelectAdapterById(session.AdapterId);
+
+            // If it's a plugin adapter and we have parameters, sync them to StateManager
+            if (session.AdapterId.StartsWith(PluginAdapterPrefix, StringComparison.Ordinal) && !string.IsNullOrEmpty(session.ParametersJson))
+            {
+                _stateManager.UpdateSessionState(session.Id, session.ParametersJson);
+            }
+        }
+        else
+        {
+            // Reset to Serial if no active session
+            SelectAdapterById("serial");
         }
     }
 
@@ -164,7 +219,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             try
             {
                 // Create instance of the config panel
-                var panel = Activator.CreateInstance(_selectedAdapter.ConfigPanelType) as UserControl;
+                var panel = Activator.CreateInstance(_selectedAdapter.ConfigPanelType) as Control;
                 ConfigPanel = panel;
             }
             catch (Exception ex)
@@ -172,6 +227,31 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 Console.Error.WriteLine($"Failed to load config panel for {_selectedAdapter.Name}: {ex.Message}");
                 ConfigPanel = null;
             }
+        }
+        else if (_selectedAdapter?.PluginId != null)
+        {
+             // Plugin-backed adapter: Use PluginUiRenderer
+             var uiSchema = PluginUiSchema.TryParse(_selectedAdapter.UiSchema);
+             var fields = uiSchema?.Fields;
+             
+             // If no fields, we don't show a panel (or could fallback to JsonSchema, but keeping it simple for now)
+             if (fields != null && fields.Count > 0 && _selectedAdapter.CapabilityId != null)
+             {
+                 var schema = new PluginUiSchema { Fields = fields };
+                 var container = _uiRenderer.GetOrRender(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, schema, _activeSessionId, "sidebar-config");
+                 if (container is AvaloniaPluginUiContainer avaloniaContainer)
+                 {
+                     ConfigPanel = avaloniaContainer.GetPanel();
+                 }
+                 else
+                 {
+                     ConfigPanel = null;
+                 }
+             }
+             else
+             {
+                 ConfigPanel = null;
+             }
         }
         else
         {
