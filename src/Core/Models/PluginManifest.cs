@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ComCross.Core.Services;
 
 public sealed class PluginManifest
@@ -18,6 +20,23 @@ public sealed class PluginManifest
     /// The host will not overwrite existing keys and will emit notifications for duplicates.
     /// </summary>
     public Dictionary<string, Dictionary<string, string>>? I18n { get; set; }
+
+    /// <summary>
+    /// Optional plugin settings page contributions.
+    /// These pages are rendered by the host Settings UI.
+    /// </summary>
+    public List<PluginSettingsPageManifest>? SettingsPages { get; set; }
+}
+
+public sealed class PluginSettingsPageManifest
+{
+    public string Id { get; set; } = string.Empty;
+    public string TitleKey { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+
+    // Declarative UI schema (UiSchemaVersion1) and optional JSON schema.
+    public JsonElement? UiSchema { get; set; }
+    public JsonElement? JsonSchema { get; set; }
 }
 
 public sealed class PluginInfo

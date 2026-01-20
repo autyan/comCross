@@ -6,8 +6,36 @@
   "entryPoint": "ComCross.Plugins.Serial.SerialBusAdapterPlugin",
   "toolGroup": "adapters",
   "permissions": ["serial.read", "serial.write", "workspace.read"],
+  "settingsPages": [
+    {
+      "id": "serial-scan",
+      "titleKey": "serial.adapter.settings.scan.title",
+      "uiSchema": {
+        "uiSchemaVersion": 1,
+        "titleKey": "serial.adapter.settings.scan.title",
+        "fields": [
+          {
+            "key": "scanPatterns",
+            "control": "text",
+            "labelKey": "serial.adapter.settings.scan.patterns"
+          }
+        ],
+        "layout": {
+          "kind": "stack",
+          "orientation": "vertical",
+          "spacing": 12,
+          "children": [
+            { "kind": "field", "key": "scanPatterns", "labelWidth": 3, "totalWidth": 10 }
+          ]
+        }
+      }
+    }
+  ],
   "i18n": {
     "en-US": {
+      "serial.adapter.name": "Serial Adapter",
+      "serial.adapter.capability.serial.name": "Serial (RS232)",
+      "serial.adapter.capability.serial.description": "Serial port communication (RS232/RS485/RS422)",
       "serial.adapter.connect.title": "Connect (Serial)",
       "serial.adapter.connect.port": "Port",
       "serial.adapter.connect.baudRate": "Baud Rate",
@@ -15,11 +43,16 @@
       "serial.adapter.connect.parity": "Parity",
       "serial.adapter.connect.stopBits": "Stop Bits",
       "serial.adapter.connect.flowControl": "Flow Control",
-      "serial.adapter.connect.encoding": "Encoding",
+      
       "serial.adapter.connect.sessionName": "Session Name",
       "serial.adapter.connect.action.connect": "Connect"
+      ,"serial.adapter.settings.scan.title": "Serial Scan"
+      ,"serial.adapter.settings.scan.patterns": "Scan Patterns (comma-separated)"
     },
     "zh-CN": {
+      "serial.adapter.name": "串口适配器",
+      "serial.adapter.capability.serial.name": "串口（RS232）",
+      "serial.adapter.capability.serial.description": "串口通信（RS232/RS485/RS422）",
       "serial.adapter.connect.title": "连接（串口）",
       "serial.adapter.connect.port": "端口",
       "serial.adapter.connect.baudRate": "波特率",
@@ -27,9 +60,11 @@
       "serial.adapter.connect.parity": "校验",
       "serial.adapter.connect.stopBits": "停止位",
       "serial.adapter.connect.flowControl": "流控",
-      "serial.adapter.connect.encoding": "编码",
+      
       "serial.adapter.connect.sessionName": "会话名称",
       "serial.adapter.connect.action.connect": "连接"
+      ,"serial.adapter.settings.scan.title": "串口扫描"
+      ,"serial.adapter.settings.scan.patterns": "扫描路径（逗号分隔）"
     }
   }
 }

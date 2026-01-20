@@ -19,7 +19,7 @@ namespace ComCross.Core.Services;
 /// </summary>
 public interface ICapabilityDispatcher
 {
-    Task DispatchAsync(string pluginId, string? sessionId, string actionName, object? parameters);
+    Task DispatchAsync(string? pluginId, string? sessionId, string actionName, object? parameters);
 }
 
 /// <summary>
@@ -51,167 +51,88 @@ public class CapabilityDispatcher : ICapabilityDispatcher
         _logger = logger;
     }
 
-    public async Task DispatchAsync(string pluginId, string? sessionId, string actionName, object? parameters)
+    public async Task DispatchAsync(string? pluginId, string? sessionId, string actionName, object? parameters)
     {
-        _logger.LogInformation("Dispatching action {Action} for {PluginId}", actionName, pluginId);
+        _logger.LogInformation("Dispatching action {Action} for Plugin:{PluginId} Session:{SessionId}", 
+            actionName, pluginId ?? "(none)", sessionId ?? "(none)");
 
-        // 1. 处理内置能力 (System)
-        if (pluginId.StartsWith("system.", StringComparison.Ordinal))
+        // 1. Resolve pluginId if not provided but we have a session
+        var resolvedPluginId = pluginId;
+        if (string.IsNullOrEmpty(resolvedPluginId) && !string.IsNullOrEmpty(sessionId))
         {
-            await HandleSystemActionAsync(pluginId, sessionId, actionName, parameters);
-            return;
+            var session = _deviceService.GetSession(sessionId);
+            resolvedPluginId = session?.PluginId;
+            _logger.LogDebug("Resolved PluginId {PluginId} from SessionId {SessionId}", resolvedPluginId, sessionId);
         }
 
-        // 2. 处理插件能力
-        await HandlePluginActionAsync(pluginId, sessionId, actionName, parameters);
+        if (string.IsNullOrEmpty(resolvedPluginId))
+        {
+            _logger.LogError("Action {Action} failed: No PluginId or SessionId could be resolved.", actionName);
+            throw new ArgumentException($"Action '{actionName}' requires either pluginId or sessionId.");
+        }
+
+        // 2. Handle Action by routing to appropriate capability provider (Built-in or External)
+        await HandleActionInternalAsync(resolvedPluginId, sessionId, actionName, parameters);
     }
 
-    private async Task HandleSystemActionAsync(string pluginId, string? sessionId, string actionName, object? parameters)
-    {
-        if (string.Equals(pluginId, "system.serial", StringComparison.Ordinal))
-        {
-            await HandleSerialActionAsync(sessionId, actionName, parameters);
-        }
-        else
-        {
-            throw new NotSupportedException($"System capability '{pluginId}' is not implemented.");
-        }
-    }
-
-    private async Task HandleSerialActionAsync(string? sessionId, string actionName, object? parameters)
-    {
-        if (string.Equals(actionName, "refresh", StringComparison.Ordinal))
-        {
-            var devices = await _deviceService.ListDevicesAsync();
-            var ports = devices.Select(d => d.Port).ToList();
-            _stateManager.UpdateState(sessionId, "system.serial.ports", ports);
-        }
-        else if (string.Equals(actionName, "connect", StringComparison.Ordinal))
-        {
-            // 解析 UI 参数
-            var uiParams = ExtractParameters(parameters);
-            if (uiParams == null || !uiParams.TryGetValue("port", out var portObj) || portObj == null)
-            {
-                throw new ArgumentException("Serial port is required.");
-            }
-
-            var port = portObj.ToString()!;
-            var settings = new SerialSettings();
-            
-            if (uiParams.TryGetValue("baudRate", out var br) && int.TryParse(br?.ToString(), out var b)) settings.BaudRate = b;
-            if (uiParams.TryGetValue("dataBits", out var db) && int.TryParse(db?.ToString(), out var d)) settings.DataBits = d;
-            
-            // 执行连接 (Core 层逻辑)
-            var targetSessionId = sessionId ?? $"session-{Guid.NewGuid():N}";
-            await _deviceService.ConnectAsync(targetSessionId, port, port, settings);
-        }
-        else if (string.Equals(actionName, "disconnect", StringComparison.Ordinal))
-        {
-            if (string.IsNullOrEmpty(sessionId)) return;
-            await _deviceService.DisconnectAsync(sessionId);
-        }
-    }
-
-    private async Task HandlePluginActionAsync(string pluginId, string? sessionId, string actionName, object? parameters)
+    private async Task HandleActionInternalAsync(string pluginId, string? sessionId, string actionName, object? parameters)
     {
         var runtime = _pluginManager.GetRuntime(pluginId);
         if (runtime == null || runtime.Client == null)
         {
-            throw new InvalidOperationException($"Plugin '{pluginId}' is not running or available.");
+            _logger.LogError("Capability Provider for '{PluginId}' is not available.", pluginId);
+            throw new InvalidOperationException($"Capability provider '{pluginId}' is not running or available.");
         }
 
-        // 修正会话连接逻辑
-        var targetSessionId = sessionId;
-        if (string.Equals(actionName, "connect", StringComparison.Ordinal) && string.IsNullOrEmpty(targetSessionId))
+        // 1. Lifecycle Actions (Standardized in PluginHostMessageTypes)
+        // These are actions that require Core-side orchestration (Session management, Shared Memory, etc.)
+        if (string.Equals(actionName, PluginHostMessageTypes.Connect, StringComparison.Ordinal))
         {
-            targetSessionId = $"session-{Guid.NewGuid():N}";
+            var targetSessionId = sessionId ?? $"session-{Guid.NewGuid():N}";
+            var uiParams = ExtractParameters(parameters) ?? new Dictionary<string, object>();
+            
+            // Extract capabilityId from parameters or default to pluginId
+            string capabilityId = pluginId; 
+            if (uiParams.TryGetValue("capabilityId", out var capIdObj)) capabilityId = capIdObj.ToString()!;
+
+            // Convert back to JsonElement for DeviceService
+            var parametersJson = JsonSerializer.Serialize(uiParams);
+            var parametersElement = JsonSerializer.Deserialize<JsonElement>(parametersJson);
+
+            // Connect via DeviceService which handles SHM and Plugin Host 'Connect' command
+            await _deviceService.ConnectAsync(pluginId, capabilityId, targetSessionId, capabilityId, parametersElement);
+            return;
         }
 
-        var payload = parameters == null ? null : (JsonElement?)JsonSerializer.SerializeToElement(parameters);
-
-        // 如果是 connect，重新包装载荷
-        if (string.Equals(actionName, "connect", StringComparison.Ordinal) && payload != null)
+        if (string.Equals(actionName, PluginHostMessageTypes.Disconnect, StringComparison.Ordinal))
         {
-             var json = payload.Value.GetRawText();
-             using var doc = JsonDocument.Parse(json);
-             var root = doc.RootElement;
-             
-             string capabilityId = "";
-             JsonElement uiParams;
-
-             if (root.TryGetProperty("CapabilityId", out var capIdProp))
-             {
-                 capabilityId = capIdProp.GetString() ?? "";
-                 uiParams = root.GetProperty("Parameters").Clone();
-             }
-             else 
-             {
-                 capabilityId = pluginId; 
-                 uiParams = root.Clone();
-             }
-             
-             var finalPayload = new 
-             {
-                 CapabilityId = capabilityId,
-                 SessionId = targetSessionId,
-                 Parameters = uiParams
-             };
-             payload = JsonSerializer.SerializeToElement(finalPayload);
+            if (string.IsNullOrEmpty(sessionId)) 
+            {
+                _logger.LogWarning("Disconnect action requested without sessionId.");
+                return;
+            }
+            await _deviceService.DisconnectAsync(sessionId);
+            return;
         }
 
+        // 2. Passthrough Actions (Non-standard or Plugin-specific)
+        // These are forwarded directly to the plugin host for processing.
+        _logger.LogDebug("Forwarding custom action '{Action}' to plugin '{PluginId}'", actionName, pluginId);
+        
+        var payloadElement = parameters == null ? null : (JsonElement?)JsonSerializer.SerializeToElement(parameters);
         var request = new PluginHostRequest(
             Guid.NewGuid().ToString("N"),
             actionName,
-            targetSessionId,
+            sessionId,
             null,
-            payload
+            payloadElement
         );
 
         var response = await runtime.Client.SendAsync(request, TimeSpan.FromSeconds(10));
         if (response != null && !response.Ok)
         {
-            throw new Exception($"Plugin action failed: {response.Error}");
-        }
-
-        // 处理 Disconnect
-        if (string.Equals(actionName, "disconnect", StringComparison.Ordinal))
-        {
-             if (!string.IsNullOrEmpty(targetSessionId))
-             {
-                 _eventBus.Publish(new SessionClosedEvent(targetSessionId));
-             }
-             return;
-        }
-
-        // 3. 特殊处理新 Session 的生成 (等待注册并发布事件)
-        if (string.Equals(actionName, "connect", StringComparison.Ordinal))
-        {
-            // 通过获取到的 payload 确认 capabilityId
-             var json = payload.Value.GetRawText();
-             using var doc = JsonDocument.Parse(json);
-             var capabilityId = doc.RootElement.GetProperty("CapabilityId").GetString()!;
-
-            // 等待 Session 注册最长 5 秒
-            // 注意：这里需要 runtime 支持 WaitForSessionRegisteredAsync
-            // 如果不存在，我们可能需要在这里轮询或让 ProtocolService 负责通知
-            
-            // 查找能力信息以获取 UI 名称
-            var cap = runtime.Capabilities?.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-            
-            var session = new Session
-            {
-                Id = targetSessionId!,
-                Name = cap?.Name ?? $"{pluginId}/{capabilityId}",
-                Port = "plugin",
-                BaudRate = 0,
-                AdapterId = $"plugin:{pluginId}:{capabilityId}",
-                PluginId = pluginId,
-                CapabilityId = capabilityId,
-                Status = SessionStatus.Connected,
-                ParametersJson = payload.Value.GetProperty("Parameters").GetRawText()
-            };
-
-            _eventBus.Publish(new SessionCreatedEvent(session));
+            _logger.LogError("Plugin action '{Action}' failed: {Error}", actionName, response.Error);
+            throw new Exception($"Action '{actionName}' failed: {response.Error}");
         }
     }
 

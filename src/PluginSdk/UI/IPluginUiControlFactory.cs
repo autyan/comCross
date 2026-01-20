@@ -9,7 +9,7 @@ public interface IPluginUiControlFactory
     /// <summary>
     /// 根据字段定义创建对应的控件
     /// </summary>
-    IPluginUiControl CreateControl(PluginUiField field);
+    IPluginUiControl CreateControl(PluginUiField field, bool wrapLabel = true);
 
     /// <summary>
     /// 根据定义的动作创建一个 UI 控件 (通常是按钮)

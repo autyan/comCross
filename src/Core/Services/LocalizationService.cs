@@ -13,6 +13,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
 {
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _translations = new();
     private readonly ConcurrentDictionary<string, byte> _missingKeyLogged = new();
+    private readonly ConcurrentDictionary<string, string> _keyOwners = new(StringComparer.Ordinal);
     private readonly LocalizationStrings _strings;
     private string _currentCulture = "en-US";
     private readonly bool _debugI18n;
@@ -22,6 +23,8 @@ public sealed class LocalizationService : IExtensibleLocalizationService
     public IReadOnlyList<LocaleCultureInfo> AvailableCultures { get; }
     
     public ILocalizationStrings Strings => _strings;
+
+    public event EventHandler<string>? LanguageChanged;
 
     public LocalizationService()
     {
@@ -96,6 +99,16 @@ public sealed class LocalizationService : IExtensibleLocalizationService
                     continue;
                 }
 
+                var ownerKey = $"{cultureCode}:{key}";
+
+                // Idempotency: if this exact (culture,key) is already owned by the same source,
+                // treat it as a no-op (do not report as duplicate).
+                if (_keyOwners.TryGetValue(ownerKey, out var existingOwner)
+                    && string.Equals(existingOwner, source, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (cultureDict.ContainsKey(key))
                 {
                     duplicates.Add($"{cultureCode}:{key}");
@@ -103,6 +116,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
                 }
 
                 cultureDict[key] = kvp.Value ?? string.Empty;
+                _keyOwners.TryAdd(ownerKey, source);
             }
         }
 
@@ -134,6 +148,8 @@ public sealed class LocalizationService : IExtensibleLocalizationService
 
         LoadCulture(cultureCode);
         _strings.RefreshAll(); // Notify XAML bindings to refresh
+
+        LanguageChanged?.Invoke(this, cultureCode);
     }
 
     public string GetString(string key, params object[] args)
@@ -283,7 +299,10 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["menu.export"] = "Export",
 
             // MessageBox
+            ["messagebox.ok"] = "OK",
             ["messagebox.cancel"] = "Cancel",
+            ["messagebox.yes"] = "Yes",
+            ["messagebox.no"] = "No",
             
             // Connect Dialog
             ["dialog.connect.title"] = "Connect to Device",
@@ -458,6 +477,10 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.section.display"] = "Display",
             ["settings.section.export"] = "Export",
             ["settings.section.plugins"] = "Plugins",
+            ["settings.section.pluginSettings"] = "Plugin Settings",
+            ["settings.pluginSettings.page"] = "Page",
+            ["settings.nav.system"] = "System",
+            ["settings.nav.system.page"] = "System Settings",
             ["settings.language"] = "Language",
             ["settings.followSystemLanguage"] = "Follow system language",
             ["settings.logs.autosave"] = "Auto save logs",
@@ -509,10 +532,6 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.connection.behavior.createNew"] = "Create new session",
             ["settings.connection.behavior.switchToExisting"] = "Switch to existing session",
             ["settings.connection.behavior.promptUser"] = "Ask every time",
-            ["settings.connection.linuxScan"] = "Linux serial scan",
-            ["settings.connection.linuxScan.tip"] = "Tip: Use glob patterns like /dev/ttyUSB*",
-            ["settings.connection.linuxScan.scanPatterns"] = "Scan patterns",
-            ["settings.connection.linuxScan.excludePatterns"] = "Exclude patterns",
             ["settings.display.maxMessages"] = "Max in-memory messages",
             ["settings.display.autoScroll"] = "Auto scroll",
             ["tool.send.clearAfterSend"] = "Clear after send",

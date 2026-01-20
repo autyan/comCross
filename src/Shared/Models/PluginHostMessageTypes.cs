@@ -13,5 +13,8 @@ public static class PluginHostMessageTypes
     public const string ApplySharedMemorySegment = "apply-shared-memory-segment";
     public const string SetBackpressure = "set-backpressure";
 
+    // Optional UX signals
+    public const string LanguageChanged = "language-changed";
+
     public const string Shutdown = "shutdown";
 }

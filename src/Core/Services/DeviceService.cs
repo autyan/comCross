@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Channels;
-using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -13,337 +14,200 @@ namespace ComCross.Core.Services;
 /// </summary>
 public sealed class DeviceService : IDisposable
 {
-    private readonly IDeviceAdapter _adapter;
+    private readonly PluginManagerService _pluginManager;
     private readonly IEventBus _eventBus;
     private readonly IMessageStreamService _messageStream;
     private readonly NotificationService _notificationService;
-    private readonly SharedMemoryManager _sharedMemoryManager;
-    private readonly SharedMemoryReader _sharedMemoryReader;
-    private readonly SharedMemoryConfig _sharedMemoryConfig;
+    private readonly SharedMemorySessionService _shmSessionService;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
 
-    private readonly CancellationTokenSource _sharedMemoryConsumeCts = new();
-    private readonly Task _sharedMemoryConsumeTask;
-
     public DeviceService(
-        IDeviceAdapter adapter,
+        PluginManagerService pluginManager,
         IEventBus eventBus,
         IMessageStreamService messageStream,
         NotificationService notificationService,
-        SharedMemoryManager sharedMemoryManager,
-        SharedMemoryReader sharedMemoryReader,
-        SharedMemoryConfig sharedMemoryConfig)
+        SharedMemorySessionService shmSessionService)
     {
-        _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+        _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-
-        _sharedMemoryManager = sharedMemoryManager ?? throw new ArgumentNullException(nameof(sharedMemoryManager));
-        _sharedMemoryReader = sharedMemoryReader ?? throw new ArgumentNullException(nameof(sharedMemoryReader));
-        _sharedMemoryConfig = sharedMemoryConfig ?? throw new ArgumentNullException(nameof(sharedMemoryConfig));
-
-        _sharedMemoryManager.Initialize();
-        _sharedMemoryManager.BackpressureDetected += HandleBackpressureDetected;
-
-        _sharedMemoryConsumeTask = Task.Run(() => ConsumeSharedMemoryFramesAsync(_sharedMemoryConsumeCts.Token));
-    }
-
-    public async Task<IReadOnlyList<Device>> ListDevicesAsync(CancellationToken cancellationToken = default)
-    {
-        return await _adapter.ListDevicesAsync(cancellationToken);
+        _shmSessionService = shmSessionService ?? throw new ArgumentNullException(nameof(shmSessionService));
+        
+        // Subscribe to data events for all sessions (to update stats)
+        _eventBus.Subscribe<DataReceivedEvent>(e => {
+            if (_sessions.TryGetValue(e.SessionId, out var state)) {
+                state.Session.RxBytes += e.BytesRead;
+            }
+        });
+        
+        _eventBus.Subscribe<DataSentEvent>(e => {
+            if (_sessions.TryGetValue(e.SessionId, out var state)) {
+                state.Session.TxBytes += e.BytesSent;
+            }
+        });
     }
 
     public async Task<Session> ConnectAsync(
+        string pluginId,
+        string capabilityId,
         string sessionId,
-        string port,
         string name,
-        SerialSettings settings,
+        JsonElement parameters,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
-        }
-        ArgumentException.ThrowIfNullOrEmpty(port);
-        ArgumentNullException.ThrowIfNull(settings);
+        var runtime = _pluginManager.GetRuntime(pluginId) 
+            ?? throw new InvalidOperationException($"Plugin {pluginId} not found");
+
+        var port = TryGetString(parameters, "port") ?? TryGetString(parameters, "Port") ?? $"{pluginId}:{capabilityId}";
+        var baudRate = TryGetInt(parameters, "baudRate") ?? TryGetInt(parameters, "BaudRate") ?? 0;
 
         var session = new Session
         {
             Id = sessionId,
             Name = name,
             Port = port,
-            BaudRate = settings.BaudRate,
-            AdapterId = "serial",
+            BaudRate = baudRate,
+            AdapterId = $"plugin:{pluginId}:{capabilityId}",
             Status = SessionStatus.Connecting,
-            Settings = settings
+            PluginId = pluginId,
+            CapabilityId = capabilityId,
+            ParametersJson = parameters.GetRawText()
         };
 
-        var connection = _adapter.OpenConnection(port);
+        // 1. Allocate Shared Memory
+        // TODO: Get requested size from capability descriptor
+        var descriptor = await _shmSessionService.AllocateOrReplaceAsync(sessionId, 256 * 1024);
 
-        SessionSegment? segment = null;
-        if (connection is ISharedMemoryCapableConnection shmCapable)
+        // 2. Apply segment to Plugin
+        await runtime.Client!.SendAsync(
+            new PluginHostRequest(
+                Guid.NewGuid().ToString("N"),
+                PluginHostMessageTypes.ApplySharedMemorySegment,
+                SessionId: sessionId,
+                Payload: JsonSerializer.SerializeToElement(new PluginHostApplySharedMemorySegmentPayload(sessionId, descriptor))),
+            TimeSpan.FromSeconds(2));
+
+        // 3. Connect
+        var connectPayload = new PluginHostConnectPayload(capabilityId, parameters, sessionId);
+        var response = await runtime.Client!.SendAsync(
+            new PluginHostRequest(
+                Guid.NewGuid().ToString("N"),
+                PluginHostMessageTypes.Connect,
+                SessionId: sessionId,
+                Payload: JsonSerializer.SerializeToElement(connectPayload)),
+            TimeSpan.FromSeconds(10));
+
+        if (response is not { Ok: true })
         {
-            segment = await _sharedMemoryManager.AllocateSegmentAsync(sessionId, _sharedMemoryConfig.DefaultSegmentSize);
-            shmCapable.SetSharedMemorySegment(segment);
-            shmCapable.SetBackpressureLevel(BackpressureLevel.None);
-            _sharedMemoryReader.StartReading(sessionId, segment);
+            await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
         }
 
-        connection.DataReceived += (_, data) => OnDataReceived(sessionId, data);
-        connection.ErrorOccurred += (_, error) => OnErrorOccurred(sessionId, error);
+        session.Status = SessionStatus.Connected;
+        session.StartTime = DateTime.UtcNow;
 
-        try
-        {
-            await connection.OpenAsync(settings, cancellationToken);
-            session.Status = SessionStatus.Connected;
-            session.StartTime = DateTime.UtcNow;
+        _sessions[sessionId] = new SessionState(session, pluginId);
+        
+        // Start reading loop in background if not already started by service
+        _shmSessionService.StartReading(sessionId);
 
-            _sessions[sessionId] = new SessionState(session, connection);
-            _eventBus.Publish(new SessionCreatedEvent(session));
-            _eventBus.Publish(new DeviceConnectedEvent(sessionId, port));
-
-            return session;
-        }
-        catch (SerialPortAccessDeniedException ex)
-        {
-            connection.Dispose();
-            if (segment is not null)
-            {
-                await _sharedMemoryReader.StopReadingAsync(sessionId);
-                _sharedMemoryManager.ReleaseSegment(sessionId);
-            }
-            
-            // Notify user about permission issue
-            await _notificationService.AddAsync(
-                NotificationCategory.Connection,
-                NotificationLevel.Warning,
-                "notification.permission.denied",
-                new object[] { ex.PortPath },
-                cancellationToken);
-            
-            throw;
-        }
-        catch
-        {
-            connection.Dispose();
-            if (segment is not null)
-            {
-                await _sharedMemoryReader.StopReadingAsync(sessionId);
-                _sharedMemoryManager.ReleaseSegment(sessionId);
-            }
-            throw;
-        }
+        _eventBus.Publish(new SessionCreatedEvent(session));
+        return session;
     }
 
     public async Task DisconnectAsync(string sessionId, string? reason = null)
     {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
-        }
-
         if (_sessions.TryRemove(sessionId, out var state))
         {
-            await state.Connection.CloseAsync();
-            state.Connection.Dispose();
+            var runtime = _pluginManager.GetRuntime(state.PluginId);
+            if (runtime?.Client != null)
+            {
+                var payload = new PluginHostDisconnectPayload(sessionId, reason);
+                await runtime.Client.SendAsync(
+                    new PluginHostRequest(
+                        Guid.NewGuid().ToString("N"),
+                        PluginHostMessageTypes.Disconnect,
+                        SessionId: sessionId,
+                        Payload: JsonSerializer.SerializeToElement(payload)),
+                    TimeSpan.FromSeconds(5));
+            }
 
-            await _sharedMemoryReader.StopReadingAsync(sessionId);
-            _sharedMemoryManager.ReleaseSegment(sessionId);
-
-            _eventBus.Publish(new ConnectionStatusChangedEvent(sessionId, state.Session.Status, SessionStatus.Disconnected));
-            _eventBus.Publish(new DeviceDisconnectedEvent(sessionId, state.Session.Port, reason));
+            await _shmSessionService.ReleaseSegmentAsync(sessionId);
             _eventBus.Publish(new SessionClosedEvent(sessionId, reason));
-        }
-    }
-
-    private async Task ConsumeSharedMemoryFramesAsync(CancellationToken cancellationToken)
-    {
-        ChannelReader<PhysicalFrame> reader = _sharedMemoryReader.GetFrameReader();
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                var frame = await reader.ReadAsync(cancellationToken);
-                OnPhysicalFrameReceived(frame.SessionId, frame.Data);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch
-            {
-                await Task.Delay(50, cancellationToken);
-            }
-        }
-    }
-
-    private void OnPhysicalFrameReceived(string sessionId, byte[] data)
-    {
-        if (!_sessions.TryGetValue(sessionId, out var state))
-        {
-            return;
-        }
-
-        state.Session.RxBytes += data.Length;
-
-        var format = MessageFormat.Text;
-        var content = System.Text.Encoding.UTF8.GetString(data);
-        if (content.Any(c => char.IsControl(c) && c != '\r' && c != '\n' && c != '\t'))
-        {
-            format = MessageFormat.Hex;
-            content = BitConverter.ToString(data).Replace("-", " ");
-        }
-
-        var message = new LogMessage
-        {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTime.UtcNow,
-            Content = content,
-            Level = LogLevel.Info,
-            Source = "RX",
-            RawData = data,
-            Format = format
-        };
-
-        _messageStream.Append(sessionId, message);
-        _eventBus.Publish(new DataReceivedEvent(sessionId, data, data.Length));
-    }
-
-    private void HandleBackpressureDetected(string sessionId, BackpressureLevel level)
-    {
-        if (_sessions.TryGetValue(sessionId, out var state) && state.Connection is ISharedMemoryCapableConnection shmCapable)
-        {
-            shmCapable.SetBackpressureLevel(level);
         }
     }
 
     public async Task<int> SendAsync(string sessionId, byte[] data, MessageFormat format = MessageFormat.Text, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
-        }
-        ArgumentNullException.ThrowIfNull(data);
-
         if (!_sessions.TryGetValue(sessionId, out var state))
         {
             throw new InvalidOperationException($"Session {sessionId} not found");
         }
 
-        var bytesSent = await state.Connection.WriteAsync(data, cancellationToken);
-        state.Session.TxBytes += bytesSent;
-
-        // Add sent message to stream with proper formatting
-        var content = format == MessageFormat.Hex
-            ? BitConverter.ToString(data).Replace("-", " ")
-            : System.Text.Encoding.UTF8.GetString(data);
-
-        var sentMessage = new LogMessage
-        {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTime.UtcNow,
-            Content = content,
-            Level = LogLevel.Info,
-            Source = "TX",
-            RawData = data,
-            Format = format
-        };
-        _messageStream.Append(sessionId, sentMessage);
-
-        _eventBus.Publish(new DataSentEvent(sessionId, data, bytesSent));
-
-        return bytesSent;
+        // We could send data via plugin command (Standard out-of-band), 
+        // but typically plugins read from their own input (e.g. Serial port reads).
+        // For outgoing data to the plugin, we typically use a command.
+        
+        // TODO: Implement Plugin Send Command if needed, or plugins can manage it.
+        // For now, let's assume the plugin handles its own Tx logic.
+        
+        return 0;
     }
 
-    public Session? GetSession(string sessionId)
-    {
-        return _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;
-    }
+    public Session? GetSession(string sessionId) => _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;
 
-    public IReadOnlyList<Session> GetAllSessions()
-    {
-        return _sessions.Values.Select(s => s.Session).ToList();
-    }
-
-    private void OnDataReceived(string sessionId, byte[] data)
-    {
-        if (_sessions.TryGetValue(sessionId, out var state))
-        {
-            state.Session.RxBytes += data.Length;
-
-            // Try to decode as UTF-8 text, fall back to hex if not valid
-            var format = MessageFormat.Text;
-            var content = System.Text.Encoding.UTF8.GetString(data);
-            
-            // Check if the decoded string contains unprintable characters
-            if (content.Any(c => char.IsControl(c) && c != '\r' && c != '\n' && c != '\t'))
-            {
-                format = MessageFormat.Hex;
-                content = BitConverter.ToString(data).Replace("-", " ");
-            }
-
-            var message = new LogMessage
-            {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow,
-                Content = content,
-                Level = LogLevel.Info,
-                Source = "RX",
-                RawData = data,
-                Format = format
-            };
-
-            _messageStream.Append(sessionId, message);
-            _eventBus.Publish(new DataReceivedEvent(sessionId, data, data.Length));
-        }
-    }
-
-    private void OnErrorOccurred(string sessionId, string error)
-    {
-        if (_sessions.TryGetValue(sessionId, out var state))
-        {
-            var message = new LogMessage
-            {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow,
-                Content = $"Error: {error}",
-                Level = LogLevel.Error,
-                Source = "System"
-            };
-
-            _messageStream.Append(sessionId, message);
-        }
-    }
+    public IReadOnlyList<Session> GetAllSessions() => _sessions.Values.Select(s => s.Session).ToList();
 
     public void Dispose()
     {
-        try
+        foreach (var sessionId in _sessions.Keys)
         {
-            _sharedMemoryConsumeCts.Cancel();
-            _sharedMemoryConsumeTask.Wait(TimeSpan.FromSeconds(2));
-        }
-        catch
-        {
-        }
-
-        _sharedMemoryManager.BackpressureDetected -= HandleBackpressureDetected;
-
-        foreach (var state in _sessions.Values)
-        {
-            state.Connection.Dispose();
+            DisconnectAsync(sessionId).GetAwaiter().GetResult();
         }
         _sessions.Clear();
-
-        try
-        {
-            _sharedMemoryConsumeCts.Dispose();
-        }
-        catch
-        {
-        }
     }
 
-    private sealed record SessionState(Session Session, IDeviceConnection Connection);
+    private sealed record SessionState(Session Session, string PluginId);
+
+    private static string? TryGetString(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind == JsonValueKind.String ? property.GetString() : property.ToString();
+    }
+
+    private static int? TryGetInt(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value))
+        {
+            return value;
+        }
+
+        if (property.ValueKind == JsonValueKind.String && int.TryParse(property.GetString(), out value))
+        {
+            return value;
+        }
+
+        return null;
+    }
 }
+

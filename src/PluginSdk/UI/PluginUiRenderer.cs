@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace ComCross.PluginSdk.UI;
 
@@ -37,7 +39,7 @@ public class PluginUiRenderer
         return _containerCache.GetOrAdd(cacheKey, _ => 
         {
             var container = CreateNewContainer();
-            RenderToContainer(container, pluginId, capabilityId, schema, sessionId);
+            RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewId);
             return container;
         });
     }
@@ -51,40 +53,74 @@ public class PluginUiRenderer
         _containerCache.TryRemove(cacheKey, out _);
     }
 
-    private void RenderToContainer(IPluginUiContainer container, string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId)
+    protected virtual void RenderToContainer(IPluginUiContainer container, string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId, string? viewId)
     {
         container.Clear();
-        
-        // 渲染字段
+
+        var controls = BuildControls(pluginId, capabilityId, schema, sessionId, viewId);
+
         foreach (var field in schema.Fields)
         {
-            var control = _factory.CreateControl(field);
-            
-            // 绑定状态更新逻辑 (Value)
+            if (controls.TryGetValue(field.Key, out var control))
+            {
+                container.AddControl(field.Key, control);
+            }
+        }
+
+        if (schema.Actions != null && schema.Actions.Count > 0)
+        {
+            foreach (var action in schema.Actions)
+            {
+                if (controls.TryGetValue(action.Id, out var actionControl))
+                {
+                    container.AddControl(action.Id, actionControl);
+                }
+            }
+        }
+    }
+
+    protected IDictionary<string, IPluginUiControl> BuildControls(string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId, string? viewId)
+    {
+        var controls = new Dictionary<string, IPluginUiControl>(StringComparer.Ordinal);
+
+        var wrapLabel = schema.Layout is null;
+
+        // Fields
+        foreach (var field in schema.Fields)
+        {
+            var control = _factory.CreateControl(field, wrapLabel);
+
+            // Value binding
             _stateManager.RegisterControl(sessionId, field.Key, control);
-            
-            // 绑定选项更新逻辑 (Options)
+
+            // Sync UI -> state (capture user edits)
+            control.ValueChanged += (_, v) =>
+            {
+                _stateManager.UpdateStateFromControl(pluginId, capabilityId, viewId, sessionId, field.Key, v, control);
+            };
+
+            // Options binding
             if (!string.IsNullOrEmpty(field.OptionsStatePath))
             {
                 _stateManager.RegisterControl(sessionId, field.OptionsStatePath, control);
             }
-            
-            // 初始化控件值 (从 StateManager 获取当前缓存值)
+
+            // init from current state cache
             var currentState = _stateManager.GetState(sessionId);
             if (currentState.TryGetValue(field.Key, out var value))
             {
                 control.UpdateFromState(value);
             }
 
-            container.AddControl(field.Key, control);
+            controls[field.Key] = control;
         }
 
-        // 渲染动作按钮
+        // Actions
         if (schema.Actions != null && schema.Actions.Count > 0)
         {
             foreach (var action in schema.Actions)
             {
-                var actionControl = _factory.CreateActionControl(action, async () => 
+                var actionControl = _factory.CreateActionControl(action, async () =>
                 {
                     if (string.Equals(action.Id, "connect", StringComparison.Ordinal))
                     {
@@ -99,16 +135,15 @@ public class PluginUiRenderer
                     }
                     else
                     {
-                         await _actionExecutor.ExecuteActionAsync(pluginId, sessionId, action.Id);
+                        await _actionExecutor.ExecuteActionAsync(pluginId, sessionId, action.Id);
                     }
                 });
 
-                if (actionControl != null)
-                {
-                    container.AddControl(action.Id, actionControl);
-                }
+                controls[action.Id] = actionControl;
             }
         }
+
+        return controls;
     }
 
     /// <summary>

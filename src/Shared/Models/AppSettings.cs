@@ -56,7 +56,6 @@ public sealed class ConnectionSettings
     public bool DefaultAddCr { get; set; } = true;
     public bool DefaultAddLf { get; set; } = true;
     public ConnectionBehavior ExistingSessionBehavior { get; set; } = ConnectionBehavior.PromptUser;
-    public LinuxSerialScanSettings LinuxSerialScan { get; set; } = new();
 }
 
 public enum ConnectionBehavior
@@ -114,30 +113,4 @@ public sealed class CommandSettings
 public sealed class PluginSettings
 {
     public Dictionary<string, bool> Enabled { get; set; } = new();
-}
-
-public sealed class LinuxSerialScanSettings
-{
-    /// <summary>
-    /// Scan patterns for Linux serial port discovery
-    /// </summary>
-    public List<string> ScanPatterns { get; set; } = new()
-    {
-        "/dev/ttyUSB*",     // USB serial adapters
-        "/dev/ttyACM*",     // USB CDC-ACM devices (Arduino, etc.)
-        "/dev/ttyS*",       // Standard serial ports
-        "/dev/ttyAMA*",     // ARM PL011 UART (Raspberry Pi, etc.)
-        "/dev/pts/*",       // Pseudo-terminal devices (socat, etc.)
-        "/tmp/vserial*",    // Custom virtual serial ports
-        "/tmp/tty*"         // Custom temporary serial ports
-    };
-    
-    /// <summary>
-    /// Exclude patterns to filter out unwanted devices
-    /// </summary>
-    public List<string> ExcludePatterns { get; set; } = new()
-    {
-        "/dev/pts/0",       // Console
-        "/dev/pts/ptmx"     // PTY master
-    };
 }

@@ -27,6 +27,8 @@ public sealed class ConfigService
         };
     }
 
+    public string ConfigDirectory => _configDirectory;
+
     public async Task SaveWorkspaceStateAsync(WorkspaceState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

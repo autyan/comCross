@@ -22,7 +22,7 @@ public sealed class PluginHostClient : IDisposable
     {
         try
         {
-            await EnsureConnectedAsync(timeout);
+            await EnsureConnectedAsync(timeout).ConfigureAwait(false);
         }
         catch
         {
@@ -35,9 +35,9 @@ public sealed class PluginHostClient : IDisposable
         }
 
         var payload = JsonSerializer.Serialize(request, _jsonOptions);
-        await _writer.WriteLineAsync(payload);
+        await _writer.WriteLineAsync(payload).ConfigureAwait(false);
 
-        var line = await ReadLineAsync(_reader, timeout);
+        var line = await ReadLineAsync(_reader, timeout).ConfigureAwait(false);
         if (line is null)
         {
             return null;
@@ -73,7 +73,7 @@ public sealed class PluginHostClient : IDisposable
         Dispose();
         _pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         using var cts = new CancellationTokenSource(timeout);
-        await _pipe.ConnectAsync(cts.Token);
+        await _pipe.ConnectAsync(cts.Token).ConfigureAwait(false);
         _reader = new StreamReader(_pipe, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         _writer = new StreamWriter(_pipe, Encoding.UTF8, bufferSize: 1024, leaveOpen: true)
         {
@@ -84,7 +84,7 @@ public sealed class PluginHostClient : IDisposable
     private static async Task<string?> ReadLineAsync(StreamReader reader, TimeSpan timeout)
     {
         var readTask = reader.ReadLineAsync();
-        var completed = await Task.WhenAny(readTask, Task.Delay(timeout));
-        return completed == readTask ? await readTask : null;
+        var completed = await Task.WhenAny(readTask, Task.Delay(timeout)).ConfigureAwait(false);
+        return completed == readTask ? await readTask.ConfigureAwait(false) : null;
     }
 }

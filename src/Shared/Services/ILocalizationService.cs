@@ -1,9 +1,11 @@
+using System.ComponentModel;
+
 namespace ComCross.Shared.Services;
 
 /// <summary>
 /// Indexer-based localization strings accessor for XAML binding
 /// </summary>
-public interface ILocalizationStrings
+public interface ILocalizationStrings : INotifyPropertyChanged
 {
     /// <summary>
     /// Gets a localized string by key using indexer syntax
@@ -25,6 +27,11 @@ public interface ILocalizationService
     /// Sets the current culture
     /// </summary>
     void SetCulture(string cultureCode);
+
+    /// <summary>
+    /// Raised after the culture has changed.
+    /// </summary>
+    event EventHandler<string>? LanguageChanged;
 
     /// <summary>
     /// Gets a localized string by key

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ComCross.Core.Models;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -38,30 +39,32 @@ public sealed class WorkspaceService
     }
 
     /// <summary>
-    /// List all available serial devices
+    /// Get all active sessions.
     /// </summary>
-    public async Task<IReadOnlyList<Device>> ListDevicesAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken cancellationToken = default)
     {
-        return await _deviceService.ListDevicesAsync(cancellationToken);
+        // Sessions are held by DeviceService in-memory.
+        // CancellationToken is accepted for API symmetry.
+        return Task.FromResult(_deviceService.GetAllSessions());
     }
 
     /// <summary>
-    /// Connect to a serial port
+    /// Connect to a device via plugin
     /// </summary>
-    public async Task<Session> ConnectAsync(string port, SerialSettings settings, string? sessionName = null, CancellationToken cancellationToken = default)
+    public async Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null, CancellationToken cancellationToken = default)
     {
         var sessionId = $"session-{Guid.NewGuid()}";
-        var name = sessionName ?? port;
+        var name = sessionName ?? $"{pluginId}:{capabilityId}";
 
         try
         {
-            var session = await _deviceService.ConnectAsync(sessionId, port, name, settings, cancellationToken);
+            var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
+            var session = await _deviceService.ConnectAsync(pluginId, capabilityId, sessionId, name, parameters, cancellationToken);
             _logStorageService.StartSession(session);
             return session;
         }
         catch (Exception)
         {
-            // Let the exception bubble up, but could add logging here
             throw;
         }
     }

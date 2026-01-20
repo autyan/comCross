@@ -101,6 +101,7 @@ while (true)
         PluginHostMessageTypes.GetUiState => HandleGetUiState(request, state, jsonOptions),
         PluginHostMessageTypes.ApplySharedMemorySegment => HandleApplySharedMemorySegment(request, state, jsonOptions),
         PluginHostMessageTypes.SetBackpressure => HandleSetBackpressure(request, state, jsonOptions),
+        PluginHostMessageTypes.LanguageChanged => HandleLanguageChanged(request, state, jsonOptions),
         PluginHostMessageTypes.Shutdown => HandleShutdown(request),
         _ => new PluginHostResponse(request.Id, false, $"Unknown request type: {request.Type}")
     };
@@ -212,6 +213,13 @@ static PluginHostResponse HandleNotify(PluginHostRequest request, HostState stat
 
 static PluginHostResponse HandleShutdown(PluginHostRequest request)
 {
+    return new PluginHostResponse(request.Id, true);
+}
+
+static PluginHostResponse HandleLanguageChanged(PluginHostRequest request, HostState state, JsonSerializerOptions jsonOptions)
+{
+    // Forward-compatibility hook: allow the main process to notify plugin host about UI language changes.
+    // Currently a no-op acknowledgement.
     return new PluginHostResponse(request.Id, true);
 }
 

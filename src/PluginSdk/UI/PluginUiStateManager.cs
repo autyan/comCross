@@ -18,6 +18,20 @@ public class PluginUiStateManager
 
     private const string DefaultStateKey = "__default__";
 
+    public event EventHandler<PluginUiStateChangedEvent>? UiStateChanged;
+
+    /// <summary>
+    /// Merge a batch of values into the in-memory cache.
+    /// Intended for host-side seeding from persisted config before rendering controls.
+    /// </summary>
+    public void MergeState(string? sessionId, IReadOnlyDictionary<string, object> values)
+    {
+        foreach (var kvp in values)
+        {
+            UpdateState(sessionId, kvp.Key, kvp.Value);
+        }
+    }
+
     /// <summary>
     /// 注册控件到特定的会话状态位
     /// </summary>
@@ -41,8 +55,13 @@ public class PluginUiStateManager
     {
         var sid = sessionId ?? DefaultStateKey;
         
-        // 更新缓存
+        // 更新缓存 (avoid re-entrancy loops)
         var sessionState = _states.GetOrAdd(sid, _ => new());
+        if (sessionState.TryGetValue(key, out var existing) && Equals(existing, value))
+        {
+            return;
+        }
+
         sessionState[key] = value;
 
         // 通知 UI 控件
@@ -59,6 +78,66 @@ public class PluginUiStateManager
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Update state coming from a UI control (user input).
+    /// Emits an event with full plugin/capability context so the host can persist values.
+    /// </summary>
+    public void UpdateStateFromControl(
+        string pluginId,
+        string capabilityId,
+        string? viewId,
+        string? sessionId,
+        string key,
+        object? value,
+        IPluginUiControl? source = null)
+    {
+        var sid = sessionId ?? DefaultStateKey;
+
+        // Update cache (avoid loops)
+        var sessionState = _states.GetOrAdd(sid, _ => new());
+        if (sessionState.TryGetValue(key, out var existing) && Equals(existing, value))
+        {
+            return;
+        }
+
+        if (value is null)
+        {
+            sessionState.TryRemove(key, out _);
+        }
+        else
+        {
+            sessionState[key] = value;
+        }
+
+        // Notify UI controls (except the source control to avoid redundant updates)
+        if (_registrations.TryGetValue(sid, out var sessionRegs))
+        {
+            if (sessionRegs.TryGetValue(key, out var controls))
+            {
+                lock (controls)
+                {
+                    foreach (var control in controls)
+                    {
+                        if (ReferenceEquals(control, source))
+                        {
+                            continue;
+                        }
+
+                        control.UpdateFromState(value);
+                    }
+                }
+            }
+        }
+
+        UiStateChanged?.Invoke(this, new PluginUiStateChangedEvent(
+            pluginId,
+            capabilityId,
+            sessionId,
+            viewId,
+            key,
+            value));
     }
 
     /// <summary>

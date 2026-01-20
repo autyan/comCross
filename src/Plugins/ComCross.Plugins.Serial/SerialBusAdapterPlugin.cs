@@ -77,8 +77,7 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
                 dataBits = 8,
                 parity = "None",
                 stopBits = "One",
-                flowControl = "None",
-                encoding = "UTF-8"
+                flowControl = "None"
             }
         };
 
@@ -262,30 +261,102 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
                "\"parity\":{\"type\":\"string\",\"enum\":[\"None\",\"Odd\",\"Even\",\"Mark\",\"Space\"]}," +
                "\"stopBits\":{\"type\":\"string\",\"enum\":[\"None\",\"One\",\"Two\",\"OnePointFive\"]}," +
                "\"flowControl\":{\"type\":\"string\",\"enum\":[\"None\",\"XOnXOff\",\"RequestToSend\",\"RequestToSendXOnXOff\"]}," +
-               "\"encoding\":{\"type\":\"string\"}," +
                "\"sessionName\":{\"type\":\"string\"}" +
                "},\"required\":[\"port\"]}";
     }
 
     private static string GetSerialConnectUiSchemaJson()
     {
-        // Host-consumed UI descriptor (draft-agnostic, schema-lite friendly).
-        // The host should treat this as plugin-owned UI declaration.
-        return "{" +
-               "\"titleKey\":\"serial.adapter.connect.title\"," +
-               "\"fields\":[" +
-               "{\"name\":\"port\",\"control\":\"select\",\"labelKey\":\"serial.adapter.connect.port\",\"optionsStatePath\":\"ports\",\"defaultStatePath\":\"defaultParameters.port\",\"required\":true}," +
-               "{\"name\":\"baudRate\",\"control\":\"number\",\"labelKey\":\"serial.adapter.connect.baudRate\",\"defaultStatePath\":\"defaultParameters.baudRate\"}," +
-               "{\"name\":\"dataBits\",\"control\":\"number\",\"labelKey\":\"serial.adapter.connect.dataBits\",\"defaultStatePath\":\"defaultParameters.dataBits\"}," +
-               "{\"name\":\"parity\",\"control\":\"select\",\"labelKey\":\"serial.adapter.connect.parity\",\"enumFromSchema\":true,\"defaultStatePath\":\"defaultParameters.parity\"}," +
-               "{\"name\":\"stopBits\",\"control\":\"select\",\"labelKey\":\"serial.adapter.connect.stopBits\",\"enumFromSchema\":true,\"defaultStatePath\":\"defaultParameters.stopBits\"}," +
-               "{\"name\":\"flowControl\",\"control\":\"select\",\"labelKey\":\"serial.adapter.connect.flowControl\",\"enumFromSchema\":true,\"defaultStatePath\":\"defaultParameters.flowControl\"}," +
-               "{\"name\":\"encoding\",\"control\":\"text\",\"labelKey\":\"serial.adapter.connect.encoding\",\"defaultStatePath\":\"defaultParameters.encoding\"}," +
-               "{\"name\":\"sessionName\",\"control\":\"text\",\"labelKey\":\"serial.adapter.connect.sessionName\"}" +
-               "]," +
-               "\"actions\":[" +
-               "{\"id\":\"connect\",\"labelKey\":\"serial.adapter.connect.action.connect\",\"kind\":\"host\",\"hostAction\":\"comcross.session.connect\",\"extraParameters\":{\"adapter\":\"serial\"}}" +
-               "]" +
-               "}";
+                // UiSchemaVersion1: declarative layout tree + stable field keys.
+                return """
+                {
+                    "uiSchemaVersion": 1,
+                    "titleKey": "serial.adapter.connect.title",
+                    "fields": [
+                        {
+                            "key": "port",
+                            "control": "select",
+                            "labelKey": "serial.adapter.connect.port",
+                            "optionsStatePath": "ports",
+                            "defaultStatePath": "defaultParameters.port",
+                            "required": true
+                        },
+                        {
+                            "key": "baudRate",
+                            "control": "number",
+                            "labelKey": "serial.adapter.connect.baudRate",
+                            "defaultStatePath": "defaultParameters.baudRate"
+                        },
+                        {
+                            "key": "dataBits",
+                            "control": "number",
+                            "labelKey": "serial.adapter.connect.dataBits",
+                            "defaultStatePath": "defaultParameters.dataBits"
+                        },
+                        {
+                            "key": "parity",
+                            "control": "select",
+                            "labelKey": "serial.adapter.connect.parity",
+                            "enumFromSchema": true,
+                            "defaultStatePath": "defaultParameters.parity"
+                        },
+                        {
+                            "key": "stopBits",
+                            "control": "select",
+                            "labelKey": "serial.adapter.connect.stopBits",
+                            "enumFromSchema": true,
+                            "defaultStatePath": "defaultParameters.stopBits"
+                        },
+                        {
+                            "key": "flowControl",
+                            "control": "select",
+                            "labelKey": "serial.adapter.connect.flowControl",
+                            "enumFromSchema": true,
+                            "defaultStatePath": "defaultParameters.flowControl"
+                        },
+                        {
+                            "key": "sessionName",
+                            "control": "text",
+                            "labelKey": "serial.adapter.connect.sessionName"
+                        }
+                    ],
+                    "layout": {
+                        "kind": "stack",
+                        "orientation": "vertical",
+                        "spacing": 12,
+                        "children": [
+                            {
+                                "kind": "field",
+                                "key": "port"
+                            },
+                            {
+                                "kind": "stack",
+                                "orientation": "vertical",
+                                "spacing": 12,
+                                "children": [
+                                    { "kind": "field", "key": "baudRate" },
+                                    { "kind": "field", "key": "dataBits" },
+                                    { "kind": "field", "key": "parity" },
+                                    { "kind": "field", "key": "stopBits" },
+                                    { "kind": "field", "key": "flowControl" }
+                                ]
+                            },
+                            {
+                                "kind": "field",
+                                "key": "sessionName"
+                            }
+                        ]
+                    },
+                    "actions": [
+                        {
+                            "id": "connect",
+                            "labelKey": "serial.adapter.connect.action.connect",
+                            "kind": "host",
+                            "hostAction": "comcross.session.connect",
+                            "extraParameters": { "adapter": "serial" }
+                        }
+                    ]
+                }
+                """;
     }
 }
