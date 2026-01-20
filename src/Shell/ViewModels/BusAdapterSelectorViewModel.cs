@@ -7,8 +7,8 @@ using ComCross.Shared.Models;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
 using ComCross.PluginSdk.UI;
+using ComCross.Shell.Services;
 using ComCross.Shell.Plugins.UI;
-using ComCross.Shell.Views;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -19,28 +19,33 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 {
     private const string PluginAdapterPrefix = "plugin:";
     private BusAdapterInfo? _selectedAdapter;
+    private BusAdapterListItemViewModel? _selectedAdapterItem;
     private Control? _configPanel; // Changed from UserControl to Control
     private string? _activeSessionId;
     private readonly PluginUiRenderer _uiRenderer;
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerViewModel _pluginManager;
     private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
+    private readonly IObjectFactory _objectFactory;
     private IReadOnlyList<PluginCapabilityLaunchOption> _lastOptions = Array.Empty<PluginCapabilityLaunchOption>();
+    private bool _isSyncingSelection;
 
     public BusAdapterSelectorViewModel(
         ILocalizationService localization,
         PluginUiRenderer uiRenderer,
         PluginUiStateManager stateManager,
         PluginManagerViewModel pluginManager,
-        ComCross.Core.Services.PluginUiConfigService pluginUiConfigService)
+        ComCross.Core.Services.PluginUiConfigService pluginUiConfigService,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _uiRenderer = uiRenderer;
         _stateManager = stateManager;
         _pluginManager = pluginManager;
         _pluginUiConfigService = pluginUiConfigService;
+        _objectFactory = objectFactory;
         
-        AvailableAdapters = new ObservableCollection<BusAdapterInfo>();
+        AdapterItems = new ObservableCollection<BusAdapterListItemViewModel>();
 
         Localization.LanguageChanged += (_, _) =>
         {
@@ -58,10 +63,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         };
     }
 
-    /// <summary>
-    /// Available bus adapters
-    /// </summary>
-    public ObservableCollection<BusAdapterInfo> AvailableAdapters { get; }
+    public ObservableCollection<BusAdapterListItemViewModel> AdapterItems { get; }
 
     public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
     {
@@ -69,7 +71,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         var previouslySelectedId = SelectedAdapter?.Id;
 
-        AvailableAdapters.Clear();
+        AdapterItems.Clear();
 
         if (options.Count > 0)
         {
@@ -79,7 +81,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 var capName = TryGetLocalized($"{option.PluginId}.capability.{option.CapabilityId}.name") ?? option.CapabilityName;
                 var capDesc = TryGetLocalized($"{option.PluginId}.capability.{option.CapabilityId}.description") ?? option.CapabilityDescription;
 
-                AvailableAdapters.Add(new BusAdapterInfo
+                var adapter = new BusAdapterInfo
                 {
                     Id = $"{PluginAdapterPrefix}{option.PluginId}:{option.CapabilityId}",
                     Name = $"{pluginName} / {capName}",
@@ -92,24 +94,26 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                     DefaultParametersJson = option.DefaultParametersJson,
                     JsonSchema = option.JsonSchema,
                     UiSchema = option.UiSchema
-                });
+                };
+
+                AdapterItems.Add(_objectFactory.Create<BusAdapterListItemViewModel>(adapter));
             }
         }
 
         // Restore selection if possible
         if (!string.IsNullOrWhiteSpace(previouslySelectedId))
         {
-            var match = AvailableAdapters.FirstOrDefault(a => string.Equals(a.Id, previouslySelectedId, StringComparison.Ordinal));
+            var match = AdapterItems.FirstOrDefault(a => string.Equals(a.Adapter.Id, previouslySelectedId, StringComparison.Ordinal));
             if (match is not null)
             {
-                SelectedAdapter = match;
+                SelectedAdapterItem = match;
                 return;
             }
         }
 
-        if (AvailableAdapters.Count > 0)
+        if (AdapterItems.Count > 0)
         {
-            SelectedAdapter = AvailableAdapters[0];
+            SelectedAdapterItem = AdapterItems[0];
         }
     }
 
@@ -117,10 +121,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     {
         if (string.IsNullOrEmpty(id)) return;
         
-        var adapter = AvailableAdapters.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.Ordinal));
-        if (adapter != null)
+        var adapter = AdapterItems.FirstOrDefault(a => string.Equals(a.Adapter.Id, id, StringComparison.Ordinal));
+        if (adapter is not null)
         {
-            SelectedAdapter = adapter;
+            SelectedAdapterItem = adapter;
         }
     }
 
@@ -136,7 +140,49 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             {
                 _selectedAdapter = value;
                 OnPropertyChanged();
+
+                if (!_isSyncingSelection)
+                {
+                    _isSyncingSelection = true;
+                    try
+                    {
+                        SelectedAdapterItem = value is null
+                            ? null
+                            : AdapterItems.FirstOrDefault(a => string.Equals(a.Adapter.Id, value.Id, StringComparison.Ordinal));
+                    }
+                    finally
+                    {
+                        _isSyncingSelection = false;
+                    }
+                }
+
                 _ = LoadConfigPanelAsync();
+            }
+        }
+    }
+
+    public BusAdapterListItemViewModel? SelectedAdapterItem
+    {
+        get => _selectedAdapterItem;
+        set
+        {
+            if (_selectedAdapterItem != value)
+            {
+                _selectedAdapterItem = value;
+                OnPropertyChanged();
+
+                if (!_isSyncingSelection)
+                {
+                    _isSyncingSelection = true;
+                    try
+                    {
+                        SelectedAdapter = value?.Adapter;
+                    }
+                    finally
+                    {
+                        _isSyncingSelection = false;
+                    }
+                }
             }
         }
     }

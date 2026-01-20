@@ -68,7 +68,7 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding L[stream.metrics.lines]}" FontSize="11" Foreground="#87909B" VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding Messages.Count}" 
+                            <TextBlock Text="{Binding MessageStream.MessageItems.Count}" 
                                        FontSize="11" 
                                        Foreground="#E6EDF3" 
                                        FontWeight="SemiBold"
@@ -99,7 +99,7 @@
                         <Border Background="#1B242A" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Text="{Binding L[settings.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
-                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Click="OnSettingsCloseClick" />
+                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Command="{Binding CloseSettingsCommand}" />
                             </Grid>
                         </Border>
                         <views:SettingsView Grid.Row="1" DataContext="{Binding Settings}" />
@@ -116,7 +116,7 @@
                         <Border Background="#1B242A" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Text="{Binding L[notifications.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
-                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Click="OnNotificationsCloseClick" />
+                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Command="{Binding CloseNotificationsCommand}" />
                             </Grid>
                         </Border>
                         <views:NotificationCenterView Grid.Row="1" DataContext="{Binding NotificationCenter}" />

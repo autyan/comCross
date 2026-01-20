@@ -65,7 +65,7 @@
                             IsVisible="{Binding CanClose}"
                             Command="{Binding CloseCommand}"
                             CommandParameter="{Binding Id}"
-                            ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.close]}">
+                          ToolTip.Tip="{Binding CloseToolTip}">
                       <Button.Styles>
                         <Style Selector="Button:pointerover">
                           <Setter Property="Background" Value="#FF4444" />
@@ -79,7 +79,7 @@
                   <Border.ContextMenu>
                     <ContextMenu>
                       <!-- Rename (all workloads) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.rename]}" 
+                      <MenuItem Header="{Binding RenameHeader}" 
                                 IsEnabled="{Binding CanRename}"
                                 Command="{Binding RenameCommand}"
                                 CommandParameter="{Binding Id}">
@@ -89,7 +89,7 @@
                       </MenuItem>
                       
                       <!-- Copy (all workloads) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.copy]}" 
+                      <MenuItem Header="{Binding CopyHeader}" 
                                 IsEnabled="{Binding CanCopy}"
                                 Command="{Binding CopyCommand}"
                                 CommandParameter="{Binding Id}">
@@ -101,7 +101,7 @@
                       <Separator IsVisible="{Binding CanDelete}" />
                       
                       <!-- Delete (except default) -->
-                      <MenuItem Header="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.delete]}" 
+                      <MenuItem Header="{Binding DeleteHeader}" 
                                 IsEnabled="{Binding CanDelete}"
                                 Command="{Binding CloseCommand}"
                                 CommandParameter="{Binding Id}">
@@ -124,7 +124,7 @@
                   Padding="16,10"
                   VerticalAlignment="Center"
                   Command="{Binding CreateWorkloadCommand}"
-                  ToolTip.Tip="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.new]}">
+              ToolTip.Tip="{Binding L[workload.new]}">
             <Button.Styles>
               <Style Selector="Button:pointerover">
                 <Setter Property="Background" Value="#1A2530" />
@@ -153,7 +153,7 @@
             </Style>
           </Button.Styles>
         </Button>
-        <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NotificationCenter.UnreadCount, StringFormat=({0})}" 
+        <TextBlock Text="{Binding NotificationCenter.UnreadCount, StringFormat=({0})}" 
                    FontSize="11" 
                    Foreground="#F5A524" 
                    VerticalAlignment="Center" />

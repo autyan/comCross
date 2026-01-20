@@ -7,7 +7,6 @@
              mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.LeftSidebar"
              x:DataType="vm:LeftSidebarViewModel"
-             x:CompileBindings="False"
              x:Name="LeftSidebarRoot">
     
     <!-- Vertical layout: Bus Adapter + Device Config + Sessions -->
@@ -46,8 +45,8 @@
                 </Grid>
                 
                 <!-- Sessions List -->
-                <ListBox ItemsSource="{Binding Sessions}" 
-                         SelectedItem="{Binding ActiveSession}" 
+                <ListBox ItemsSource="{Binding SessionItems}"
+                         SelectedItem="{Binding SelectedSessionItem}" 
                          SelectionMode="Single"
                          Background="Transparent" 
                          BorderThickness="0">
@@ -72,7 +71,7 @@
                         </Style>
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate x:DataType="vm:SessionListItemViewModel">
                             <Border Padding="12,8" CornerRadius="8" Margin="0,2">
                                 <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
                                     <!-- Status Indicator -->
@@ -108,12 +107,12 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" FontSize="10" Foreground="#87909B" Margin="0,0,12,0">
-                                            <Run Text="{Binding $parent[Window].DataContext.L[status.tx], Mode=OneWay}" />
+                                            <Run Text="{Binding TxLabel}" />
                                             <Run Text=" " />
                                             <Run Text="{Binding TxBytes}" FontWeight="SemiBold" Foreground="#4A9EFF" />
                                         </TextBlock>
                                         <TextBlock Grid.Column="1" FontSize="10" Foreground="#87909B">
-                                            <Run Text="{Binding $parent[Window].DataContext.L[status.rx], Mode=OneWay}" />
+                                            <Run Text="{Binding RxLabel}" />
                                             <Run Text=" " />
                                             <Run Text="{Binding RxBytes}" FontWeight="SemiBold" Foreground="#4AFF9E" />
                                         </TextBlock>

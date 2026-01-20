@@ -12,6 +12,7 @@ using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 using ComCross.Shell.Views;
+using ComCross.Shell.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.ViewModels;
@@ -23,16 +24,22 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
 {
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
+    private readonly IObjectFactory _objectFactory;
+    private readonly NotificationCenterViewModel _notificationCenter;
     private WorkloadTabItemViewModel? _activeTab;
 
     public WorkloadTabsViewModel(
         ILocalizationService localization,
         WorkloadService workloadService,
-        IEventBus eventBus)
+        IEventBus eventBus,
+        NotificationCenterViewModel notificationCenter,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _notificationCenter = notificationCenter;
+        _objectFactory = objectFactory;
 
         Tabs = new ObservableCollection<WorkloadTabItemViewModel>();
 
@@ -82,6 +89,8 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
     public ICommand RenameWorkloadCommand { get; }
     public ICommand CopyWorkloadCommand { get; }
 
+    public NotificationCenterViewModel NotificationCenter => _notificationCenter;
+
     /// <summary>
     /// Load all workloads and populate tabs
     /// </summary>
@@ -92,13 +101,12 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         Tabs.Clear();
         foreach (var workload in workloads)
         {
-            var tabItem = new WorkloadTabItemViewModel(
+            var tabItem = _objectFactory.Create<WorkloadTabItemViewModel>(
                 workload,
                 ActivateWorkloadCommand,
                 CloseWorkloadCommand,
                 RenameWorkloadCommand,
-                CopyWorkloadCommand
-            );
+                CopyWorkloadCommand);
             Tabs.Add(tabItem);
         }
 
@@ -117,6 +125,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
     private async Task CreateWorkloadAsync()
     {
         var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
+        dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
         var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
             ? desktop.MainWindow 
             : null;
@@ -200,7 +209,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
             return;
 
         var dialog = App.ServiceProvider.GetRequiredService<RenameWorkloadDialog>();
-        dialog.CurrentName = tab.Name;
+        dialog.DataContext = _objectFactory.Create<RenameWorkloadDialogViewModel>(tab.Name);
 
         var result = await dialog.ShowDialog<string?>(mainWindow);
 
@@ -231,6 +240,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
 
         // Show dialog to input new name
         var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
+        dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
         var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
 
         if (result != null)
@@ -245,13 +255,12 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         var workload = _workloadService.GetWorkload(e.WorkloadId);
         if (workload != null)
         {
-            var tabItem = new WorkloadTabItemViewModel(
+            var tabItem = _objectFactory.Create<WorkloadTabItemViewModel>(
                 workload,
                 ActivateWorkloadCommand,
                 CloseWorkloadCommand,
                 RenameWorkloadCommand,
-                CopyWorkloadCommand
-            );
+                CopyWorkloadCommand);
             Tabs.Add(tabItem);
 
             // Auto-activate new workload

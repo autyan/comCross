@@ -29,6 +29,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
     private CommandScope _editorScope = CommandScope.Global;
     private string _editorHotkey = string.Empty;
     private int _editorSortOrder;
+    private bool _isActive;
 
     public CommandCenterViewModel(
         ILocalizationService localization,
@@ -48,6 +49,12 @@ public sealed class CommandCenterViewModel : BaseViewModel
     }
 
     public ObservableCollection<CommandDefinition> Commands { get; } = new();
+
+    public bool IsActive
+    {
+        get => _isActive;
+        set => SetProperty(ref _isActive, value);
+    }
 
     public CommandDefinition? SelectedCommand
     {

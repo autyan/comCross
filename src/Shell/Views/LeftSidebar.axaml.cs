@@ -6,6 +6,7 @@ using ComCross.Shared.Models;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.Views;
 
@@ -26,7 +27,8 @@ public partial class LeftSidebar : BaseUserControl
         if (owner.DataContext is MainWindowViewModel vm)
         {
             var dialog = App.ServiceProvider.GetRequiredService<ConnectDialog>();
-            dialog.DataContext = vm;
+            var objectFactory = App.ServiceProvider.GetRequiredService<IObjectFactory>();
+            dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, vm.BusAdapterSelectorViewModel);
 
             await dialog.ShowDialog(owner);
         }
@@ -64,75 +66,25 @@ public partial class LeftSidebar : BaseUserControl
     }
     
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
         {
-            var dialog = new Window
-            {
-                Title = vm.L["dialog.renameSession.title"],
-                Width = 350,
-                Height = 150,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
-            };
+            return;
+        }
 
-            var textBox = new TextBox
-            {
-                Text = session.Name,
-                Watermark = vm.L["dialog.renameSession.placeholder"],
-                Margin = new Avalonia.Thickness(0, 0, 0, 10)
-            };
-
-            var okButton = new Button
-            {
-                Content = vm.L["dialog.renameSession.ok"],
-                Width = 80,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                Margin = new Avalonia.Thickness(0, 0, 10, 0)
-            };
-
-            var cancelButton = new Button
-            {
-                Content = vm.L["dialog.renameSession.cancel"],
-                Width = 80,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
-            };
-
-            okButton.Click += (s, args) =>
-            {
-                if (!string.IsNullOrWhiteSpace(textBox.Text))
-                {
-                    session.Name = textBox.Text;
-                }
-                dialog.Close();
-            };
-
-            cancelButton.Click += (s, args) => dialog.Close();
-
-            var buttonPanel = new StackPanel
-            {
-                Orientation = Avalonia.Layout.Orientation.Horizontal,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                Children = { okButton, cancelButton }
-            };
-
-            var mainPanel = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(20),
-                Children = 
-                {
-                    new TextBlock { Text = vm.L["dialog.renameSession.label"], Margin = new Avalonia.Thickness(0, 0, 0, 5) },
-                    textBox,
-                    buttonPanel
-                }
-            };
-
-            dialog.Content = mainPanel;
-            
-            textBox.Focus();
-            textBox.SelectAll();
-
-            if (TopLevel.GetTopLevel(this) is Window owner)
-            {
-                await dialog.ShowDialog(owner);
-            }
+        var dialogFactory = App.ServiceProvider.GetRequiredService<ITextInputDialogFactory>();
+        var result = await dialogFactory.ShowAsync(
+            owner,
+            vm.Localization,
+            vm.L["dialog.renameSession.title"],
+            vm.L["dialog.renameSession.label"],
+            session.Name,
+            vm.L["dialog.renameSession.placeholder"],
+            vm.L["dialog.renameSession.ok"],
+            vm.L["dialog.renameSession.cancel"]);
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            session.Name = result;
+        }
     }
 }

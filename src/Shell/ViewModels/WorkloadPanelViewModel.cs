@@ -8,6 +8,7 @@ using ComCross.Core.Services;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Services;
+using ComCross.Shell.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +21,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
 {
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
+    private readonly IObjectFactory _objectFactory;
     private readonly ILogger<WorkloadPanelViewModel> _logger;
     private WorkloadItemViewModel? _selectedWorkload;
     private bool _isLoading;
@@ -31,12 +33,14 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
         ILocalizationService localization,
         WorkloadService workloadService,
         IEventBus eventBus,
-        ILogger<WorkloadPanelViewModel> logger)
+        ILogger<WorkloadPanelViewModel> logger,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _workloadService = workloadService;
         _eventBus = eventBus;
         _logger = logger;
+        _objectFactory = objectFactory;
 
         Workloads = new ObservableCollection<WorkloadItemViewModel>();
 
@@ -130,7 +134,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
             Workloads.Clear();
             foreach (var workload in workloads.OrderByDescending(w => w.IsDefault).ThenBy(w => w.Name))
             {
-                Workloads.Add(new WorkloadItemViewModel(workload));
+                Workloads.Add(_objectFactory.Create<WorkloadItemViewModel>(workload, RenameWorkloadCommand, DeleteWorkloadCommand));
             }
 
             // 默认选中第一个（默认 Workload）
@@ -165,6 +169,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.CreateWorkloadDialog>();
+                dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
                 result = await dialog.ShowDialog<ComCross.Shell.Views.CreateWorkloadResult?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
                         ? desktop.MainWindow!
@@ -207,7 +212,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.RenameWorkloadDialog>();
-                dialog.CurrentName = currentName;
+                dialog.DataContext = _objectFactory.Create<RenameWorkloadDialogViewModel>(currentName);
                 newName = await dialog.ShowDialog<string?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
                         ? desktop.MainWindow!

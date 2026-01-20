@@ -20,7 +20,7 @@
             Padding="12,8">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0"
-                   Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.panel.title]}"
+                   Text="{Binding L[workload.panel.title]}"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource --text-0}"
@@ -31,7 +31,7 @@
                 Background="Transparent"
                 BorderThickness="0"
                 Padding="8,4"
-                ToolTip.Tip="创建新任务">
+          ToolTip.Tip="{Binding L[workload.new]}">
           <TextBlock Text="＋" FontSize="16" Foreground="{DynamicResource --accent}" />
         </Button>
       </Grid>
@@ -48,7 +48,7 @@
         <TextBlock Foreground="{DynamicResource --text-1}"
                    FontSize="13">
           <Run Text="⏳ " />
-          <Run Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).L[workload.panel.loading]}" />
+          <Run Text="{Binding L[workload.panel.loading]}" />
         </TextBlock>
       </StackPanel>
     </Border>
@@ -103,15 +103,15 @@
                             VerticalAlignment="Center">
                       <Button.Flyout>
                         <MenuFlyout>
-                          <MenuItem Header="重命名"
-                                    Command="{Binding $parent[UserControl].((vm:WorkloadPanelViewModel)DataContext).RenameWorkloadCommand}"
+                          <MenuItem Header="{Binding RenameHeader}"
+                                    Command="{Binding RenameCommand}"
                                     CommandParameter="{Binding Id}">
                             <MenuItem.Icon>
                               <TextBlock Text="✏️" />
                             </MenuItem.Icon>
                           </MenuItem>
-                          <MenuItem Header="删除"
-                                    Command="{Binding $parent[UserControl].((vm:WorkloadPanelViewModel)DataContext).DeleteWorkloadCommand}"
+                          <MenuItem Header="{Binding DeleteHeader}"
+                                    Command="{Binding DeleteCommand}"
                                     CommandParameter="{Binding Id}"
                                     IsEnabled="{Binding !IsDefault}">
                             <MenuItem.Icon>

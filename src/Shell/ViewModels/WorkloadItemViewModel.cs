@@ -2,21 +2,28 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using ComCross.Core.Models;
+using ComCross.Shared.Services;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
 /// <summary>
 /// Workload 项的 ViewModel，用于在 UI 中显示单个 Workload
 /// </summary>
-public sealed class WorkloadItemViewModel : INotifyPropertyChanged
+public sealed class WorkloadItemViewModel : BaseViewModel
 {
     private bool _isExpanded = true;
     private bool _isSelected;
-    
-    public event PropertyChangedEventHandler? PropertyChanged;
 
-    public WorkloadItemViewModel(Workload workload)
+    public WorkloadItemViewModel(
+        ILocalizationService localization,
+        Workload workload,
+        ICommand renameCommand,
+        ICommand deleteCommand,
+        IObjectFactory objectFactory)
+        : base(localization)
     {
         Id = workload.Id;
         Name = workload.Name;
@@ -24,18 +31,20 @@ public sealed class WorkloadItemViewModel : INotifyPropertyChanged
         IsDefault = workload.IsDefault;
         CreatedAt = workload.CreatedAt;
         UpdatedAt = workload.UpdatedAt;
+
+        RenameCommand = renameCommand;
+        DeleteCommand = deleteCommand;
         
         Sessions = new ObservableCollection<SessionItemViewModel>();
         
         // 加载 Sessions（从 SessionIds）
         foreach (var sessionId in workload.SessionIds)
         {
-            Sessions.Add(new SessionItemViewModel
-            {
-                Id = sessionId,
-                Name = $"Session {sessionId.Substring(0, 8)}", // 临时名称，稍后从实际 Session 加载
-                WorkloadId = Id
-            });
+            var session = objectFactory.Create<SessionItemViewModel>();
+            session.Id = sessionId;
+            session.Name = $"Session {sessionId.Substring(0, 8)}"; // 临时名称，稍后从实际 Session 加载
+            session.WorkloadId = Id;
+            Sessions.Add(session);
         }
     }
 
@@ -79,6 +88,10 @@ public sealed class WorkloadItemViewModel : INotifyPropertyChanged
     /// </summary>
     public ObservableCollection<SessionItemViewModel> Sessions { get; }
 
+    public ICommand RenameCommand { get; }
+
+    public ICommand DeleteCommand { get; }
+
     /// <summary>
     /// Session 数量
     /// </summary>
@@ -88,6 +101,10 @@ public sealed class WorkloadItemViewModel : INotifyPropertyChanged
     /// 显示的计数文本（如 "默认任务 (3)"）
     /// </summary>
     public string DisplayName => $"{Name} ({SessionCount})";
+
+    public string RenameHeader => L["workload.rename"];
+
+    public string DeleteHeader => L["workload.delete"];
 
     /// <summary>
     /// 是否展开（TreeView 折叠/展开状态）
@@ -175,11 +192,6 @@ public sealed class WorkloadItemViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(DisplayName));
         }
     }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }
 
 /// <summary>
@@ -196,7 +208,7 @@ public sealed class SessionItemViewModel : INotifyPropertyChanged
     /// <summary>
     /// Session ID
     /// </summary>
-    public string Id { get; init; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>
     /// Session 名称

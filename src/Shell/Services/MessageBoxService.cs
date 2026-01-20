@@ -2,10 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using ComCross.Shared.Services;
+using ComCross.Shell.ViewModels;
+using ComCross.Shell.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Services;
 
@@ -105,109 +106,25 @@ public static class MessageBoxService
     /// <returns>Index of clicked button, or -1 if dialog was closed</returns>
     public static async Task<int> ShowCustomAsync(string title, string message, MessageBoxIcon icon, params string[] buttons)
     {
-        var dialog = CreateMessageBox(title, message, icon, buttons);
+        var dialogFactory = App.ServiceProvider.GetRequiredService<IMessageBoxDialogFactory>();
         var owner = GetMainWindow();
         
         if (owner != null)
         {
-            var result = await dialog.ShowDialog<int?>(owner);
-            return result ?? -1;
+            return await dialogFactory.ShowCustomAsync(owner, title, message, icon, buttons);
         }
-        
-        dialog.Show();
         return -1;
     }
 
     private static async Task ShowMessageAsync(string title, string message, MessageBoxIcon icon, string[] buttons)
     {
-        var dialog = CreateMessageBox(title, message, icon, buttons);
+        var dialogFactory = App.ServiceProvider.GetRequiredService<IMessageBoxDialogFactory>();
         var owner = GetMainWindow();
         
         if (owner != null)
         {
-            await dialog.ShowDialog(owner);
+            await dialogFactory.ShowMessageAsync(owner, title, message, icon, buttons);
         }
-        else
-        {
-            dialog.Show();
-        }
-    }
-
-    private static Window CreateMessageBox(string title, string message, MessageBoxIcon icon, string[] buttons)
-    {
-        var dialog = new Window
-        {
-            Title = title,
-            MinWidth = 400,
-            MaxWidth = 600,
-            SizeToContent = SizeToContent.WidthAndHeight,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            // Must be opaque; transparent windows cause unreadable overlays on Linux/Wayland.
-            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#1B1F24"))
-        };
-
-        var iconText = icon switch
-        {
-            MessageBoxIcon.Error => "❌",
-            MessageBoxIcon.Warning => "⚠️",
-            MessageBoxIcon.Info => "ℹ️",
-            MessageBoxIcon.Question => "❓",
-            _ => ""
-        };
-
-        var iconBlock = new TextBlock
-        {
-            Text = iconText,
-            FontSize = 32,
-            Margin = new Avalonia.Thickness(0, 0, 16, 0),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top
-        };
-
-        var messageBlock = new TextBlock
-        {
-            Text = message,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            MaxWidth = 500,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
-        };
-
-        var messagePanel = new StackPanel
-        {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Margin = new Avalonia.Thickness(20),
-            Children = { iconBlock, messageBlock }
-        };
-
-        var buttonPanel = new StackPanel
-        {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            Spacing = 10,
-            Margin = new Avalonia.Thickness(20, 0, 20, 20)
-        };
-
-        for (int i = 0; i < buttons.Length; i++)
-        {
-            var buttonIndex = i;
-            var button = new Button
-            {
-                Content = buttons[i],
-                MinWidth = 100,
-                Padding = new Avalonia.Thickness(16, 8)
-            };
-
-            button.Click += (s, e) => dialog.Close(buttonIndex);
-            buttonPanel.Children.Add(button);
-        }
-
-        var mainPanel = new StackPanel
-        {
-            Children = { messagePanel, buttonPanel }
-        };
-
-        dialog.Content = mainPanel;
-        return dialog;
     }
 }
 

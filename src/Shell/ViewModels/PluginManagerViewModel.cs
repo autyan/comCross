@@ -22,6 +22,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     private readonly PluginHostProtocolService _protocolService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
+    private readonly IObjectFactory _objectFactory;
     private string _pluginsDirectory;
 
     public event EventHandler? PluginsReloaded;
@@ -33,7 +34,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
         PluginManagerService pluginManagerService,
         PluginHostProtocolService protocolService,
         SettingsService settingsService,
-        NotificationService notificationService)
+        NotificationService notificationService,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _discoveryService = discoveryService;
@@ -42,6 +44,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         _protocolService = protocolService;
         _settingsService = settingsService;
         _notificationService = notificationService;
+        _objectFactory = objectFactory;
         _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
 
         // 构造时自动加载当前运行时的状态
@@ -73,7 +76,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         foreach (var runtime in runtimes)
         {
-            Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, Localization));
+            Plugins.Add(_objectFactory.Create<PluginItemViewModel>(runtime, _settingsService.Current.Plugins.Enabled, Localization));
         }
 
         PluginsReloaded?.Invoke(this, EventArgs.Empty);

@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="180"
+        x:Class="ComCross.Shell.Views.TextInputDialog"
+        x:DataType="vm:TextInputDialogViewModel"
+        Width="420"
+        Height="180"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto" Margin="20">
+    <TextBlock Grid.Row="0"
+               Text="{Binding Label}"
+               Margin="0,0,0,8" />
+
+    <TextBox Grid.Row="1"
+             x:Name="InputBox"
+             Text="{Binding Text, Mode=TwoWay}"
+             Watermark="{Binding Watermark}"
+             Margin="0,0,0,16" />
+
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="12">
+      <Button Content="{Binding CancelText}" Width="100" Click="OnCancelClick" />
+      <Button Content="{Binding OkText}" Width="100" Classes="accent" Click="OnOkClick" />
+    </StackPanel>
+  </Grid>
+</Window>

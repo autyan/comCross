@@ -56,7 +56,7 @@ public partial class ConnectDialog : BaseWindow
 
     private async System.Threading.Tasks.Task OnDialogOpenedAsync()
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not ConnectDialogViewModel vm)
         {
             return;
         }
@@ -114,7 +114,7 @@ public partial class ConnectDialog : BaseWindow
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not ConnectDialogViewModel vm)
         {
             return;
         }
@@ -143,7 +143,7 @@ public partial class ConnectDialog : BaseWindow
     }
 
     private async System.Threading.Tasks.Task LoadCapabilityUiAsync(
-        MainWindowViewModel vm,
+        ConnectDialogViewModel vm,
         PluginCapabilityLaunchOption? selected,
         bool refreshOnly = false)
     {

@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="220"
+        x:Class="ComCross.Shell.Views.MessageBoxDialogWindow"
+        x:DataType="vm:MessageBoxDialogViewModel"
+        MinWidth="400"
+        MaxWidth="600"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#1B1F24"
+        Title="{Binding Title}">
+
+  <StackPanel>
+    <StackPanel Orientation="Horizontal" Margin="20">
+      <TextBlock Text="{Binding IconText}"
+                 FontSize="32"
+                 Margin="0,0,16,0"
+                 VerticalAlignment="Top" />
+      <TextBlock Text="{Binding Message}"
+                 TextWrapping="Wrap"
+                 MaxWidth="500"
+                 VerticalAlignment="Center" />
+    </StackPanel>
+
+    <ItemsControl ItemsSource="{Binding Buttons}" Margin="20,0,20,20">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:MessageBoxDialogButton">
+          <Button Content="{Binding Text}"
+                  Tag="{Binding Index}"
+                  MinWidth="100"
+                  Padding="16,8"
+                  Click="OnButtonClick" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</Window>

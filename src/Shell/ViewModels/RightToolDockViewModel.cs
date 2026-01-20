@@ -62,6 +62,8 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
             OnPropertyChanged(nameof(IsSendTabActive));
             OnPropertyChanged(nameof(IsCommandsTabActive));
+
+            CommandCenter.IsActive = IsCommandsTabActive;
         }
     }
 
@@ -73,6 +75,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         ActiveSession = session;
         IsConnected = session?.Status == SessionStatus.Connected;
         CommandCenter.SetSession(session?.Id, session?.Name);
+        CommandCenter.IsActive = IsCommandsTabActive;
     }
 
     public async Task SendAsync(string message, bool hex, bool addCr, bool addLf)

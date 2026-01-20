@@ -3,8 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using ComCross.Core.Models;
-using ComCross.Shared.Models;
-using ReactiveUI;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -15,9 +14,17 @@ public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
 {
     private string _name;
     private bool _isActive;
+    private readonly ILocalizationService _localization;
 
-    public WorkloadTabItemViewModel(Workload workload, ICommand activateCommand, ICommand closeCommand, ICommand renameCommand, ICommand copyCommand)
+    public WorkloadTabItemViewModel(
+        ILocalizationService localization,
+        Workload workload,
+        ICommand activateCommand,
+        ICommand closeCommand,
+        ICommand renameCommand,
+        ICommand copyCommand)
     {
+        _localization = localization;
         Id = workload.Id;
         _name = workload.Name;
         Icon = workload.IsDefault ? "🏠" : "📁";
@@ -27,7 +34,17 @@ public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
         CloseCommand = closeCommand;
         RenameCommand = renameCommand;
         CopyCommand = copyCommand;
+
+        _localization.LanguageChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(CloseToolTip));
+            OnPropertyChanged(nameof(RenameHeader));
+            OnPropertyChanged(nameof(CopyHeader));
+            OnPropertyChanged(nameof(DeleteHeader));
+        };
     }
+
+    private ILocalizationStrings L => _localization.Strings;
 
     /// <summary>
     /// Workload unique ID
@@ -128,6 +145,14 @@ public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
     /// Can this workload be copied? (All workloads can be copied)
     /// </summary>
     public bool CanCopy => true;
+
+    public string CloseToolTip => L["workload.close"];
+
+    public string RenameHeader => L["workload.rename"];
+
+    public string CopyHeader => L["workload.copy"];
+
+    public string DeleteHeader => L["workload.delete"];
 
     /// <summary>
     /// Command to activate this workload

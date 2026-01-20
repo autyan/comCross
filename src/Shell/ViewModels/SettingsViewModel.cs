@@ -67,6 +67,19 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(SelectedNavigationEntry));
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
+            OnPropertyChanged(nameof(IsPluginManagerSelected));
+        };
+
+        Localization.LanguageChanged += (_, _) =>
+        {
+            InvalidateNavigationCache();
+            EnsureNavigationCache();
+            OnPropertyChanged(nameof(PluginSettingsPages));
+            OnPropertyChanged(nameof(NavigationEntries));
+            OnPropertyChanged(nameof(SelectedNavigationEntry));
+            OnPropertyChanged(nameof(IsSystemSettingsSelected));
+            OnPropertyChanged(nameof(IsPluginManagerSelected));
+            OnPropertyChanged(nameof(IsPluginSettingsSelected));
         };
     }
     public PluginManagerViewModel PluginManager => _pluginManager;
@@ -114,6 +127,7 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
+            OnPropertyChanged(nameof(IsPluginManagerSelected));
 
             if (_selectedNavigationEntry?.Kind == SettingsNavKind.PluginPage)
             {
@@ -130,7 +144,8 @@ public sealed class SettingsViewModel : BaseViewModel
         }
     }
 
-    public bool IsSystemSettingsSelected => _selectedNavigationEntry?.Kind != SettingsNavKind.PluginPage;
+    public bool IsSystemSettingsSelected => _selectedNavigationEntry is null || _selectedNavigationEntry.Kind == SettingsNavKind.System;
+    public bool IsPluginManagerSelected => _selectedNavigationEntry?.Kind == SettingsNavKind.PluginManager;
     public bool IsPluginSettingsSelected => _selectedNavigationEntry?.Kind == SettingsNavKind.PluginPage;
 
     public PluginSettingsPageOption? SelectedPluginSettingsPage
@@ -184,6 +199,7 @@ public sealed class SettingsViewModel : BaseViewModel
             var entries = new List<SettingsNavEntry>();
             entries.Add(SettingsNavEntry.Header(L["settings.nav.system"]));
             entries.Add(SettingsNavEntry.SystemPage(L["settings.nav.system.page"]));
+            entries.Add(SettingsNavEntry.PluginManagerPage(L["settings.nav.plugins.page"]));
 
             foreach (var runtime in _pluginManager.GetAllRuntimes())
             {
@@ -320,6 +336,7 @@ public sealed class SettingsViewModel : BaseViewModel
     public enum SettingsNavKind
     {
         System,
+        PluginManager,
         PluginPage
     }
 
@@ -336,6 +353,7 @@ public sealed class SettingsViewModel : BaseViewModel
 
         public static SettingsNavEntry Header(string title) => new(SettingsNavKind.System, title, IsSelectable: false);
         public static SettingsNavEntry SystemPage(string title) => new(SettingsNavKind.System, title, IsSelectable: true);
+        public static SettingsNavEntry PluginManagerPage(string title) => new(SettingsNavKind.PluginManager, title, IsSelectable: true);
 
         public static SettingsNavEntry PluginPage(string pluginId, string pageId, string title, string uiSchemaJson)
             => new(SettingsNavKind.PluginPage, title, IsSelectable: true, PluginId: pluginId, PageId: pageId, UiSchemaJson: uiSchemaJson);

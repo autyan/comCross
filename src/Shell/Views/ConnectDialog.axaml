@@ -5,7 +5,7 @@
         xmlns:vm="using:ComCross.Shell.ViewModels"
         mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="350"
         x:Class="ComCross.Shell.Views.ConnectDialog"
-        x:DataType="vm:MainWindowViewModel"
+        x:DataType="vm:ConnectDialogViewModel"
         Title="{Binding L[dialog.connect.title]}"
         Width="520" Height="520"
         WindowStartupLocation="CenterOwner"

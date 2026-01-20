@@ -5,7 +5,7 @@
         xmlns:vm="using:ComCross.Shell.ViewModels"
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
         x:Class="ComCross.Shell.Views.CreateWorkloadDialog"
-        x:CompileBindings="False"
+  x:DataType="vm:CreateWorkloadDialogViewModel"
         Title="{Binding L[dialog.createWorkload.title]}"
         Width="400"
         Height="250"

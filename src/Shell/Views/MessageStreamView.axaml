@@ -5,11 +5,7 @@
              xmlns:vm="using:ComCross.Shell.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
-             x:DataType="vm:MessageStreamViewModel"
-             x:Name="Root"
-             TimestampFormat="{Binding Display.TimestampFormat}"
-             MessageFontFamily="{Binding Display.MessageFontFamily}"
-             MessageFontSize="{Binding Display.MessageFontSize}">
+             x:DataType="vm:MessageStreamViewModel">
     
     <Grid RowDefinitions="Auto,Auto,*">
         <!-- Search Bar -->
@@ -34,7 +30,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding L[stream.metrics.lines]}" FontSize="10" Foreground="#87909B" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding Messages.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding MessageItems.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
                 </StackPanel>
                 
@@ -55,14 +51,16 @@
         <!-- Message List -->
         <ListBox Grid.Row="2"
                  x:Name="MessageList"
-                 ItemsSource="{Binding Messages}" 
+                 ItemsSource="{Binding MessageItems}" 
                  Background="#0F1417" 
                  BorderThickness="0"
                  SelectionMode="Single"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 FontFamily="{Binding Display.MessageFontFamily}"
+                 FontSize="{Binding Display.MessageFontSize}">
             <ListBox.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="vm:LogMessageListItemViewModel">
                     <Border Padding="8,2" BorderBrush="#25303A" BorderThickness="0,0,0,1">
                         <Grid ColumnDefinitions="Auto,Auto,Auto,*" Height="20">
                             <!-- Direction Indicator (TX/RX) -->
@@ -70,24 +68,14 @@
                             
                             <!-- Timestamp -->
                             <TextBlock Grid.Column="1" 
-                                       FontFamily="{Binding MessageFontFamily, ElementName=Root}" 
-                                       FontSize="{Binding MessageFontSize, ElementName=Root}" 
+                                       Text="{Binding TimestampText}"
                                        Foreground="#6B7780" 
                                        Margin="0,0,8,0"
-                                       VerticalAlignment="Center">
-                                <TextBlock.Text>
-                                    <MultiBinding Converter="{StaticResource TimestampFormatConverter}">
-                                        <Binding Path="Timestamp" />
-                                        <Binding Path="TimestampFormat" ElementName="Root" />
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
+                                       VerticalAlignment="Center" />
                             
                             <!-- Direction (TX/RX) -->
                             <TextBlock Grid.Column="2"
                                        Text="{Binding Source}"
-                                       FontFamily="{Binding MessageFontFamily, ElementName=Root}"
-                                       FontSize="{Binding MessageFontSize, ElementName=Root}"
                                        FontWeight="SemiBold"
                                        Foreground="{Binding Source, Converter={StaticResource DirectionColorConverter}}"
                                        Margin="0,0,8,0"
@@ -97,8 +85,6 @@
                             <!-- Content -->
                             <TextBlock Grid.Column="3" 
                                        Text="{Binding Content}" 
-                                       FontFamily="{Binding MessageFontFamily, ElementName=Root}" 
-                                       FontSize="{Binding MessageFontSize, ElementName=Root}" 
                                        Foreground="#E6EDF3"
                                        TextWrapping="NoWrap"
                                        TextTrimming="CharacterEllipsis"

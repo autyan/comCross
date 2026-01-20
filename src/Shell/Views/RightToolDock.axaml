@@ -6,9 +6,7 @@
              xmlns:views="using:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.RightToolDock"
-             x:DataType="vm:RightToolDockViewModel"
-             x:Name="Root"
-             IsCommandsTabActive="{Binding IsCommandsTabActive}">
+             x:DataType="vm:RightToolDockViewModel">
     
     <Grid RowDefinitions="Auto,*">
         <!-- Tool Tabs -->
@@ -93,7 +91,7 @@
                         </Grid>
                     </StackPanel>
 
-                    <views:CommandCenterView DataContext="{Binding CommandCenter}" IsVisible="{Binding IsCommandsTabActive, ElementName=Root}" />
+                    <views:CommandCenterView DataContext="{Binding CommandCenter}" IsVisible="{Binding IsActive}" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

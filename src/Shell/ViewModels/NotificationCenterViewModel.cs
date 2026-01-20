@@ -8,20 +8,24 @@ using Avalonia.Threading;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
 public sealed class NotificationCenterViewModel : BaseViewModel
 {
     private readonly NotificationService _notificationService;
+    private readonly IObjectFactory _objectFactory;
     private int _unreadCount;
 
     public NotificationCenterViewModel(
         ILocalizationService localization,
-        NotificationService notificationService)
+        NotificationService notificationService,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _notificationService = notificationService;
+        _objectFactory = objectFactory;
         _notificationService.NotificationAdded += OnNotificationAdded;
         
         // 构造时同步加载数据
@@ -56,7 +60,7 @@ public sealed class NotificationCenterViewModel : BaseViewModel
             Items.Clear();
             foreach (var item in items)
             {
-                Items.Add(new NotificationItemViewModel(item, Localization));
+                Items.Add(_objectFactory.Create<NotificationItemViewModel>(item, Localization));
             }
 
             UpdateUnreadCount();
@@ -112,7 +116,7 @@ public sealed class NotificationCenterViewModel : BaseViewModel
     {
         Dispatcher.UIThread.Post(() =>
         {
-            Items.Insert(0, new NotificationItemViewModel(item, Localization));
+            Items.Insert(0, _objectFactory.Create<NotificationItemViewModel>(item, Localization));
             UpdateUnreadCount();
             OnPropertyChanged(nameof(HasNotifications));
             OnPropertyChanged(nameof(IsEmpty));

@@ -1,114 +1,13 @@
-using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
-using ComCross.Shared.Services;
-using Microsoft.Extensions.DependencyInjection;
+using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
 public partial class CreateWorkloadDialog : BaseWindow
 {
-    private string _workloadName = string.Empty;
-    private string _workloadDescription = string.Empty;
-    private string? _nameError;
-
-    // 无参构造函数用于Avalonia XAML设计器
     public CreateWorkloadDialog()
     {
         InitializeComponent();
-        DataContext = this; // 启用L绑定
-    }
-
-    private void InitializeComponent()
-    {
-        AvaloniaXamlLoader.Load(this);
-    }
-
-    /// <summary>
-    /// 任务名称
-    /// </summary>
-    public string WorkloadName
-    {
-        get => _workloadName;
-        set
-        {
-            if (_workloadName != value)
-            {
-                _workloadName = value;
-                OnPropertyChanged();
-                ValidateName();
-                OnPropertyChanged(nameof(IsValid));
-            }
-        }
-    }
-
-    /// <summary>
-    /// 任务描述
-    /// </summary>
-    public string WorkloadDescription
-    {
-        get => _workloadDescription;
-        set
-        {
-            if (_workloadDescription != value)
-            {
-                _workloadDescription = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(DescriptionLength));
-            }
-        }
-    }
-
-    /// <summary>
-    /// 名称错误提示
-    /// </summary>
-    public string? NameError
-    {
-        get => _nameError;
-        private set
-        {
-            if (_nameError != value)
-            {
-                _nameError = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    /// <summary>
-    /// 描述长度
-    /// </summary>
-    public int DescriptionLength => WorkloadDescription?.Length ?? 0;
-
-    /// <summary>
-    /// 表单是否有效
-    /// </summary>
-    public bool IsValid => !string.IsNullOrWhiteSpace(WorkloadName) && string.IsNullOrEmpty(NameError);
-
-    /// <summary>
-    /// 验证名称
-    /// </summary>
-    private void ValidateName()
-    {
-        if (string.IsNullOrWhiteSpace(WorkloadName))
-        {
-            NameError = L["dialog.createWorkload.error.empty"];
-        }
-        else if (WorkloadName.Length < 2)
-        {
-            NameError = L["dialog.createWorkload.error.minLength"];
-        }
-        else if (WorkloadName.Length > 50)
-        {
-            NameError = L["dialog.createWorkload.error.maxLength"];
-        }
-        else
-        {
-            NameError = null;
-        }
     }
 
     /// <summary>
@@ -124,21 +23,16 @@ public partial class CreateWorkloadDialog : BaseWindow
     /// </summary>
     private void OnCreateClick(object? sender, RoutedEventArgs e)
     {
-        if (IsValid)
+        if (DataContext is not CreateWorkloadDialogViewModel vm || !vm.IsValid)
         {
-            Close(new CreateWorkloadResult
-            {
-                Name = WorkloadName.Trim(),
-                Description = WorkloadDescription?.Trim()
-            });
+            return;
         }
-    }
 
-    public new event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        Close(new CreateWorkloadResult
+        {
+            Name = vm.WorkloadName.Trim(),
+            Description = vm.WorkloadDescription?.Trim()
+        });
     }
 }
 

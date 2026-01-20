@@ -237,7 +237,14 @@
                 </WrapPanel>
             </StackPanel>
 
-            <views:PluginManagerView DataContext="{Binding}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Plugin manager page -->
+            <ScrollViewer IsVisible="{Binding IsPluginManagerSelected}">
+                <StackPanel Spacing="12" Margin="20">
+                    <TextBlock Text="{Binding SelectedNavigationEntry.Title}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
+                    <views:PluginManagerView DataContext="{Binding PluginManager}" />
                 </StackPanel>
             </ScrollViewer>
 

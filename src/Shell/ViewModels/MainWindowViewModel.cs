@@ -19,6 +19,8 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Shell.Services;
+using ComCross.Shell.Views;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -26,9 +28,8 @@ public class MainWindowViewModel : BaseViewModel
 {
     private readonly SettingsService _settingsService;
     private readonly AppLogService _appLogService;
-    private readonly NotificationService _notificationService;
-    private readonly ICapabilityDispatcher _dispatcher;
     private readonly Core.Application.IAppHost _appHost;
+    private readonly IProgressDialogFactory _progressDialogFactory;
     
     // Business services
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
@@ -38,11 +39,6 @@ public class MainWindowViewModel : BaseViewModel
     public LeftSidebarViewModel LeftSidebar { get; }
     public MessageStreamViewModel MessageStream { get; }
     public RightToolDockViewModel RightToolDock { get; }
-
-    /// <summary>
-    /// Workload panel ViewModel
-    /// </summary>
-    public WorkloadPanelViewModel WorkloadPanelViewModel { get; private set; } = null!;
 
     /// <summary>
     /// Workload tabs ViewModel (延迟加载)
@@ -164,19 +160,15 @@ public class MainWindowViewModel : BaseViewModel
     // Commands
     public ICommand ClearMessagesCommand { get; }
     public ICommand ExportMessagesCommand { get; }
+    public ICommand CloseSettingsCommand { get; }
+    public ICommand CloseNotificationsCommand { get; }
 
     public MainWindowViewModel(
         ILocalizationService localization,
-        IEventBus eventBus,
-        IMessageStreamService messageStream,
         SettingsService settingsService,
         AppLogService appLogService,
-        NotificationService notificationService,
-        PluginUiStateManager pluginUiStateManager,
-        ICapabilityDispatcher dispatcher,
         Core.Application.IAppHost appHost,
         IWorkspaceCoordinator workspaceCoordinator,
-        WorkloadPanelViewModel workloadPanelViewModel,
         WorkloadTabsViewModel workloadTabsViewModel,
         BusAdapterSelectorViewModel busAdapterSelectorViewModel,
         NotificationCenterViewModel notificationCenterViewModel,
@@ -184,17 +176,18 @@ public class MainWindowViewModel : BaseViewModel
         PluginManagerViewModel pluginManagerViewModel,
         SettingsViewModel settingsViewModel,
         DisplaySettingsViewModel displaySettingsViewModel,
-        SessionsViewModel sessionsViewModel)
+        SessionsViewModel sessionsViewModel,
+        LeftSidebarViewModel leftSidebar,
+        MessageStreamViewModel messageStream,
+        RightToolDockViewModel rightToolDock,
+        IProgressDialogFactory progressDialogFactory)
         : base(localization)
     {
         _settingsService = settingsService;
         _appLogService = appLogService;
-        _notificationService = notificationService;
-        _dispatcher = dispatcher;
         _appHost = appHost;
         _workspaceCoordinator = workspaceCoordinator;
-
-        WorkloadPanelViewModel = workloadPanelViewModel;
+        _progressDialogFactory = progressDialogFactory;
         WorkloadTabsViewModel = workloadTabsViewModel;
         BusAdapterSelectorViewModel = busAdapterSelectorViewModel;
 
@@ -205,10 +198,10 @@ public class MainWindowViewModel : BaseViewModel
         Display = displaySettingsViewModel;
         SessionsVm = sessionsViewModel;
 
-        // Sub-viewmodels for MainWindow's 3 subviews.
-        MessageStream = new MessageStreamViewModel(localization, messageStream, settingsService, displaySettingsViewModel);
-        RightToolDock = new RightToolDockViewModel(localization, workspaceCoordinator, appLogService, MessageStream, settingsViewModel, commandCenterViewModel);
-        LeftSidebar = new LeftSidebarViewModel(localization, eventBus, pluginUiStateManager, busAdapterSelectorViewModel);
+        // Sub-viewmodels for MainWindow's 3 subviews (DI-scoped and shared).
+        LeftSidebar = leftSidebar;
+        MessageStream = messageStream;
+        RightToolDock = rightToolDock;
 
         LeftSidebar.ActiveSessionChanged += (_, session) =>
         {
@@ -228,6 +221,8 @@ public class MainWindowViewModel : BaseViewModel
         // Initialize UI-only commands
         ClearMessagesCommand = new RelayCommand(() => RightToolDock.ClearMessages());
         ExportMessagesCommand = new AsyncRelayCommand(() => RightToolDock.ExportAsync());
+        CloseSettingsCommand = new RelayCommand(() => IsSettingsOpen = false);
+        CloseNotificationsCommand = new RelayCommand(() => IsNotificationsOpen = false);
         
         // 订阅语言变更事件（用于通知 Core/Plugins），UI 文本刷新由 BaseViewModel 统一处理。
         Localization.LanguageChanged += OnLanguageChanged;
@@ -271,6 +266,11 @@ public class MainWindowViewModel : BaseViewModel
             }
 
             RightToolDock.SetActiveSession(LeftSidebar.ActiveSession);
+
+            // Workloads: ensure default workload and load tabs.
+            await _workspaceCoordinator.EnsureDefaultWorkloadAsync();
+            await WorkloadTabsViewModel.LoadWorkloadsAsync();
+
             _appLogService.Info("Application UI state initialized.");
         }
         catch (Exception ex)
@@ -305,8 +305,6 @@ public class MainWindowViewModel : BaseViewModel
         }
     }
 
-    public ObservableCollection<LogMessage> Messages => MessageStream.Messages;
-
     private async void OnLanguageChanged(object? sender, string cultureCode)
     {
         // 通知核心层同步外部插件语言 (由于 Core 不感知 UI，我们需要从 UI 入口点转发这个通知)
@@ -337,99 +335,18 @@ public class MainWindowViewModel : BaseViewModel
     }
     
     /// <summary>
-    /// Cleanup resources before application exit
-    /// </summary>
-    public void Cleanup()
-    {
-        try
-        {
-            _appLogService.Info("Starting application cleanup...");
-            
-            // Core will handle session disconnection and plugin shutdown via AppHost
-            
-            MessageStream.SetActiveSession(null);
-            
-            _appLogService.Info("Application cleanup completed.");
-        }
-        catch (Exception ex)
-        {
-            _appLogService.Error($"Error during cleanup: {ex.Message}", ex);
-        }
-    }
-
-    /// <summary>
     /// Cleanup with progress dialog - runs on background thread
     /// </summary>
     public async Task CleanupWithProgressAsync()
     {
-        var progressDialog = new ProgressDialogViewModel(Localization);
-        
-        // Show progress dialog on UI thread
-        var dialogTask = Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            var dialog = new Window
-            {
-                Title = L["shutdown.title"],
-                Width = 400,
-                Height = 200,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Content = new Border
-                {
-                    Padding = new Avalonia.Thickness(20),
-                    Child = new StackPanel
-                    {
-                        Spacing = 16,
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Text = L["shutdown.message"],
-                                FontSize = 14,
-                                TextWrapping = Avalonia.Media.TextWrapping.Wrap
-                            },
-                            new TextBlock
-                            {
-                                Text = progressDialog.CurrentStatus,
-                                FontSize = 12,
-                                Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#87909B")),
-                                [!TextBlock.TextProperty] = new Avalonia.Data.Binding("CurrentStatus") { Source = progressDialog }
-                            },
-                            new ProgressBar
-                            {
-                                IsIndeterminate = true,
-                                Height = 4
-                            }
-                        }
-                    }
-                }
-            };
-
-            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
-            {
-                dialog.Show(desktop.MainWindow);
-            }
-            else
-            {
-                dialog.Show();
-            }
-
-            return dialog;
-        });
-
-        Window? progressWindow = await dialogTask;
+        var progressDialog = _progressDialogFactory.CreateViewModel();
+        var progressWindow = await _progressDialogFactory.ShowAsync(progressDialog);
 
         try
         {
             _appLogService.Info("Starting application cleanup with progress...");
             
             progressDialog.UpdateStatus(L["shutdown.disconnecting"]);
-            
-            // Delegate all core shutdown logic to AppHost
-            await Task.Run(async () =>
-            {
-                await _appHost.ShutdownAsync();
-            });
 
             // Save workspace state
             progressDialog.UpdateStatus(L["shutdown.savingState"]);

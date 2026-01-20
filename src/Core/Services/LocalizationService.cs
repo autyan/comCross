@@ -481,6 +481,8 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.pluginSettings.page"] = "Page",
             ["settings.nav.system"] = "System",
             ["settings.nav.system.page"] = "System Settings",
+            ["settings.nav.plugins"] = "Plugins",
+            ["settings.nav.plugins.page"] = "Plugin Manager",
             ["settings.language"] = "Language",
             ["settings.followSystemLanguage"] = "Follow system language",
             ["settings.logs.autosave"] = "Auto save logs",

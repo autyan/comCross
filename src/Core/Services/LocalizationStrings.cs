@@ -23,6 +23,9 @@ internal class LocalizationStrings : ILocalizationStrings, INotifyPropertyChange
     public void RefreshAll()
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+        // Different binding engines disagree on the indexer property name.
+        // Raise both to ensure XAML bindings like {Binding L[some.key]} refresh.
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
     }
 }

@@ -14,6 +14,7 @@ namespace ComCross.Shell;
 public partial class App : Application
 {
     private static IServiceProvider? _serviceProvider;
+    private IServiceScope? _mainWindowScope;
     private Core.Application.IAppHost? _appHost;
     private MainWindowViewModel? _viewModel;
     private bool _isShuttingDown = false;
@@ -86,8 +87,10 @@ public partial class App : Application
                 Console.Error.WriteLine("[Shell] Services initialized");
 
                 // 5. Build UI
-                _viewModel = _serviceProvider!.GetRequiredService<MainWindowViewModel>();
-                var mainWindow = _serviceProvider!.GetRequiredService<MainWindow>();
+                _mainWindowScope = _serviceProvider!.CreateScope();
+
+                _viewModel = _mainWindowScope.ServiceProvider.GetRequiredService<MainWindowViewModel>();
+                var mainWindow = _mainWindowScope.ServiceProvider.GetRequiredService<MainWindow>();
                 mainWindow.DataContext = _viewModel;
                 desktop.MainWindow = mainWindow;
                 // Defensive: explicitly show the window, but do it asynchronously.
@@ -156,6 +159,9 @@ public partial class App : Application
             }
             finally
             {
+                _mainWindowScope?.Dispose();
+                _mainWindowScope = null;
+
                 // Always shutdown on UI thread
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {

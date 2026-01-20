@@ -7,18 +7,9 @@ namespace ComCross.Shell.Views;
 
 public partial class RightToolDock : BaseUserControl
 {
-    public static readonly StyledProperty<bool> IsCommandsTabActiveProperty =
-        AvaloniaProperty.Register<RightToolDock, bool>(nameof(IsCommandsTabActive));
-
     public RightToolDock()
     {
         InitializeComponent();
-    }
-
-    public bool IsCommandsTabActive
-    {
-        get => GetValue(IsCommandsTabActiveProperty);
-        set => SetValue(IsCommandsTabActiveProperty, value);
     }
 
     private void OnSendTabClick(object? sender, RoutedEventArgs e)

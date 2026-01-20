@@ -3,22 +3,22 @@
              xmlns:vm="clr-namespace:ComCross.Shell.ViewModels"
              xmlns:models="clr-namespace:ComCross.Shell.Models"
              x:Class="ComCross.Shell.Views.BusAdapterSelector"
-             x:CompileBindings="False">
+             x:DataType="vm:BusAdapterSelectorViewModel">
 
   <StackPanel Spacing="12">
     <!-- Section Header -->
-    <TextBlock Text="{Binding $parent[Window].DataContext.L[sidebar.busAdapter]}" 
+    <TextBlock Text="{Binding L[sidebar.busAdapter]}" 
                FontSize="11" 
                FontWeight="Bold" 
                Foreground="#87909B"
                Margin="0,0,0,4" />
     
     <!-- Adapter Selection ComboBox -->
-    <ComboBox ItemsSource="{Binding AvailableAdapters}"
-              SelectedItem="{Binding SelectedAdapter}"
+    <ComboBox ItemsSource="{Binding AdapterItems}"
+              SelectedItem="{Binding SelectedAdapterItem}"
               HorizontalAlignment="Stretch">
       <ComboBox.ItemTemplate>
-        <DataTemplate x:DataType="models:BusAdapterInfo">
+        <DataTemplate x:DataType="vm:BusAdapterListItemViewModel">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="{Binding Icon}" 
                        FontSize="14" 
@@ -26,7 +26,7 @@
             <TextBlock Text="{Binding Name}" 
                        FontSize="13" 
                        VerticalAlignment="Center" />
-            <TextBlock Text="{Binding $parent[Window].DataContext.L[sidebar.busAdapter.comingSoon]}" 
+            <TextBlock Text="{Binding ComingSoonLabel}" 
                        FontSize="11" 
                        Foreground="#87909B"
                        VerticalAlignment="Center"
@@ -37,11 +37,11 @@
     </ComboBox>
     
     <!-- Adapter Description (if available) -->
-    <TextBlock Text="{Binding SelectedAdapter.Description}" 
+    <TextBlock Text="{Binding SelectedAdapterItem.Description}" 
                FontSize="11" 
                Foreground="#87909B"
                TextWrapping="Wrap"
-               IsVisible="{Binding SelectedAdapter.Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+           IsVisible="{Binding SelectedAdapterItem.Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     
     <!-- Configuration Panel Placeholder -->
     <!-- The actual config panel will be loaded dynamically based on selected adapter -->

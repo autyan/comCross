@@ -7,6 +7,7 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -15,21 +16,26 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly IEventBus _eventBus;
     private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly BusAdapterSelectorViewModel _busAdapterSelectorViewModel;
+    private readonly IObjectFactory _objectFactory;
 
     private Session? _activeSession;
     private bool _isConnected;
     private string? _preferredActiveSessionId;
+    private SessionListItemViewModel? _selectedSessionItem;
+    private bool _syncingSelection;
 
     public LeftSidebarViewModel(
         ILocalizationService localization,
         IEventBus eventBus,
         PluginUiStateManager pluginUiStateManager,
-        BusAdapterSelectorViewModel busAdapterSelectorViewModel)
+        BusAdapterSelectorViewModel busAdapterSelectorViewModel,
+        IObjectFactory objectFactory)
         : base(localization)
     {
         _eventBus = eventBus;
         _pluginUiStateManager = pluginUiStateManager;
         _busAdapterSelectorViewModel = busAdapterSelectorViewModel;
+        _objectFactory = objectFactory;
 
         _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
         _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
@@ -39,6 +45,36 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public ObservableCollection<Session> Sessions { get; } = new();
 
+    // UI-only collection for typed, compiled bindings.
+    public ObservableCollection<SessionListItemViewModel> SessionItems { get; } = new();
+
+    public SessionListItemViewModel? SelectedSessionItem
+    {
+        get => _selectedSessionItem;
+        set
+        {
+            if (!SetProperty(ref _selectedSessionItem, value))
+            {
+                return;
+            }
+
+            if (_syncingSelection)
+            {
+                return;
+            }
+
+            _syncingSelection = true;
+            try
+            {
+                ActiveSession = value?.Session;
+            }
+            finally
+            {
+                _syncingSelection = false;
+            }
+        }
+    }
+
     public Session? ActiveSession
     {
         get => _activeSession;
@@ -47,6 +83,21 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             if (!SetProperty(ref _activeSession, value))
             {
                 return;
+            }
+
+            if (!_syncingSelection)
+            {
+                _syncingSelection = true;
+                try
+                {
+                    SelectedSessionItem = _activeSession is null
+                        ? null
+                        : SessionItems.FirstOrDefault(i => ReferenceEquals(i.Session, _activeSession));
+                }
+                finally
+                {
+                    _syncingSelection = false;
+                }
             }
 
             // Sync UI context management (ADR-010 / Plugin UI v0.4.0)
@@ -96,6 +147,11 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             if (!Sessions.Any(s => s.Id == e.Session.Id))
             {
                 Sessions.Add(e.Session);
+            }
+
+            if (!SessionItems.Any(i => i.Session.Id == e.Session.Id))
+            {
+                SessionItems.Add(_objectFactory.Create<SessionListItemViewModel>(e.Session));
             }
 
             // Prefer restoring last active session (if provided); otherwise activate the newly created one.
