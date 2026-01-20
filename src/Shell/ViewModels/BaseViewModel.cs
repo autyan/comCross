@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -8,9 +9,11 @@ namespace ComCross.Shell.ViewModels;
 /// <summary>
 /// Base class for all ViewModels with localization support
 /// </summary>
-public abstract class BaseViewModel : INotifyPropertyChanged
+public abstract class BaseViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly ILocalizationService _localization;
+    private readonly EventHandler<string> _languageChangedHandler;
+    private bool _isDisposed;
 
     /// <summary>
     /// Indexer-based localization strings accessor for XAML and code
@@ -26,11 +29,7 @@ public abstract class BaseViewModel : INotifyPropertyChanged
     {
         _localization = localization;
 
-        // Ensure all bindings refresh on language changes.
-        // This covers:
-        // - XAML binding to ViewModel properties that compute values from L[...]
-        // - Any cached string properties when they are exposed via computed getters
-        _localization.LanguageChanged += (_, _) =>
+        _languageChangedHandler = (_, _) =>
         {
             // Explicitly notify L so bindings like {Binding L[some.key]} re-evaluate.
             OnPropertyChanged(nameof(L));
@@ -38,6 +37,33 @@ public abstract class BaseViewModel : INotifyPropertyChanged
             // Also refresh any computed properties on the ViewModel.
             OnPropertyChanged(null);
         };
+
+        // Ensure all bindings refresh on language changes.
+        // This covers:
+        // - XAML binding to ViewModel properties that compute values from L[...]
+        // - Any cached string properties when they are exposed via computed getters
+        _localization.LanguageChanged += _languageChangedHandler;
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _isDisposed = true;
+
+        if (disposing)
+        {
+            _localization.LanguageChanged -= _languageChangedHandler;
+        }
     }
 
     #region INotifyPropertyChanged

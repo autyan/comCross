@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
@@ -22,7 +21,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     private readonly PluginHostProtocolService _protocolService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
-    private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<PluginItemViewModel, PluginItemContext> _itemFactory;
     private string _pluginsDirectory;
 
     public event EventHandler? PluginsReloaded;
@@ -35,7 +34,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         PluginHostProtocolService protocolService,
         SettingsService settingsService,
         NotificationService notificationService,
-        IObjectFactory objectFactory)
+        IItemVmFactory<PluginItemViewModel, PluginItemContext> itemFactory)
         : base(localization)
     {
         _discoveryService = discoveryService;
@@ -44,14 +43,16 @@ public sealed class PluginManagerViewModel : BaseViewModel
         _protocolService = protocolService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _objectFactory = objectFactory;
+        _itemFactory = itemFactory;
         _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
+
+        Plugins = new ItemVmCollection<PluginItemViewModel, PluginItemContext>(_itemFactory);
 
         // 构造时自动加载当前运行时的状态
         _ = LoadAsync();
     }
 
-    public ObservableCollection<PluginItemViewModel> Plugins { get; } = new();
+    public ItemVmCollection<PluginItemViewModel, PluginItemContext> Plugins { get; }
 
     public string PluginsDirectory
     {
@@ -76,10 +77,24 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         foreach (var runtime in runtimes)
         {
-            Plugins.Add(_objectFactory.Create<PluginItemViewModel>(runtime, _settingsService.Current.Plugins.Enabled, Localization));
+            var id = runtime.Info.Manifest.Id;
+            var isEnabled = _settingsService.Current.Plugins.Enabled.TryGetValue(id, out var enabled) ? enabled : true;
+            Plugins.Add(new PluginItemContext(runtime, isEnabled));
         }
 
         PluginsReloaded?.Invoke(this, EventArgs.Empty);
+
+        await Task.CompletedTask;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Plugins.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 
     public async Task ShutdownAllAsync(TimeSpan timeoutPerHost)
@@ -603,7 +618,11 @@ public sealed record PluginCapabilityLaunchOption(
     string? JsonSchema,
     string? UiSchema);
 
-public sealed class PluginItemViewModel : BaseViewModel
+public sealed record PluginItemContext(
+    PluginRuntime Runtime,
+    bool IsEnabled);
+
+public sealed class PluginItemViewModel : LocalizedItemViewModelBase<PluginItemContext>
 {
     private bool _isEnabled;
     private PluginLoadState _state;
@@ -611,24 +630,31 @@ public sealed class PluginItemViewModel : BaseViewModel
     private bool _capabilitiesError;
     private string _name;
 
-    public PluginItemViewModel(
-        PluginRuntime runtime,
-        IReadOnlyDictionary<string, bool> enabledMap,
-        ILocalizationService localization)
+    private string _id = string.Empty;
+    private string _version = string.Empty;
+    private string _permissions = string.Empty;
+    private string _assemblyPath = string.Empty;
+
+    public PluginItemViewModel(ILocalizationService localization)
         : base(localization)
     {
-        Id = runtime.Info.Manifest.Id;
-        _name = runtime.Info.Manifest.Name;
-        Version = runtime.Info.Manifest.Version;
-        Permissions = string.Join(", ", runtime.Info.Manifest.Permissions);
-        AssemblyPath = runtime.Info.AssemblyPath;
-        _isEnabled = enabledMap.TryGetValue(Id, out var isEnabled) ? isEnabled : true;
-        _state = runtime.State;
-
-        UpdateState(runtime);
+        _name = string.Empty;
     }
 
-    public string Id { get; }
+    protected override void OnInit(PluginItemContext context)
+    {
+        _id = context.Runtime.Info.Manifest.Id;
+        _name = context.Runtime.Info.Manifest.Name;
+        _version = context.Runtime.Info.Manifest.Version;
+        _permissions = string.Join(", ", context.Runtime.Info.Manifest.Permissions);
+        _assemblyPath = context.Runtime.Info.AssemblyPath;
+        _isEnabled = context.IsEnabled;
+        _state = context.Runtime.State;
+
+        UpdateState(context.Runtime);
+    }
+
+    public string Id => _id;
     public string Name => _name;
 
     public string DisplayName
@@ -640,9 +666,9 @@ public sealed class PluginItemViewModel : BaseViewModel
             return string.Equals(localized, $"[{key}]", StringComparison.Ordinal) ? Name : localized;
         }
     }
-    public string Version { get; }
-    public string Permissions { get; }
-    public string AssemblyPath { get; }
+    public string Version => _version;
+    public string Permissions => _permissions;
+    public string AssemblyPath => _assemblyPath;
     public PluginLoadState State
     {
         get => _state;

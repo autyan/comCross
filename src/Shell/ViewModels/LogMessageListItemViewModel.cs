@@ -5,19 +5,35 @@ using ComCross.Shared.Models;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class LogMessageListItemViewModel : INotifyPropertyChanged
-{
-    private string _timestampText;
+public sealed record LogMessageListItemContext(LogMessage Message, string? TimestampFormat);
 
-    public LogMessageListItemViewModel(LogMessage message, string? timestampFormat)
+public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IInitializable<LogMessageListItemContext>
+{
+    private LogMessage? _message;
+    private string _timestampText;
+    private bool _isInitialized;
+
+    public LogMessageListItemViewModel()
     {
-        Message = message;
-        _timestampText = FormatTimestamp(message.Timestamp, timestampFormat);
+        _timestampText = string.Empty;
+    }
+
+    public void Init(LogMessageListItemContext context)
+    {
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("LogMessageListItemViewModel already initialized.");
+        }
+
+        _isInitialized = true;
+        _message = context.Message;
+        _timestampText = FormatTimestamp(context.Message.Timestamp, context.TimestampFormat);
+        OnPropertyChanged(null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public LogMessage Message { get; }
+    public LogMessage Message => _message ?? throw new InvalidOperationException("LogMessageListItemViewModel not initialized.");
 
     public DateTime Timestamp => Message.Timestamp;
 

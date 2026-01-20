@@ -3,15 +3,22 @@ using ComCross.Shell.Models;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class BusAdapterListItemViewModel : BaseViewModel
+public sealed class BusAdapterListItemViewModel : LocalizedItemViewModelBase<BusAdapterInfo>
 {
-    public BusAdapterListItemViewModel(ILocalizationService localization, BusAdapterInfo adapter)
+    private BusAdapterInfo? _adapter;
+
+    public BusAdapterListItemViewModel(ILocalizationService localization)
         : base(localization)
     {
-        Adapter = adapter;
     }
 
-    public BusAdapterInfo Adapter { get; }
+    public BusAdapterInfo Adapter => _adapter ?? throw new System.InvalidOperationException("BusAdapterListItemViewModel not initialized.");
+
+    protected override void OnInit(BusAdapterInfo adapter)
+    {
+        _adapter = adapter;
+        OnPropertyChanged(null);
+    }
 
     public string Icon => Adapter.Icon;
 

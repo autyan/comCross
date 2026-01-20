@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -17,11 +16,12 @@ namespace ComCross.Shell.ViewModels;
 /// <summary>
 /// Workload 面板的 ViewModel，管理所有 Workload 的显示和操作
 /// </summary>
-public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
+public sealed class WorkloadPanelViewModel : BaseViewModel
 {
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
     private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<WorkloadItemViewModel, WorkloadItemContext> _workloadItemFactory;
     private readonly ILogger<WorkloadPanelViewModel> _logger;
     private WorkloadItemViewModel? _selectedWorkload;
     private bool _isLoading;
@@ -34,15 +34,17 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
         WorkloadService workloadService,
         IEventBus eventBus,
         ILogger<WorkloadPanelViewModel> logger,
-        IObjectFactory objectFactory)
+        IObjectFactory objectFactory,
+        IItemVmFactory<WorkloadItemViewModel, WorkloadItemContext> workloadItemFactory)
         : base(localization)
     {
         _workloadService = workloadService;
         _eventBus = eventBus;
         _logger = logger;
         _objectFactory = objectFactory;
+        _workloadItemFactory = workloadItemFactory;
 
-        Workloads = new ObservableCollection<WorkloadItemViewModel>();
+        Workloads = new ItemVmCollection<WorkloadItemViewModel, WorkloadItemContext>(_workloadItemFactory);
 
         // 初始化命令
         CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
@@ -63,7 +65,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
     /// <summary>
     /// Workload 列表
     /// </summary>
-    public ObservableCollection<WorkloadItemViewModel> Workloads { get; }
+    public ItemVmCollection<WorkloadItemViewModel, WorkloadItemContext> Workloads { get; }
 
     /// <summary>
     /// 当前选中的 Workload
@@ -134,7 +136,10 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
             Workloads.Clear();
             foreach (var workload in workloads.OrderByDescending(w => w.IsDefault).ThenBy(w => w.Name))
             {
-                Workloads.Add(_objectFactory.Create<WorkloadItemViewModel>(workload, RenameWorkloadCommand, DeleteWorkloadCommand));
+                Workloads.Add(new WorkloadItemContext(
+                    workload,
+                    RenameWorkloadCommand,
+                    DeleteWorkloadCommand));
             }
 
             // 默认选中第一个（默认 Workload）
@@ -314,13 +319,19 @@ public sealed class WorkloadPanelViewModel : BaseViewModel, IDisposable
     //     _ = LoadWorkloadsAsync(); // 重新加载列表（简单实现）
     // }
 
-    public void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        // 取消订阅事件
-        foreach (var subscription in _subscriptions)
+        if (disposing)
         {
-            subscription.Dispose();
+            foreach (var subscription in _subscriptions)
+            {
+                subscription.Dispose();
+            }
+            _subscriptions.Clear();
+
+            Workloads.Dispose();
         }
-        _subscriptions.Clear();
+
+        base.Dispose(disposing);
     }
 }

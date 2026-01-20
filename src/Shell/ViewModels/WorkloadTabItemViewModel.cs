@@ -1,55 +1,60 @@
 using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using ComCross.Core.Models;
 using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
+public sealed record WorkloadTabItemContext(
+    Workload Workload,
+    ICommand ActivateCommand,
+    ICommand CloseCommand,
+    ICommand RenameCommand,
+    ICommand CopyCommand);
+
 /// <summary>
 /// ViewModel for individual Workload tab item
 /// </summary>
-public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
+public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<WorkloadTabItemContext>
 {
-    private string _name;
+    private string _id = string.Empty;
+    private string _name = string.Empty;
     private bool _isActive;
-    private readonly ILocalizationService _localization;
+    private string _icon = "📁";
+    private bool _isDefault;
+    private bool _isInitialized;
 
-    public WorkloadTabItemViewModel(
-        ILocalizationService localization,
-        Workload workload,
-        ICommand activateCommand,
-        ICommand closeCommand,
-        ICommand renameCommand,
-        ICommand copyCommand)
+    public WorkloadTabItemViewModel(ILocalizationService localization)
+        : base(localization)
     {
-        _localization = localization;
-        Id = workload.Id;
-        _name = workload.Name;
-        Icon = workload.IsDefault ? "🏠" : "📁";
-        IsDefault = workload.IsDefault;
-
-        ActivateCommand = activateCommand;
-        CloseCommand = closeCommand;
-        RenameCommand = renameCommand;
-        CopyCommand = copyCommand;
-
-        _localization.LanguageChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(CloseToolTip));
-            OnPropertyChanged(nameof(RenameHeader));
-            OnPropertyChanged(nameof(CopyHeader));
-            OnPropertyChanged(nameof(DeleteHeader));
-        };
     }
 
-    private ILocalizationStrings L => _localization.Strings;
+    public void Init(WorkloadTabItemContext context)
+    {
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("WorkloadTabItemViewModel already initialized.");
+        }
+
+        _isInitialized = true;
+
+        _id = context.Workload.Id;
+        _name = context.Workload.Name;
+        _icon = context.Workload.IsDefault ? "🏠" : "📁";
+        _isDefault = context.Workload.IsDefault;
+
+        ActivateCommand = context.ActivateCommand;
+        CloseCommand = context.CloseCommand;
+        RenameCommand = context.RenameCommand;
+        CopyCommand = context.CopyCommand;
+
+        OnPropertyChanged(null);
+    }
 
     /// <summary>
     /// Workload unique ID
     /// </summary>
-    public string Id { get; }
+    public string Id => _id;
 
     /// <summary>
     /// Workload name
@@ -103,12 +108,12 @@ public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
     /// <summary>
     /// Workload icon
     /// </summary>
-    public string Icon { get; }
+    public string Icon => _icon;
 
     /// <summary>
     /// Is this the default workload?
     /// </summary>
-    public bool IsDefault { get; }
+    public bool IsDefault => _isDefault;
 
     /// <summary>
     /// Is this workload currently active?
@@ -154,30 +159,12 @@ public sealed class WorkloadTabItemViewModel : INotifyPropertyChanged
 
     public string DeleteHeader => L["workload.delete"];
 
-    /// <summary>
-    /// Command to activate this workload
-    /// </summary>
-    public ICommand ActivateCommand { get; }
+    // Commands are assigned during Init.
+    public ICommand ActivateCommand { get; private set; } = null!;
 
-    /// <summary>
-    /// Command to close this workload
-    /// </summary>
-    public ICommand CloseCommand { get; }
+    public ICommand CloseCommand { get; private set; } = null!;
 
-    /// <summary>
-    /// Command to rename this workload
-    /// </summary>
-    public ICommand RenameCommand { get; }
+    public ICommand RenameCommand { get; private set; } = null!;
 
-    /// <summary>
-    /// Command to copy this workload (state + data)
-    /// </summary>
-    public ICommand CopyCommand { get; }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
+    public ICommand CopyCommand { get; private set; } = null!;
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -20,12 +19,16 @@ namespace ComCross.Shell.ViewModels;
 /// <summary>
 /// ViewModel for Workload tabs management
 /// </summary>
-public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
+public sealed class WorkloadTabsViewModel : BaseViewModel
 {
     private readonly WorkloadService _workloadService;
     private readonly IEventBus _eventBus;
     private readonly IObjectFactory _objectFactory;
     private readonly NotificationCenterViewModel _notificationCenter;
+    private readonly IItemVmFactory<WorkloadTabItemViewModel, WorkloadTabItemContext> _tabItemFactory;
+    private readonly IDisposable _workloadCreatedSubscription;
+    private readonly IDisposable _workloadRenamedSubscription;
+    private readonly IDisposable _workloadDeletedSubscription;
     private WorkloadTabItemViewModel? _activeTab;
 
     public WorkloadTabsViewModel(
@@ -33,15 +36,17 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         WorkloadService workloadService,
         IEventBus eventBus,
         NotificationCenterViewModel notificationCenter,
-        IObjectFactory objectFactory)
+        IObjectFactory objectFactory,
+        IItemVmFactory<WorkloadTabItemViewModel, WorkloadTabItemContext> tabItemFactory)
         : base(localization)
     {
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _notificationCenter = notificationCenter;
         _objectFactory = objectFactory;
+        _tabItemFactory = tabItemFactory;
 
-        Tabs = new ObservableCollection<WorkloadTabItemViewModel>();
+        Tabs = new ItemVmCollection<WorkloadTabItemViewModel, WorkloadTabItemContext>(_tabItemFactory);
 
         // Create commands using AsyncRelayCommand and RelayCommand (same as MainWindowViewModel)
         CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
@@ -50,15 +55,15 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
         CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
 
-        _eventBus.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
-        _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
-        _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
+        _workloadCreatedSubscription = _eventBus.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
+        _workloadRenamedSubscription = _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
+        _workloadDeletedSubscription = _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
     }
 
     /// <summary>
     /// Collection of workload tabs
     /// </summary>
-    public ObservableCollection<WorkloadTabItemViewModel> Tabs { get; }
+    public ItemVmCollection<WorkloadTabItemViewModel, WorkloadTabItemContext> Tabs { get; }
 
     /// <summary>
     /// Currently active tab
@@ -101,13 +106,12 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         Tabs.Clear();
         foreach (var workload in workloads)
         {
-            var tabItem = _objectFactory.Create<WorkloadTabItemViewModel>(
+            Tabs.Add(new WorkloadTabItemContext(
                 workload,
                 ActivateWorkloadCommand,
                 CloseWorkloadCommand,
                 RenameWorkloadCommand,
-                CopyWorkloadCommand);
-            Tabs.Add(tabItem);
+                CopyWorkloadCommand));
         }
 
         // Activate the default workload or first one
@@ -255,13 +259,12 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         var workload = _workloadService.GetWorkload(e.WorkloadId);
         if (workload != null)
         {
-            var tabItem = _objectFactory.Create<WorkloadTabItemViewModel>(
+            Tabs.Add(new WorkloadTabItemContext(
                 workload,
                 ActivateWorkloadCommand,
                 CloseWorkloadCommand,
                 RenameWorkloadCommand,
-                CopyWorkloadCommand);
-            Tabs.Add(tabItem);
+                CopyWorkloadCommand));
 
             // Auto-activate new workload
             ActivateWorkload(workload.Id);
@@ -296,8 +299,16 @@ public sealed class WorkloadTabsViewModel : BaseViewModel, IDisposable
         }
     }
 
-    public void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        // Cleanup if needed
+        if (disposing)
+        {
+            _workloadCreatedSubscription.Dispose();
+            _workloadRenamedSubscription.Dispose();
+            _workloadDeletedSubscription.Dispose();
+            Tabs.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

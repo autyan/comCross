@@ -5,24 +5,38 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class SessionListItemViewModel : BaseViewModel, IDisposable
+public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Session>
 {
-    private readonly Session _session;
+    private Session? _session;
+    private bool _isInitialized;
 
-    public SessionListItemViewModel(ILocalizationService localization, Session session)
+    public SessionListItemViewModel(ILocalizationService localization)
         : base(localization)
     {
-        _session = session;
-        _session.PropertyChanged += OnSessionPropertyChanged;
     }
 
-    public Session Session => _session;
+    public void Init(Session session)
+    {
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("SessionListItemViewModel already initialized.");
+        }
 
-    public string Name => _session.Name;
-    public string Port => _session.Port;
-    public long RxBytes => _session.RxBytes;
-    public long TxBytes => _session.TxBytes;
-    public SessionStatus Status => _session.Status;
+        _isInitialized = true;
+        _session = session;
+        _session.PropertyChanged += OnSessionPropertyChanged;
+
+        // Ensure UI refresh on initial attach.
+        OnPropertyChanged(null);
+    }
+
+    public Session Session => _session ?? throw new InvalidOperationException("SessionListItemViewModel not initialized.");
+
+    public string Name => Session.Name;
+    public string Port => Session.Port;
+    public long RxBytes => Session.RxBytes;
+    public long TxBytes => Session.TxBytes;
+    public SessionStatus Status => Session.Status;
 
     public string TxLabel => L["status.tx"];
     public string RxLabel => L["status.rx"];
@@ -46,8 +60,16 @@ public sealed class SessionListItemViewModel : BaseViewModel, IDisposable
         }
     }
 
-    public void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        _session.PropertyChanged -= OnSessionPropertyChanged;
+        if (disposing)
+        {
+            if (_session != null)
+            {
+                _session.PropertyChanged -= OnSessionPropertyChanged;
+            }
+        }
+
+        base.Dispose(disposing);
     }
 }

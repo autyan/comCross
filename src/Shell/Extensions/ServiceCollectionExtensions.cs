@@ -24,6 +24,9 @@ public static class ServiceCollectionExtensions
         // Cross-cutting factories (avoid manual `new` for Views/ViewModels)
         services.AddTransient<IObjectFactory, ComCross.Shell.Services.ObjectFactory>();
 
+        // Item VM factory (Create via DI, then Init(context))
+        services.AddTransient(typeof(IItemVmFactory<,>), typeof(ItemVmFactory<,>));
+
         // Dialog factories
         services.AddTransient<ITextInputDialogFactory, TextInputDialogFactory>();
         services.AddTransient<IMessageBoxDialogFactory, MessageBoxDialogFactory>();

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Linq;
@@ -8,31 +7,32 @@ using Avalonia.Threading;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
-using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
 public sealed class NotificationCenterViewModel : BaseViewModel
 {
     private readonly NotificationService _notificationService;
-    private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<NotificationItemViewModel, NotificationItem> _itemFactory;
     private int _unreadCount;
 
     public NotificationCenterViewModel(
         ILocalizationService localization,
         NotificationService notificationService,
-        IObjectFactory objectFactory)
+        IItemVmFactory<NotificationItemViewModel, NotificationItem> itemFactory)
         : base(localization)
     {
         _notificationService = notificationService;
-        _objectFactory = objectFactory;
+        _itemFactory = itemFactory;
         _notificationService.NotificationAdded += OnNotificationAdded;
+
+        Items = new ItemVmCollection<NotificationItemViewModel, NotificationItem>(_itemFactory);
         
         // 构造时同步加载数据
         _ = LoadAsync();
     }
 
-    public ObservableCollection<NotificationItemViewModel> Items { get; } = new();
+    public ItemVmCollection<NotificationItemViewModel, NotificationItem> Items { get; }
 
     public int UnreadCount
     {
@@ -60,7 +60,7 @@ public sealed class NotificationCenterViewModel : BaseViewModel
             Items.Clear();
             foreach (var item in items)
             {
-                Items.Add(_objectFactory.Create<NotificationItemViewModel>(item, Localization));
+                Items.Add(item);
             }
 
             UpdateUnreadCount();
@@ -116,7 +116,7 @@ public sealed class NotificationCenterViewModel : BaseViewModel
     {
         Dispatcher.UIThread.Post(() =>
         {
-            Items.Insert(0, _objectFactory.Create<NotificationItemViewModel>(item, Localization));
+            Items.Insert(0, item);
             UpdateUnreadCount();
             OnPropertyChanged(nameof(HasNotifications));
             OnPropertyChanged(nameof(IsEmpty));
@@ -127,40 +127,62 @@ public sealed class NotificationCenterViewModel : BaseViewModel
     {
         UnreadCount = Items.Count(i => !i.IsRead);
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _notificationService.NotificationAdded -= OnNotificationAdded;
+            Items.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }
 
-public sealed class NotificationItemViewModel : BaseViewModel
+public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<NotificationItem>
 {
-    private readonly NotificationItem _item;
-    private readonly object[] _args;
+    private NotificationItem? _item;
+    private object[] _args = Array.Empty<object>();
 
-    public NotificationItemViewModel(NotificationItem item, ILocalizationService localization)
+    public NotificationItemViewModel(ILocalizationService localization)
         : base(localization)
+    {
+    }
+
+    protected override void OnInit(NotificationItem item)
     {
         _item = item;
         _args = ParseArgs(item.MessageArgsJson);
+        OnPropertyChanged(null);
     }
 
-    public string Id => _item.Id;
-    public DateTime CreatedAt => _item.CreatedAt.ToLocalTime();
-    public NotificationLevel Level => _item.Level;
+    public string Id => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Id;
+    public DateTime CreatedAt => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).CreatedAt.ToLocalTime();
+    public NotificationLevel Level => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Level;
 
     public string Message
     {
-        get => Localization.GetString(_item.MessageKey, _args);
+        get
+        {
+            var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
+            return Localization.GetString(item.MessageKey, _args);
+        }
     }
 
     public bool IsRead
     {
-        get => _item.IsRead;
+        get => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).IsRead;
         set
         {
-            if (_item.IsRead == value)
+            var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
+
+            if (item.IsRead == value)
             {
                 return;
             }
 
-            _item.IsRead = value;
+            item.IsRead = value;
             OnPropertyChanged();
         }
     }

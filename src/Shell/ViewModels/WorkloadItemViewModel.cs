@@ -1,72 +1,99 @@
 using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using ComCross.Core.Models;
 using ComCross.Shared.Services;
-using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
+
+public sealed record WorkloadItemContext(
+    Workload Workload,
+    ICommand RenameCommand,
+    ICommand DeleteCommand);
+
+public sealed record WorkloadSessionItemContext(
+    string SessionId,
+    string WorkloadId,
+    string Name);
 
 /// <summary>
 /// Workload 项的 ViewModel，用于在 UI 中显示单个 Workload
 /// </summary>
-public sealed class WorkloadItemViewModel : BaseViewModel
+public sealed class WorkloadItemViewModel : LocalizedItemViewModelBase<WorkloadItemContext>
 {
+    private readonly IItemVmFactory<SessionItemViewModel, WorkloadSessionItemContext> _sessionItemFactory;
+
     private bool _isExpanded = true;
     private bool _isSelected;
 
+    private string _id = string.Empty;
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+    private bool _isDefault;
+    private DateTime _createdAt;
+    private DateTime _updatedAt;
+
     public WorkloadItemViewModel(
         ILocalizationService localization,
-        Workload workload,
-        ICommand renameCommand,
-        ICommand deleteCommand,
-        IObjectFactory objectFactory)
+        IItemVmFactory<SessionItemViewModel, WorkloadSessionItemContext> sessionItemFactory)
         : base(localization)
     {
-        Id = workload.Id;
-        Name = workload.Name;
-        Description = workload.Description ?? string.Empty;
-        IsDefault = workload.IsDefault;
-        CreatedAt = workload.CreatedAt;
-        UpdatedAt = workload.UpdatedAt;
+        _sessionItemFactory = sessionItemFactory;
 
-        RenameCommand = renameCommand;
-        DeleteCommand = deleteCommand;
-        
-        Sessions = new ObservableCollection<SessionItemViewModel>();
-        
-        // 加载 Sessions（从 SessionIds）
-        foreach (var sessionId in workload.SessionIds)
+        Sessions = new ItemVmCollection<SessionItemViewModel, WorkloadSessionItemContext>(_sessionItemFactory);
+    }
+
+    protected override void OnInit(WorkloadItemContext context)
+    {
+        _id = context.Workload.Id;
+        _name = context.Workload.Name;
+        _description = context.Workload.Description ?? string.Empty;
+        _isDefault = context.Workload.IsDefault;
+        _createdAt = context.Workload.CreatedAt;
+        _updatedAt = context.Workload.UpdatedAt;
+
+        RenameCommand = context.RenameCommand;
+        DeleteCommand = context.DeleteCommand;
+
+        Sessions.Clear();
+        foreach (var sessionId in context.Workload.SessionIds)
         {
-            var session = objectFactory.Create<SessionItemViewModel>();
-            session.Id = sessionId;
-            session.Name = $"Session {sessionId.Substring(0, 8)}"; // 临时名称，稍后从实际 Session 加载
-            session.WorkloadId = Id;
-            Sessions.Add(session);
+            var displayName = sessionId.Length >= 8
+                ? $"Session {sessionId.Substring(0, 8)}"
+                : $"Session {sessionId}";
+
+            Sessions.Add(new WorkloadSessionItemContext(
+                sessionId,
+                _id,
+                displayName));
         }
+
+        OnPropertyChanged(nameof(SessionCount));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(null);
     }
 
     /// <summary>
     /// Workload ID
     /// </summary>
-    public string Id { get; }
+    public string Id => _id;
 
     /// <summary>
     /// Workload 名称
     /// </summary>
-    public string Name { get; private set; }
+    public string Name => _name;
 
     /// <summary>
     /// Workload 描述
     /// </summary>
-    public string Description { get; private set; }
+    public string Description => _description;
 
     /// <summary>
     /// 是否为默认 Workload
     /// </summary>
-    public bool IsDefault { get; }
+    public bool IsDefault => _isDefault;
 
     /// <summary>
     /// 图标（默认 Workload 显示 🏠，普通 Workload 显示 📁）
@@ -76,21 +103,21 @@ public sealed class WorkloadItemViewModel : BaseViewModel
     /// <summary>
     /// 创建时间
     /// </summary>
-    public DateTime CreatedAt { get; }
+    public DateTime CreatedAt => _createdAt;
 
     /// <summary>
     /// 更新时间
     /// </summary>
-    public DateTime UpdatedAt { get; private set; }
+    public DateTime UpdatedAt => _updatedAt;
 
     /// <summary>
     /// Workload 中的 Session 列表
     /// </summary>
-    public ObservableCollection<SessionItemViewModel> Sessions { get; }
+    public ItemVmCollection<SessionItemViewModel, WorkloadSessionItemContext> Sessions { get; }
 
-    public ICommand RenameCommand { get; }
+    public ICommand RenameCommand { get; private set; } = null!;
 
-    public ICommand DeleteCommand { get; }
+    public ICommand DeleteCommand { get; private set; } = null!;
 
     /// <summary>
     /// Session 数量
@@ -143,10 +170,10 @@ public sealed class WorkloadItemViewModel : BaseViewModel
     /// </summary>
     public void UpdateName(string newName)
     {
-        if (Name != newName)
+        if (_name != newName)
         {
-            Name = newName;
-            UpdatedAt = DateTime.UtcNow;
+            _name = newName;
+            _updatedAt = DateTime.UtcNow;
             OnPropertyChanged(nameof(Name));
             OnPropertyChanged(nameof(DisplayName));
             OnPropertyChanged(nameof(UpdatedAt));
@@ -158,10 +185,10 @@ public sealed class WorkloadItemViewModel : BaseViewModel
     /// </summary>
     public void UpdateDescription(string newDescription)
     {
-        if (Description != newDescription)
+        if (_description != newDescription)
         {
-            Description = newDescription;
-            UpdatedAt = DateTime.UtcNow;
+            _description = newDescription;
+            _updatedAt = DateTime.UtcNow;
             OnPropertyChanged(nameof(Description));
             OnPropertyChanged(nameof(UpdatedAt));
         }
@@ -170,12 +197,11 @@ public sealed class WorkloadItemViewModel : BaseViewModel
     /// <summary>
     /// 添加 Session
     /// </summary>
-    public void AddSession(SessionItemViewModel session)
+    public void AddSession(WorkloadSessionItemContext session)
     {
-        if (!Sessions.Contains(session))
+        if (!Sessions.Any(s => string.Equals(s.Id, session.SessionId, StringComparison.Ordinal)))
         {
             Sessions.Add(session);
-            session.WorkloadId = Id;
             OnPropertyChanged(nameof(SessionCount));
             OnPropertyChanged(nameof(DisplayName));
         }
@@ -192,23 +218,48 @@ public sealed class WorkloadItemViewModel : BaseViewModel
             OnPropertyChanged(nameof(DisplayName));
         }
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Sessions.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }
 
 /// <summary>
 /// Session 项的 ViewModel（用于在 Workload 下显示）
 /// </summary>
-public sealed class SessionItemViewModel : INotifyPropertyChanged
+public sealed class SessionItemViewModel : INotifyPropertyChanged, IInitializable<WorkloadSessionItemContext>
 {
     private string _name = string.Empty;
     private string _workloadId = string.Empty;
     private bool _isConnected;
+    private bool _isInitialized;
     
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>
     /// Session ID
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string Id { get; private set; } = string.Empty;
+
+    public void Init(WorkloadSessionItemContext context)
+    {
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("SessionItemViewModel already initialized.");
+        }
+
+        _isInitialized = true;
+        Id = context.SessionId;
+        _workloadId = context.WorkloadId;
+        _name = context.Name;
+        OnPropertyChanged(null);
+    }
 
     /// <summary>
     /// Session 名称
@@ -232,14 +283,6 @@ public sealed class SessionItemViewModel : INotifyPropertyChanged
     public string WorkloadId
     {
         get => _workloadId;
-        set
-        {
-            if (_workloadId != value)
-            {
-                _workloadId = value;
-                OnPropertyChanged();
-            }
-        }
     }
 
     /// <summary>

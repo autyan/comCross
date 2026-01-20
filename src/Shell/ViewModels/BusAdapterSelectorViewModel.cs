@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
@@ -7,7 +6,6 @@ using ComCross.Shared.Models;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
 using ComCross.PluginSdk.UI;
-using ComCross.Shell.Services;
 using ComCross.Shell.Plugins.UI;
 
 namespace ComCross.Shell.ViewModels;
@@ -26,9 +24,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerViewModel _pluginManager;
     private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
-    private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
     private IReadOnlyList<PluginCapabilityLaunchOption> _lastOptions = Array.Empty<PluginCapabilityLaunchOption>();
     private bool _isSyncingSelection;
+    private readonly EventHandler<string> _languageChangedHandler;
 
     public BusAdapterSelectorViewModel(
         ILocalizationService localization,
@@ -36,18 +35,18 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginUiStateManager stateManager,
         PluginManagerViewModel pluginManager,
         ComCross.Core.Services.PluginUiConfigService pluginUiConfigService,
-        IObjectFactory objectFactory)
+        IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory)
         : base(localization)
     {
         _uiRenderer = uiRenderer;
         _stateManager = stateManager;
         _pluginManager = pluginManager;
         _pluginUiConfigService = pluginUiConfigService;
-        _objectFactory = objectFactory;
-        
-        AdapterItems = new ObservableCollection<BusAdapterListItemViewModel>();
+        _adapterItemFactory = adapterItemFactory;
 
-        Localization.LanguageChanged += (_, _) =>
+        AdapterItems = new ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo>(_adapterItemFactory);
+        
+        _languageChangedHandler = (_, _) =>
         {
             if (_lastOptions.Count > 0)
             {
@@ -61,9 +60,11 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 _ = LoadConfigPanelAsync();
             }
         };
+
+        Localization.LanguageChanged += _languageChangedHandler;
     }
 
-    public ObservableCollection<BusAdapterListItemViewModel> AdapterItems { get; }
+    public ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo> AdapterItems { get; }
 
     public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
     {
@@ -96,7 +97,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                     UiSchema = option.UiSchema
                 };
 
-                AdapterItems.Add(_objectFactory.Create<BusAdapterListItemViewModel>(adapter));
+                AdapterItems.Add(adapter);
             }
         }
 
@@ -115,6 +116,17 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         {
             SelectedAdapterItem = AdapterItems[0];
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Localization.LanguageChanged -= _languageChangedHandler;
+            AdapterItems.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 
     public void SelectAdapterById(string? id)

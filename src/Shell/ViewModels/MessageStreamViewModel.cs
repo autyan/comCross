@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using Avalonia.Threading;
@@ -7,7 +6,6 @@ using ComCross.Core.Services;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
-using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -15,7 +13,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
 {
     private readonly IMessageStreamService _messageStream;
     private readonly SettingsService _settingsService;
-    private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> _itemFactory;
 
     private IDisposable? _messageSubscription;
 
@@ -27,20 +25,22 @@ public sealed class MessageStreamViewModel : BaseViewModel
         IMessageStreamService messageStream,
         SettingsService settingsService,
         DisplaySettingsViewModel display,
-        IObjectFactory objectFactory)
+        IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> itemFactory)
         : base(localization)
     {
         _messageStream = messageStream;
         _settingsService = settingsService;
         Display = display;
-        _objectFactory = objectFactory;
+        _itemFactory = itemFactory;
+
+        MessageItems = new ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext>(_itemFactory);
 
         Display.PropertyChanged += OnDisplayPropertyChanged;
     }
 
     public DisplaySettingsViewModel Display { get; }
 
-    public ObservableCollection<LogMessageListItemViewModel> MessageItems { get; } = new();
+    public ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext> MessageItems { get; }
 
     public Session? ActiveSession
     {
@@ -91,7 +91,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
                     return;
                 }
 
-                MessageItems.Add(_objectFactory.Create<LogMessageListItemViewModel>(message, Display.TimestampFormat));
+                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
                 TrimMessages();
             });
         });
@@ -116,7 +116,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
         foreach (var message in messages)
         {
-            MessageItems.Add(_objectFactory.Create<LogMessageListItemViewModel>(message, Display.TimestampFormat));
+            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
         }
 
         ApplyFilter();
@@ -135,7 +135,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
             MessageItems.Clear();
             foreach (var message in filtered)
             {
-                MessageItems.Add(_objectFactory.Create<LogMessageListItemViewModel>(message, Display.TimestampFormat));
+                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
             }
 
             return;
@@ -147,7 +147,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
         foreach (var message in messages)
         {
-            MessageItems.Add(_objectFactory.Create<LogMessageListItemViewModel>(message, Display.TimestampFormat));
+            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
         }
     }
 
@@ -171,5 +171,18 @@ public sealed class MessageStreamViewModel : BaseViewModel
         {
             item.UpdateTimestampFormat(Display.TimestampFormat);
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Display.PropertyChanged -= OnDisplayPropertyChanged;
+            _messageSubscription?.Dispose();
+            _messageSubscription = null;
+            MessageItems.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

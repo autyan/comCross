@@ -7,7 +7,6 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
-using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -16,7 +15,10 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly IEventBus _eventBus;
     private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly BusAdapterSelectorViewModel _busAdapterSelectorViewModel;
-    private readonly IObjectFactory _objectFactory;
+    private readonly IItemVmFactory<SessionListItemViewModel, Session> _sessionItemFactory;
+
+    private readonly IDisposable _sessionCreatedSubscription;
+    private readonly IDisposable _sessionClosedSubscription;
 
     private Session? _activeSession;
     private bool _isConnected;
@@ -29,16 +31,17 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         IEventBus eventBus,
         PluginUiStateManager pluginUiStateManager,
         BusAdapterSelectorViewModel busAdapterSelectorViewModel,
-        IObjectFactory objectFactory)
+        IItemVmFactory<SessionListItemViewModel, Session> sessionItemFactory)
         : base(localization)
     {
         _eventBus = eventBus;
         _pluginUiStateManager = pluginUiStateManager;
         _busAdapterSelectorViewModel = busAdapterSelectorViewModel;
-        _objectFactory = objectFactory;
+        _sessionItemFactory = sessionItemFactory;
 
-        _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
-        _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
+        _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
+        _sessionClosedSubscription = _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
+        SessionItems = new ItemVmCollection<SessionListItemViewModel, Session>(_sessionItemFactory);
     }
 
     public BusAdapterSelectorViewModel BusAdapterSelectorViewModel => _busAdapterSelectorViewModel;
@@ -46,7 +49,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     public ObservableCollection<Session> Sessions { get; } = new();
 
     // UI-only collection for typed, compiled bindings.
-    public ObservableCollection<SessionListItemViewModel> SessionItems { get; } = new();
+    public ItemVmCollection<SessionListItemViewModel, Session> SessionItems { get; }
 
     public SessionListItemViewModel? SelectedSessionItem
     {
@@ -57,7 +60,6 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             {
                 return;
             }
-
             if (_syncingSelection)
             {
                 return;
@@ -151,7 +153,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
             if (!SessionItems.Any(i => i.Session.Id == e.Session.Id))
             {
-                SessionItems.Add(_objectFactory.Create<SessionListItemViewModel>(e.Session));
+                SessionItems.Add(e.Session);
             }
 
             // Prefer restoring last active session (if provided); otherwise activate the newly created one.
@@ -184,5 +186,17 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                 ActiveSessionChanged?.Invoke(this, ActiveSession);
             }
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _sessionCreatedSubscription.Dispose();
+            _sessionClosedSubscription.Dispose();
+            SessionItems.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }
