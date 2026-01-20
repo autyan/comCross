@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using ComCross.PluginSdk.UI;
 
 namespace ComCross.Shell.Plugins.UI;
@@ -44,9 +45,51 @@ public class AvaloniaGenericControl : AvaloniaPluginUiControl
     public override Control AvaloniaControl => _control;
     public override string Name => _name;
     public override object? Value { get; set; }
-    public override event EventHandler<object?>? ValueChanged;
+    public override event EventHandler<object?>? ValueChanged { add { } remove { } }
     public override void UpdateFromState(object? value) { }
     public override void Reset() { }
+}
+
+public sealed class AvaloniaLabeledControl : AvaloniaPluginUiControl
+{
+    private readonly string _name;
+    private readonly AvaloniaPluginUiControl _inner;
+    private readonly StackPanel _panel;
+
+    public AvaloniaLabeledControl(string name, string label, AvaloniaPluginUiControl inner)
+    {
+        _name = name;
+        _inner = inner;
+        _panel = new StackPanel
+        {
+            Spacing = 4,
+            Orientation = Orientation.Vertical
+        };
+
+        _panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            Foreground = Avalonia.Media.Brushes.LightGray
+        });
+        _panel.Children.Add(_inner.AvaloniaControl);
+
+        _inner.ValueChanged += (_, v) => ValueChanged?.Invoke(this, v);
+    }
+
+    public override Control AvaloniaControl => _panel;
+    public override string Name => _name;
+
+    public override object? Value
+    {
+        get => _inner.Value;
+        set => _inner.Value = value;
+    }
+
+    public override event EventHandler<object?>? ValueChanged;
+
+    public override void UpdateFromState(object? value) => _inner.UpdateFromState(value);
+    public override void Reset() => _inner.Reset();
 }
 
 /// <summary>
@@ -61,7 +104,7 @@ public class AvaloniaTextBoxControl : AvaloniaPluginUiControl
 
     public AvaloniaTextBoxControl(PluginUiField field)
     {
-        _name = field.Key;
+        _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
         _textBox = new TextBox
         {
             Watermark = field.Label,
@@ -94,11 +137,20 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
 
     public AvaloniaComboBoxControl(PluginUiField field)
     {
-        _name = field.Key;
+        _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
         _comboBox = new ComboBox();
-        if (field.Options != null)
+        var initialOptions = field.GetOptionsAsOptionList();
+        if (initialOptions.Count > 0)
         {
-            _comboBox.ItemsSource = field.Options;
+            var items = new List<string>(initialOptions.Count);
+            foreach (var opt in initialOptions)
+            {
+                if (!string.IsNullOrWhiteSpace(opt.Value))
+                {
+                    items.Add(opt.Value);
+                }
+            }
+            _comboBox.ItemsSource = items;
         }
         _comboBox.SelectionChanged += (s, e) => ValueChanged?.Invoke(this, _comboBox.SelectedItem);
     }
@@ -138,4 +190,133 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
     }
 
     public override void Reset() => _comboBox.SelectedIndex = -1;
+}
+
+public sealed class AvaloniaNumberControl : AvaloniaPluginUiControl
+{
+    private readonly NumericUpDown _numeric;
+    private readonly string _name;
+
+    public override Control AvaloniaControl => _numeric;
+    public override string Name => _name;
+
+    public AvaloniaNumberControl(PluginUiField field)
+    {
+        _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
+        _numeric = new NumericUpDown
+        {
+            Minimum = 0,
+            Maximum = 10000000,
+            Increment = 1,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        _numeric.ValueChanged += (_, _) => ValueChanged?.Invoke(this, _numeric.Value);
+    }
+
+    public override object? Value
+    {
+        get => _numeric.Value;
+        set
+        {
+            if (value is null)
+            {
+                _numeric.Value = null;
+                return;
+            }
+
+            if (value is int i)
+            {
+                _numeric.Value = i;
+                return;
+            }
+
+            if (value is long l)
+            {
+                _numeric.Value = l;
+                return;
+            }
+
+            if (value is double d)
+            {
+                _numeric.Value = (decimal)d;
+                return;
+            }
+
+            if (value is decimal m)
+            {
+                _numeric.Value = m;
+                return;
+            }
+
+            if (value is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Number && je.TryGetDouble(out var jd))
+                {
+                    _numeric.Value = (decimal)jd;
+                    return;
+                }
+            }
+
+            if (double.TryParse(value.ToString(), out var parsed))
+            {
+                _numeric.Value = (decimal)parsed;
+            }
+        }
+    }
+
+    public override event EventHandler<object?>? ValueChanged;
+
+    public override void UpdateFromState(object? value) => Value = value;
+
+    public override void Reset() => _numeric.Value = null;
+}
+
+public sealed class AvaloniaCheckBoxControl : AvaloniaPluginUiControl
+{
+    private readonly CheckBox _checkBox;
+    private readonly string _name;
+
+    public override Control AvaloniaControl => _checkBox;
+    public override string Name => _name;
+
+    public AvaloniaCheckBoxControl(PluginUiField field)
+    {
+        _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
+        _checkBox = new CheckBox
+        {
+            Content = field.Label,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        _checkBox.IsCheckedChanged += (_, _) => ValueChanged?.Invoke(this, _checkBox.IsChecked ?? false);
+    }
+
+    public override object? Value
+    {
+        get => _checkBox.IsChecked ?? false;
+        set
+        {
+            if (value is bool b)
+            {
+                _checkBox.IsChecked = b;
+                return;
+            }
+
+            if (value is JsonElement je && (je.ValueKind == JsonValueKind.True || je.ValueKind == JsonValueKind.False))
+            {
+                _checkBox.IsChecked = je.GetBoolean();
+                return;
+            }
+
+            if (bool.TryParse(value?.ToString(), out var parsed))
+            {
+                _checkBox.IsChecked = parsed;
+            }
+        }
+    }
+
+    public override event EventHandler<object?>? ValueChanged;
+
+    public override void UpdateFromState(object? value) => Value = value;
+
+    public override void Reset() => _checkBox.IsChecked = false;
 }

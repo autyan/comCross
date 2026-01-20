@@ -6,7 +6,7 @@
              xmlns:views="clr-namespace:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.LeftSidebar"
-             x:DataType="vm:MainWindowViewModel"
+             x:DataType="vm:LeftSidebarViewModel"
              x:CompileBindings="False"
              x:Name="LeftSidebarRoot">
     

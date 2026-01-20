@@ -6,7 +6,7 @@
              xmlns:views="using:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.RightToolDock"
-             x:DataType="vm:MainWindowViewModel"
+             x:DataType="vm:RightToolDockViewModel"
              x:Name="Root"
              IsCommandsTabActive="{Binding IsCommandsTabActive}">
     

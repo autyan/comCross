@@ -23,7 +23,7 @@ public partial class RightToolDock : BaseUserControl
 
     private void OnSendTabClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
         {
             vm.SelectedToolTab = ToolDockTab.Send;
         }
@@ -31,7 +31,7 @@ public partial class RightToolDock : BaseUserControl
 
     private void OnCommandsTabClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
         {
             vm.SelectedToolTab = ToolDockTab.Commands;
         }
@@ -39,7 +39,7 @@ public partial class RightToolDock : BaseUserControl
     
     private void OnClearClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
         {
             vm.ClearMessages();
         }
@@ -47,7 +47,7 @@ public partial class RightToolDock : BaseUserControl
     
     private async void OnExportClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
         {
             await vm.ExportAsync();
         }
@@ -55,7 +55,7 @@ public partial class RightToolDock : BaseUserControl
     
     private async void OnSendClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
         {
             var sendBox = this.FindControl<TextBox>("SendMessageBox");
             var hexMode = this.FindControl<CheckBox>("HexModeCheckBox");

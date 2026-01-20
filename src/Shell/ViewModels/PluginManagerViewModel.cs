@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Linq;
 using ComCross.Core.Services;
@@ -24,7 +22,6 @@ public sealed class PluginManagerViewModel : BaseViewModel
     private readonly PluginHostProtocolService _protocolService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
-    private readonly IExtensibleLocalizationService? _extensibleLocalization;
     private string _pluginsDirectory;
 
     public event EventHandler? PluginsReloaded;
@@ -45,8 +42,10 @@ public sealed class PluginManagerViewModel : BaseViewModel
         _protocolService = protocolService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _extensibleLocalization = localization as IExtensibleLocalizationService;
         _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
+
+        // 构造时自动加载当前运行时的状态
+        _ = LoadAsync();
     }
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; } = new();
@@ -74,7 +73,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         foreach (var runtime in runtimes)
         {
-            Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, L));
+            Plugins.Add(new PluginItemViewModel(runtime, _settingsService.Current.Plugins.Enabled, Localization));
         }
 
         PluginsReloaded?.Invoke(this, EventArgs.Empty);
@@ -102,6 +101,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
     /// </summary>
     public PluginRuntime? GetRuntime(string pluginId) => _pluginManagerService.GetRuntime(pluginId);
 
+    public IReadOnlyList<PluginRuntime> GetAllRuntimes() => _pluginManagerService.GetAllRuntimes();
+
     /// <summary>
     /// 向插件发送请求
     /// </summary>
@@ -116,57 +117,6 @@ public sealed class PluginManagerViewModel : BaseViewModel
         return await runtime.Client.SendAsync(request, TimeSpan.FromSeconds(5));
     }
 
-    private void TryRegisterPluginI18n(IReadOnlyList<PluginInfo> plugins)
-    {
-        if (_extensibleLocalization is null)
-        {
-            return;
-        }
-
-        foreach (var plugin in plugins)
-        {
-            var bundle = plugin.Manifest.I18n;
-            if (bundle is null || bundle.Count == 0)
-            {
-                continue;
-            }
-
-            var bundlesView = bundle.ToDictionary(
-                kvp => kvp.Key,
-                kvp => (IReadOnlyDictionary<string, string>)kvp.Value,
-                StringComparer.Ordinal);
-
-            var prefix = plugin.Manifest.Id + ".";
-
-            _extensibleLocalization.RegisterTranslations(
-                plugin.Manifest.Id,
-                bundlesByCulture: bundlesView,
-                duplicateKeys: out var duplicates,
-                invalidKeys: out var invalid,
-                validateKey: key => key.StartsWith(prefix, StringComparison.Ordinal));
-
-            // Notify duplicates (do not overwrite existing values).
-            foreach (var dup in duplicates)
-            {
-                _ = _notificationService.AddAsync(
-                    NotificationCategory.System,
-                    NotificationLevel.Warning,
-                    "notification.plugin.i18n.duplicateKey",
-                    new object[] { dup });
-            }
-
-            // Notify invalid keys (missing prefix).
-            foreach (var inv in invalid)
-            {
-                _ = _notificationService.AddAsync(
-                    NotificationCategory.System,
-                    NotificationLevel.Warning,
-                    "notification.plugin.i18n.invalidKeyPrefix",
-                    new object[] { inv });
-            }
-        }
-    }
-
     public async Task ToggleAsync(PluginItemViewModel plugin)
     {
         _settingsService.Current.Plugins.Enabled[plugin.Id] = plugin.IsEnabled;
@@ -174,14 +124,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         await LoadAsync();
     }
 
-    public void RefreshLocalizedText()
-    {
-        foreach (var plugin in Plugins)
-        {
-            plugin.RefreshStatus(L);
-            plugin.RefreshCapabilitiesText(L);
-        }
-    }
+    
 
     public async Task TestConnectAsync(PluginItemViewModel plugin)
     {
@@ -362,14 +305,26 @@ public sealed class PluginManagerViewModel : BaseViewModel
             .Where(r => r.State == PluginLoadState.Loaded)
             .SelectMany(r => r.Capabilities.Select(c => new PluginCapabilityLaunchOption(
                 r.Info.Manifest.Id,
-                r.Info.Manifest.Name,
+                LocalizeOrFallback($"{r.Info.Manifest.Id}.name", r.Info.Manifest.Name),
                 c.Id,
-                c.Name,
-                c.Description,
+                LocalizeOrFallback($"{r.Info.Manifest.Id}.capability.{c.Id}.name", c.Name),
+                LocalizeOrFallbackNullable($"{r.Info.Manifest.Id}.capability.{c.Id}.description", c.Description),
                 c.DefaultParametersJson,
                 c.JsonSchema,
                 c.UiSchema)))
             .ToList();
+    }
+
+    private string LocalizeOrFallback(string key, string fallback)
+    {
+        var localized = L[key];
+        return string.Equals(localized, $"[{key}]", StringComparison.Ordinal) ? fallback : localized;
+    }
+
+    private string? LocalizeOrFallbackNullable(string key, string? fallback)
+    {
+        var localized = L[key];
+        return string.Equals(localized, $"[{key}]", StringComparison.Ordinal) ? fallback : localized;
     }
 
     public async Task<JsonElement?> TryGetUiStateAsync(
@@ -623,7 +578,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             var runtime = _pluginManagerService.GetRuntime(plugin.Id);
             if (runtime != null)
             {
-                plugin.UpdateState(runtime, L);
+                plugin.UpdateState(runtime);
             }
         }
     }
@@ -645,32 +600,43 @@ public sealed record PluginCapabilityLaunchOption(
     string? JsonSchema,
     string? UiSchema);
 
-public sealed class PluginItemViewModel : INotifyPropertyChanged
+public sealed class PluginItemViewModel : BaseViewModel
 {
     private bool _isEnabled;
-    private string _statusText = string.Empty;
-    private string _capabilitiesText = string.Empty;
-    private bool _canConnect;
     private PluginLoadState _state;
+    private int _capabilityCount;
+    private bool _capabilitiesError;
+    private string _name;
 
     public PluginItemViewModel(
         PluginRuntime runtime,
         IReadOnlyDictionary<string, bool> enabledMap,
-        ILocalizationStrings localizedStrings)
+        ILocalizationService localization)
+        : base(localization)
     {
         Id = runtime.Info.Manifest.Id;
-        Name = runtime.Info.Manifest.Name;
+        _name = runtime.Info.Manifest.Name;
         Version = runtime.Info.Manifest.Version;
         Permissions = string.Join(", ", runtime.Info.Manifest.Permissions);
         AssemblyPath = runtime.Info.AssemblyPath;
         _isEnabled = enabledMap.TryGetValue(Id, out var isEnabled) ? isEnabled : true;
         _state = runtime.State;
-        RefreshStatus(localizedStrings);
-        RefreshCapabilities(runtime, localizedStrings);
+
+        UpdateState(runtime);
     }
 
     public string Id { get; }
-    public string Name { get; }
+    public string Name => _name;
+
+    public string DisplayName
+    {
+        get
+        {
+            var key = Id + ".name";
+            var localized = L[key];
+            return string.Equals(localized, $"[{key}]", StringComparison.Ordinal) ? Name : localized;
+        }
+    }
     public string Version { get; }
     public string Permissions { get; }
     public string AssemblyPath { get; }
@@ -691,47 +657,33 @@ public sealed class PluginItemViewModel : INotifyPropertyChanged
 
     public string StatusText
     {
-        get => _statusText;
-        private set
+        get => State switch
         {
-            if (_statusText == value)
-            {
-                return;
-            }
-
-            _statusText = value;
-            OnPropertyChanged();
-        }
+            PluginLoadState.Loaded => L["settings.plugins.status.loaded"],
+            PluginLoadState.Disabled => L["settings.plugins.status.disabled"],
+            PluginLoadState.Failed => L["settings.plugins.status.failed"],
+            _ => L["settings.plugins.status.failed"]
+        };
     }
 
     public string CapabilitiesText
     {
-        get => _capabilitiesText;
-        private set
+        get
         {
-            if (_capabilitiesText == value)
+            if (State != PluginLoadState.Loaded)
             {
-                return;
+                return string.Empty;
             }
 
-            _capabilitiesText = value;
-            OnPropertyChanged();
+            return _capabilitiesError
+                ? string.Format(L["settings.plugins.capabilities.error"], _capabilityCount)
+                : string.Format(L["settings.plugins.capabilities"], _capabilityCount);
         }
     }
 
     public bool CanConnect
     {
-        get => _canConnect;
-        private set
-        {
-            if (_canConnect == value)
-            {
-                return;
-            }
-
-            _canConnect = value;
-            OnPropertyChanged();
-        }
+        get => State == PluginLoadState.Loaded && _capabilityCount > 0;
     }
 
     public bool IsEnabled
@@ -749,65 +701,19 @@ public sealed class PluginItemViewModel : INotifyPropertyChanged
         }
     }
 
-    public void RefreshStatus(ILocalizationStrings localizedStrings)
-    {
-        StatusText = State switch
-        {
-            PluginLoadState.Loaded => localizedStrings["settings.plugins.status.loaded"],
-            PluginLoadState.Disabled => localizedStrings["settings.plugins.status.disabled"],
-            PluginLoadState.Failed => localizedStrings["settings.plugins.status.failed"],
-            _ => localizedStrings["settings.plugins.status.failed"]
-        };
-    }
-
-    public void RefreshCapabilitiesText(ILocalizationStrings localizedStrings)
-    {
-        // Re-render the already computed stateful string using the latest localization.
-        // If we are not loaded, keep it empty.
-        if (State != PluginLoadState.Loaded)
-        {
-            CapabilitiesText = string.Empty;
-        }
-        else if (CapabilitiesText.StartsWith("Capabilities", StringComparison.OrdinalIgnoreCase) ||
-                 CapabilitiesText.StartsWith("能力", StringComparison.OrdinalIgnoreCase))
-        {
-            // No-op; actual refresh requires runtime counts, handled in UpdateState.
-        }
-    }
-
-    public void RefreshCapabilities(PluginRuntime runtime, ILocalizationStrings localizedStrings)
-    {
-        if (runtime.State != PluginLoadState.Loaded)
-        {
-            CapabilitiesText = string.Empty;
-            CanConnect = false;
-            return;
-        }
-
-        var count = runtime.Capabilities?.Count ?? 0;
-        CanConnect = count > 0;
-        if (!string.IsNullOrWhiteSpace(runtime.CapabilitiesError))
-        {
-            CapabilitiesText = string.Format(
-                localizedStrings["settings.plugins.capabilities.error"],
-                count);
-            return;
-        }
-
-        CapabilitiesText = string.Format(localizedStrings["settings.plugins.capabilities"], count);
-    }
-
-    public void UpdateState(PluginRuntime runtime, ILocalizationStrings localizedStrings)
+    public void UpdateState(PluginRuntime runtime)
     {
         State = runtime.State;
-        RefreshStatus(localizedStrings);
-        RefreshCapabilities(runtime, localizedStrings);
-    }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
+        _name = runtime.Info.Manifest.Name;
+        _capabilityCount = runtime.Capabilities?.Count ?? 0;
+        _capabilitiesError = !string.IsNullOrWhiteSpace(runtime.CapabilitiesError);
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        // Ensure dependents refresh.
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(CapabilitiesText));
+        OnPropertyChanged(nameof(CanConnect));
     }
 }

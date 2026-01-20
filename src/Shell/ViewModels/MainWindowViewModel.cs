@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,7 +13,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using ComCross.Adapters.Serial;
 using ComCross.Core.Services;
 using ComCross.PluginSdk.UI;
 using ComCross.Shared.Events;
@@ -26,49 +24,20 @@ namespace ComCross.Shell.ViewModels;
 
 public class MainWindowViewModel : BaseViewModel
 {
-    private readonly IEventBus _eventBus;
-    private readonly IMessageStreamService _messageStream;
-    private readonly DeviceService _deviceService;
-    private readonly SerialAdapter _serialAdapter;
-    private readonly ConfigService _configService;
-    private readonly AppDatabase _database;
     private readonly SettingsService _settingsService;
     private readonly AppLogService _appLogService;
     private readonly NotificationService _notificationService;
-    private readonly LogStorageService _logStorageService;
-    private readonly CommandService _commandService;
-    private readonly PluginDiscoveryService _pluginDiscoveryService;
-    private readonly PluginRuntimeService _pluginRuntimeService;
-    private readonly PluginManagerService _pluginManagerService;
-    private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly ICapabilityDispatcher _dispatcher;
+    private readonly Core.Application.IAppHost _appHost;
     
     // Business services
-    private readonly WorkspaceService _workspaceService;
-    private readonly WorkloadService _workloadService;
-    private readonly ExportService _exportService;
-    private readonly Dictionary<string, IDisposable> _messageSubscriptions = new();
-    private Session? _activeSession;
-    private Device? _selectedDevice;
-    private int _baudRate = 115200;
-    private int _dataBits = 8;
-    private Parity _parity = Parity.None;
-    private StopBits _stopBits = StopBits.One;
-    private string _searchQuery = string.Empty;
-    private bool _isConnected;
+    private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private bool _isSettingsOpen;
     private bool _isNotificationsOpen;
-    private ToolDockTab _selectedToolTab = ToolDockTab.Send;
 
-    // Timer for periodic updates
-    private readonly DispatcherTimer _statisticsUpdateTimer;
-    private readonly object _statisticsLock = new object();
-    private long _cachedTotalRxBytes;
-    private long _cachedTotalTxBytes;
-
-    public ObservableCollection<Session> Sessions { get; } = new();
-    public ObservableCollection<Device> Devices { get; } = new();
-    public ObservableCollection<LogMessage> Messages { get; } = new();
+    public LeftSidebarViewModel LeftSidebar { get; }
+    public MessageStreamViewModel MessageStream { get; }
+    public RightToolDockViewModel RightToolDock { get; }
 
     /// <summary>
     /// Workload panel ViewModel
@@ -86,88 +55,16 @@ public class MainWindowViewModel : BaseViewModel
     public BusAdapterSelectorViewModel BusAdapterSelectorViewModel { get; private set; } = null!;
 
     /// <summary>
-    /// Workload service (exposed for initialization)
+    /// Workspace coordinator
     /// </summary>
-    public WorkloadService WorkloadService => _workloadService;
+    public IWorkspaceCoordinator WorkspaceCoordinator => _workspaceCoordinator;
 
-    public int BaudRate
-    {
-        get => _baudRate;
-        set => SetProperty(ref _baudRate, value);
-    }
-
-    public int DataBits
-    {
-        get => _dataBits;
-        set => SetProperty(ref _dataBits, value);
-    }
-
-    public Parity Parity
-    {
-        get => _parity;
-        set => SetProperty(ref _parity, value);
-    }
-
-    public StopBits StopBits
-    {
-        get => _stopBits;
-        set => SetProperty(ref _stopBits, value);
-    }
-
-    public Device? SelectedDevice
-    {
-        get => _selectedDevice;
-        set
-        {
-            if (_selectedDevice != value)
-            {
-                _selectedDevice = value;
-                OnPropertyChanged();
-                (QuickConnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (QuickConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
+    // Back-compat: some legacy views still bind to MainWindowViewModel directly.
+    public ObservableCollection<Session> Sessions => LeftSidebar.Sessions;
     public Session? ActiveSession
     {
-        get => _activeSession;
-        set
-        {
-            if (_activeSession != value)
-            {
-                _activeSession = value;
-                OnPropertyChanged();
-                LoadMessages();
-                CommandCenter.SetSession(_activeSession?.Id, _activeSession?.Name);
-                
-                // Sync UI context management (ADR-010 / Plugin UI v0.4.0)
-                _pluginUiStateManager.SwitchContext(_activeSession?.Id);
-                BusAdapterSelectorViewModel.SetActiveSession(_activeSession);
-
-                // Sync device selection and connection state
-                if (_activeSession != null)
-                {
-                    var device = Devices.FirstOrDefault(d => d.Port == _activeSession.Port);
-                    if (device != null && SelectedDevice != device)
-                    {
-                        SelectedDevice = device;
-                    }
-                    
-                    // Sync serial settings to UI
-                    BaudRate = _activeSession.Settings.BaudRate;
-                    DataBits = _activeSession.Settings.DataBits;
-                    Parity = _activeSession.Settings.Parity;
-                    StopBits = _activeSession.Settings.StopBits;
-
-                    IsConnected = _activeSession.Status == SessionStatus.Connected;
-                }
-                else
-                {
-                    IsConnected = false;
-                }
-            }
-        }
+        get => LeftSidebar.ActiveSession;
+        set => LeftSidebar.ActiveSession = value;
     }
 
     public async Task UpdateSessionNameAsync(string newName)
@@ -190,31 +87,15 @@ public class MainWindowViewModel : BaseViewModel
 
     public string SearchQuery
     {
-        get => _searchQuery;
+        get => MessageStream.SearchQuery;
         set
         {
-            if (_searchQuery != value)
-            {
-                _searchQuery = value;
-                OnPropertyChanged();
-                FilterMessages();
-            }
+            MessageStream.SearchQuery = value;
+            OnPropertyChanged();
         }
     }
 
-    public bool IsConnected
-    {
-        get => _isConnected;
-        private set
-        {
-            if (_isConnected != value)
-            {
-                _isConnected = value;
-                OnPropertyChanged();
-                UpdateCommandStates();
-            }
-        }
-    }
+    public bool IsConnected => RightToolDock.IsConnected;
 
     public bool IsSettingsOpen
     {
@@ -244,57 +125,33 @@ public class MainWindowViewModel : BaseViewModel
 
     public ToolDockTab SelectedToolTab
     {
-        get => _selectedToolTab;
+        get => RightToolDock.SelectedToolTab;
         set
         {
-            if (_selectedToolTab == value)
-            {
-                return;
-            }
-
-            _selectedToolTab = value;
+            RightToolDock.SelectedToolTab = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsSendTabActive));
             OnPropertyChanged(nameof(IsCommandsTabActive));
         }
     }
 
-    public bool IsSendTabActive => _selectedToolTab == ToolDockTab.Send;
-    public bool IsCommandsTabActive => _selectedToolTab == ToolDockTab.Commands;
+    public bool IsSendTabActive => RightToolDock.IsSendTabActive;
+    public bool IsCommandsTabActive => RightToolDock.IsCommandsTabActive;
 
     public string Title => L["app.title"];
-    public string TimestampFormat => _settingsService.Current.Display.TimestampFormat;
-    public bool AutoScrollEnabled => _settingsService.Current.Display.AutoScroll;
-    public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
-    public int MessageFontSize => _settingsService.Current.Display.FontSize;
+
+    public DisplaySettingsViewModel Display { get; }
+    public SessionsViewModel SessionsVm { get; }
 
     /// <summary>
     /// Total received bytes across all sessions in current workload
     /// </summary>
-    public long TotalRxBytes
-    {
-        get
-        {
-            lock (_statisticsLock)
-            {
-                return _cachedTotalRxBytes;
-            }
-        }
-    }
+    public long TotalRxBytes => _workspaceCoordinator.TotalRxBytes;
 
     /// <summary>
     /// Total transmitted bytes across all sessions in current workload
     /// </summary>
-    public long TotalTxBytes
-    {
-        get
-        {
-            lock (_statisticsLock)
-            {
-                return _cachedTotalTxBytes;
-            }
-        }
-    }
+    public long TotalTxBytes => _workspaceCoordinator.TotalTxBytes;
 
     public SettingsViewModel Settings { get; }
 
@@ -305,8 +162,6 @@ public class MainWindowViewModel : BaseViewModel
     public PluginManagerViewModel PluginManager { get; }
 
     // Commands
-    public ICommand QuickConnectCommand { get; }
-    public ICommand DisconnectCommand { get; }
     public ICommand ClearMessagesCommand { get; }
     public ICommand ExportMessagesCommand { get; }
 
@@ -314,51 +169,30 @@ public class MainWindowViewModel : BaseViewModel
         ILocalizationService localization,
         IEventBus eventBus,
         IMessageStreamService messageStream,
-        DeviceService deviceService,
-        SerialAdapter serialAdapter,
-        ConfigService configService,
-        AppDatabase database,
         SettingsService settingsService,
         AppLogService appLogService,
         NotificationService notificationService,
-        LogStorageService logStorageService,
-        CommandService commandService,
-        PluginDiscoveryService pluginDiscoveryService,
-        PluginRuntimeService pluginRuntimeService,
-        PluginManagerService pluginManagerService,
         PluginUiStateManager pluginUiStateManager,
         ICapabilityDispatcher dispatcher,
-        WorkspaceService workspaceService,
-        WorkloadService workloadService,
-        ExportService exportService,
+        Core.Application.IAppHost appHost,
+        IWorkspaceCoordinator workspaceCoordinator,
         WorkloadPanelViewModel workloadPanelViewModel,
         WorkloadTabsViewModel workloadTabsViewModel,
         BusAdapterSelectorViewModel busAdapterSelectorViewModel,
         NotificationCenterViewModel notificationCenterViewModel,
         CommandCenterViewModel commandCenterViewModel,
         PluginManagerViewModel pluginManagerViewModel,
-        SettingsViewModel settingsViewModel)
+        SettingsViewModel settingsViewModel,
+        DisplaySettingsViewModel displaySettingsViewModel,
+        SessionsViewModel sessionsViewModel)
         : base(localization)
     {
-        _eventBus = eventBus;
-        _messageStream = messageStream;
-        _deviceService = deviceService;
-        _serialAdapter = serialAdapter;
-        _configService = configService;
-        _database = database;
         _settingsService = settingsService;
         _appLogService = appLogService;
         _notificationService = notificationService;
-        _logStorageService = logStorageService;
-        _commandService = commandService;
-        _pluginDiscoveryService = pluginDiscoveryService;
-        _pluginRuntimeService = pluginRuntimeService;
-        _pluginManagerService = pluginManagerService;
-        _pluginUiStateManager = pluginUiStateManager;
         _dispatcher = dispatcher;
-        _workspaceService = workspaceService;
-        _workloadService = workloadService;
-        _exportService = exportService;
+        _appHost = appHost;
+        _workspaceCoordinator = workspaceCoordinator;
 
         WorkloadPanelViewModel = workloadPanelViewModel;
         WorkloadTabsViewModel = workloadTabsViewModel;
@@ -368,681 +202,90 @@ public class MainWindowViewModel : BaseViewModel
         CommandCenter = commandCenterViewModel;
         PluginManager = pluginManagerViewModel;
         Settings = settingsViewModel;
+        Display = displaySettingsViewModel;
+        SessionsVm = sessionsViewModel;
 
-        BusAdapterSelectorViewModel.PropertyChanged += (_, args) =>
+        // Sub-viewmodels for MainWindow's 3 subviews.
+        MessageStream = new MessageStreamViewModel(localization, messageStream, settingsService, displaySettingsViewModel);
+        RightToolDock = new RightToolDockViewModel(localization, workspaceCoordinator, appLogService, MessageStream, settingsViewModel, commandCenterViewModel);
+        LeftSidebar = new LeftSidebarViewModel(localization, eventBus, pluginUiStateManager, busAdapterSelectorViewModel);
+
+        LeftSidebar.ActiveSessionChanged += (_, session) =>
         {
-            if (string.Equals(args.PropertyName, nameof(BusAdapterSelectorViewModel.SelectedAdapter), StringComparison.Ordinal))
-            {
-                (QuickConnectCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (QuickConnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
+            MessageStream.SetActiveSession(session);
+            RightToolDock.SetActiveSession(session);
+            OnPropertyChanged(nameof(ActiveSession));
+            OnPropertyChanged(nameof(IsConnected));
         };
 
+        // 子 ViewModel 会通过自己的构造函数或订阅机制处理数据加载
+        // 我们只需要在插件列表变化时同步适配器选择器
         PluginManager.PluginsReloaded += (_, _) =>
         {
             BusAdapterSelectorViewModel.UpdatePluginAdapters(PluginManager.GetAllCapabilityOptions());
         };
 
-        // Initialize commands
-        QuickConnectCommand = new AsyncRelayCommand(
-            QuickConnectAsync,
-            () => SelectedDevice != null && string.Equals(BusAdapterSelectorViewModel.SelectedAdapter?.Id, "serial", StringComparison.Ordinal));
-        DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => IsConnected);
-        ClearMessagesCommand = new RelayCommand(() => Messages.Clear());
-        ExportMessagesCommand = new AsyncRelayCommand(ExportMessagesAsync);
+        // Initialize UI-only commands
+        ClearMessagesCommand = new RelayCommand(() => RightToolDock.ClearMessages());
+        ExportMessagesCommand = new AsyncRelayCommand(() => RightToolDock.ExportAsync());
         
-        // Initialize statistics update timer (1 second interval)
-        _statisticsUpdateTimer = new DispatcherTimer
+        // 订阅语言变更事件（用于通知 Core/Plugins），UI 文本刷新由 BaseViewModel 统一处理。
+        Localization.LanguageChanged += OnLanguageChanged;
+        
+        // Subscribe to statistics updates from coordinator
+        _workspaceCoordinator.StatisticsUpdated += (_, _) =>
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Dispatcher.UIThread.Post(() =>
+            {
+                OnPropertyChanged(nameof(TotalRxBytes));
+                OnPropertyChanged(nameof(TotalTxBytes));
+            });
         };
-        _statisticsUpdateTimer.Tick += OnStatisticsUpdateTick;
-        _statisticsUpdateTimer.Start();
-        
-        // Subscribe to workload change events to update statistics immediately
-        _eventBus.Subscribe<ActiveWorkloadChangedEvent>(e =>
-        {
-            UpdateStatistics();
-        });
-
-        _eventBus.Subscribe<SessionCreatedEvent>(e => 
-        {
-            Dispatcher.UIThread.Post(() => 
-            {
-                if (!Sessions.Any(s => s.Id == e.Session.Id))
-                {
-                    Sessions.Add(e.Session);
-                    ActiveSession = e.Session;
-                    IsConnected = true;
-                    
-                    CommandCenter.SetSession(e.Session.Id, e.Session.Name);
-                    _logStorageService.StartSession(e.Session);
-                    
-                    // Subscribe to messages for this session
-                    SubscribeToSessionMessages(e.Session.Id);
-                }
-            });
-        });
-
-        _eventBus.Subscribe<SessionClosedEvent>(e => 
-        {
-            Dispatcher.UIThread.Post(() => 
-            {
-                var session = Sessions.FirstOrDefault(s => s.Id == e.SessionId);
-                if (session != null)
-                {
-                    session.Status = SessionStatus.Disconnected;
-                    if (ActiveSession?.Id == e.SessionId)
-                    {
-                        IsConnected = false;
-                        CommandCenter.SetSession(null, null);
-                    }
-                    
-                    // Cleanup subscriptions
-                    if (_messageSubscriptions.TryGetValue(e.SessionId, out var sub))
-                    {
-                        sub.Dispose();
-                        _messageSubscriptions.Remove(e.SessionId);
-                    }
-                    
-                    // Optionally remove from list or keep it as "Disconnected"
-                    // Sessions.Remove(session); 
-                }
-            });
-        });
         
         _ = InitializeAsync();
-    }
-
-    private void SubscribeToSessionMessages(string sessionId)
-    {
-        if (!_messageSubscriptions.ContainsKey(sessionId))
-        {
-            var subscription = _messageStream.Subscribe(sessionId, message =>
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (ActiveSession?.Id == sessionId)
-                    {
-                        Messages.Add(message);
-                        TrimMessages();
-                    }
-                });
-            });
-            _messageSubscriptions[sessionId] = subscription;
-        }
-    }
-
-    private void OnStatisticsUpdateTick(object? sender, EventArgs e)
-    {
-        UpdateStatistics();
-    }
-
-    /// <summary>
-    /// Update cached statistics from all sessions (thread-safe)
-    /// </summary>
-    public void UpdateStatistics()
-    {
-        lock (_statisticsLock)
-        {
-            _cachedTotalRxBytes = Sessions.Sum(s => s.RxBytes);
-            _cachedTotalTxBytes = Sessions.Sum(s => s.TxBytes);
-        }
-        
-        // Notify UI on main thread
-        Dispatcher.UIThread.Post(() =>
-        {
-            OnPropertyChanged(nameof(TotalRxBytes));
-            OnPropertyChanged(nameof(TotalTxBytes));
-        });
     }
 
     private async Task InitializeAsync()
     {
         try
         {
-            Console.WriteLine("[MainWindowViewModel] Starting initialization...");
-            
-            await _database.InitializeAsync();
-            Console.WriteLine("[MainWindowViewModel] Database initialized");
-            
-            await _settingsService.InitializeAsync();
-            Console.WriteLine("[MainWindowViewModel] Settings initialized");
-            
             _appLogService.Initialize(_settingsService.Current.AppLogs);
-            _settingsService.SettingsChanged += OnSettingsChanged;
-            
-            // Initialize MessageBoxService with localization
-            Shell.Services.MessageBoxService.Initialize(Localization);
-            
+
+            // UI 初始化：确保当前 Tab 状态正确
             Dispatcher.UIThread.Post(() =>
             {
-                Settings.ReloadFromSettings();
-                Settings.ApplySystemLanguageIfNeeded();
-                
-                // Trigger initial property notifications for tool tab state
                 OnPropertyChanged(nameof(IsSendTabActive));
                 OnPropertyChanged(nameof(IsCommandsTabActive));
             });
 
-            // Configure SerialAdapter with Linux scan settings
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
-            }
-
-            // Load devices
-            Console.WriteLine("[MainWindowViewModel] Loading devices...");
-            var devices = await _deviceService.ListDevicesAsync();
-            Console.WriteLine($"[MainWindowViewModel] Found {devices.Count} devices");
-            
-            foreach (var device in devices)
-            {
-                Devices.Add(device);
-            }
-            
-            // Sync initial ports to Plugin UI State for system.serial
-            _pluginUiStateManager.UpdateState(null, "system.serial.ports", devices.Select(d => d.Port).ToList());
-
-            await NotificationCenter.LoadAsync();
-            Console.WriteLine("[MainWindowViewModel] Notifications loaded");
-            
-            await NotificationCenter.LoadAsync();
-            Console.WriteLine("[MainWindowViewModel] Notifications loaded");
-            
-            // Initialize Core plugin manager
-            await _pluginManagerService.InitializeAsync();
-            
-            await PluginManager.LoadAsync();
-            Console.WriteLine("[MainWindowViewModel] Plugins loaded");
-
+            // 获取初始插件能力列表（核心层已在 AppHost 加载完毕）
             BusAdapterSelectorViewModel.UpdatePluginAdapters(PluginManager.GetAllCapabilityOptions());
 
-            // Load workspace state (with automatic migration from v0.3 if needed)
-            var state = await _workspaceService.LoadStateAsync();
-            Console.WriteLine("[MainWindowViewModel] Workspace state loaded");
+            // 加载工作区 UI 状态
+            var state = await _workspaceCoordinator.LoadStateAsync();
             
-            // In v0.4, sessions are stored in Workloads
-            // For now, keep legacy restoration logic for Sessions (if any exist from migration)
-            // TODO v0.4: Implement proper Session persistence in SQLite with WorkloadId
-#pragma warning disable CS0618 // Type or member is obsolete
-            if (state.Sessions != null && state.Sessions.Count > 0)
+            // 恢复 UI 状态 (Session/Tab 等)
+            if (state.UiState?.ActiveSessionId != null)
             {
-                foreach (var sessionState in state.Sessions)
-            {
-                var session = new Session
-                {
-                    Id = sessionState.Id,
-                    Name = sessionState.Name,
-                    Port = sessionState.Port,
-                    BaudRate = sessionState.Settings.BaudRate,
-                    Status = SessionStatus.Disconnected,
-                    Settings = sessionState.Settings
-                };
-                Sessions.Add(session);
-            }
-        }
-#pragma warning restore CS0618
-
-        // Restore UI state
-        if (state.UiState?.ActiveSessionId != null)
-        {
-            ActiveSession = Sessions.FirstOrDefault(s => s.Id == state.UiState.ActiveSessionId);
-        }
-
-        CommandCenter.SetSession(ActiveSession?.Id, ActiveSession?.Name);
-        _appLogService.Info("Application initialized.");
-            
-            Console.WriteLine("[MainWindowViewModel] Initialization complete");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[MainWindowViewModel] FATAL ERROR during initialization: {ex.Message}");
-            Console.WriteLine($"[MainWindowViewModel] Stack trace: {ex.StackTrace}");
-            if (ex.InnerException != null)
-            {
-                Console.WriteLine($"[MainWindowViewModel] Inner exception: {ex.InnerException.Message}");
-            }
-            _appLogService?.LogException(ex, "Fatal initialization error");
-        }
-    }
-
-    public async Task ConnectAsync(string port, int baudRate, string name)
-    {
-        var settings = new SerialSettings { BaudRate = baudRate };
-        await ConnectWithSettingsAsync(port, settings, name);
-    }
-
-    public async Task<bool> TryConnectPluginAdapterAsync(string pluginId, string capabilityId, string? parametersJson)
-    {
-        try
-        {
-            await PluginManager.ConnectByIdsAsync(pluginId, capabilityId, parametersJson);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(
-                L["dialog.connect.plugin.title"],
-                string.Format(L["dialog.connect.plugin.failed"], ex.Message));
-            return false;
-        }
-    }
-
-    public async Task<bool> ExecuteHostActionAsync(string hostAction, JsonElement parameters)
-    {
-        try
-        {
-            return hostAction switch
-            {
-                "comcross.session.connect" => await ExecuteHostConnectSessionAsync(parameters),
-                _ => await ShowUnknownHostActionAsync(hostAction)
-            };
-        }
-        catch (Exception ex)
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(
-                L["dialog.connect.title"],
-                ex.Message);
-            return false;
-        }
-    }
-
-    private async Task<bool> ShowUnknownHostActionAsync(string hostAction)
-    {
-        await Shell.Services.MessageBoxService.ShowErrorAsync(
-            L["dialog.connect.title"],
-            $"Unknown host action: {hostAction}");
-        return false;
-    }
-
-    private sealed record HostConnectSessionParameters(
-        string? Adapter,
-        string? Port,
-        int? BaudRate,
-        int? DataBits,
-        string? Parity,
-        string? StopBits,
-        string? FlowControl,
-        string? Encoding,
-        string? SessionName);
-
-    private async Task<bool> ExecuteHostConnectSessionAsync(JsonElement parameters)
-    {
-        if (parameters.ValueKind != JsonValueKind.Object)
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Parameters must be a JSON object.");
-            return false;
-        }
-
-        HostConnectSessionParameters? payload;
-        try
-        {
-            payload = parameters.Deserialize<HostConnectSessionParameters>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch (Exception ex)
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], ex.Message);
-            return false;
-        }
-
-        if (payload is null || string.IsNullOrWhiteSpace(payload.Adapter))
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Missing required parameter: adapter");
-            return false;
-        }
-
-        if (!string.Equals(payload.Adapter, "serial", StringComparison.Ordinal))
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], $"Unsupported adapter: {payload.Adapter}");
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(payload.Port))
-        {
-            await Shell.Services.MessageBoxService.ShowErrorAsync(L["dialog.connect.title"], "Missing required parameter: port");
-            return false;
-        }
-
-        var settings = new SerialSettings();
-        if (payload.BaudRate is { } baud)
-        {
-            settings.BaudRate = baud;
-        }
-
-        if (payload.DataBits is { } dataBits)
-        {
-            settings.DataBits = dataBits;
-        }
-
-        if (!string.IsNullOrWhiteSpace(payload.Parity) && Enum.TryParse<Parity>(payload.Parity, ignoreCase: true, out var parity))
-        {
-            settings.Parity = parity;
-        }
-
-        if (!string.IsNullOrWhiteSpace(payload.StopBits) && Enum.TryParse<StopBits>(payload.StopBits, ignoreCase: true, out var stopBits))
-        {
-            settings.StopBits = stopBits;
-        }
-
-        if (!string.IsNullOrWhiteSpace(payload.FlowControl) && Enum.TryParse<Handshake>(payload.FlowControl, ignoreCase: true, out var handshake))
-        {
-            settings.FlowControl = handshake;
-        }
-
-        if (!string.IsNullOrWhiteSpace(payload.Encoding))
-        {
-            settings.Encoding = payload.Encoding;
-        }
-
-        var sessionName = string.IsNullOrWhiteSpace(payload.SessionName) ? payload.Port : payload.SessionName;
-        await ConnectWithSettingsAsync(payload.Port, settings, sessionName);
-        return true;
-    }
-
-    private async Task ConnectWithSettingsAsync(string port, SerialSettings settings, string name)
-    {
-        try
-        {
-            // NEW: Use the unified dispatcher instead of calling services directly.
-            // This ensures logic stays in the Core and Shell remains passive.
-            await _dispatcher.DispatchAsync("system.serial", null, "connect", new
-            {
-                port = port,
-                baudRate = settings.BaudRate,
-                dataBits = settings.DataBits,
-                parity = settings.Parity,
-                stopBits = settings.StopBits,
-                name = name
-            });
-        }
-        catch (SerialPortAccessDeniedException ex)
-        {
-            _appLogService.LogException(ex, "Serial port access denied");
-            await Shell.Services.MessageBoxService.ShowSerialPortAccessDeniedErrorAsync(port, ex);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Connection failed: {ex.Message}");
-            _appLogService.LogException(ex, "Connect failed");
-        }
-    }
-
-    public async Task QuickConnectAsync()
-    {
-        if (SelectedDevice == null)
-        {
-            await Shell.Services.MessageBoxService.ShowWarningAsync(
-                L["connection.error.noPortSelected"],
-                L["connection.error.noPortSelectedMessage"]);
-            return;
-        }
-
-        var port = SelectedDevice.Port;
-        
-        // If current active session is for this port, just reconnect it
-        if (ActiveSession != null && ActiveSession.Port == port)
-        {
-            if (ActiveSession.Status == SessionStatus.Disconnected)
-            {
-                await ReconnectSessionAsync(ActiveSession);
-            }
-            // Already connected to this port, do nothing
-            return;
-        }
-        
-        // Check if there's an existing session for this port
-        var existingSession = Sessions.FirstOrDefault(s => s.Port == port);
-        if (existingSession != null)
-        {
-            var behavior = _settingsService.Current.Connection.ExistingSessionBehavior;
-            
-            switch (behavior)
-            {
-                case ConnectionBehavior.SwitchToExisting:
-                    ActiveSession = existingSession;
-                    if (existingSession.Status == SessionStatus.Disconnected)
-                    {
-                        // Reconnect
-                        await ReconnectSessionAsync(existingSession);
-                    }
-                    return;
-                    
-                case ConnectionBehavior.PromptUser:
-                    var switchToExisting = L["connection.confirm.ok"];
-                    var createNew = L["connection.confirm.cancel"];
-                    var cancel = L["messagebox.cancel"];
-                    
-                    var choice = await Shell.Services.MessageBoxService.ShowCustomAsync(
-                        L["connection.confirm.existingSession.title"],
-                        string.Format(L["connection.confirm.existingSession.message"], port),
-                        Shell.Services.MessageBoxIcon.Question,
-                        switchToExisting, createNew, cancel);
-                    
-                    if (choice == 0) // Switch to existing
-                    {
-                        ActiveSession = existingSession;
-                        if (existingSession.Status == SessionStatus.Disconnected)
-                        {
-                            await ReconnectSessionAsync(existingSession);
-                        }
-                        return;
-                    }
-                    else if (choice == 1) // Create new
-                    {
-                        // Continue to create new session
-                        break;
-                    }
-                    else // Cancel (choice == 2 or -1)
-                    {
-                        return;
-                    }
-                    
-                case ConnectionBehavior.CreateNew:
-                default:
-                    // Continue to create new session
-                    break;
-            }
-        }
-
-        var settings = new SerialSettings 
-        { 
-            BaudRate = BaudRate,
-            DataBits = DataBits,
-            Parity = Parity,
-            StopBits = StopBits
-        };
-        var name = port;
-
-        try
-        {
-            var session = await _workspaceService.ConnectAsync(port, settings, name);
-            Sessions.Add(session);
-            ActiveSession = session;
-            IsConnected = true;
-
-            CommandCenter.SetSession(session.Id, session.Name);
-
-            // Subscribe to messages
-            _workspaceService.SubscribeToMessages(session.Id, message =>
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    Messages.Add(message);
-                    TrimMessages();
-                });
-            });
-
-            // Save workspace state
-            await SaveWorkspaceStateAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Connection failed: {ex.Message}");
-            _appLogService.LogException(ex, "Connect failed");
-            await Shell.Services.MessageBoxService.ShowErrorAsync(
-                L["connection.error.failed"],
-                string.Format(L["connection.error.failedMessage"], port, ex.Message));
-        }
-    }
-
-    public async Task DisconnectAsync()
-    {
-        if (ActiveSession == null) return;
-
-        try
-        {
-            var pluginId = ActiveSession.PluginId ?? "system.serial";
-            await _dispatcher.DispatchAsync(pluginId, ActiveSession.Id, "disconnect", null);
-        }
-        catch (Exception ex)
-        {
-            _appLogService.LogException(ex, "Disconnect failed");
-        }
-    }
-
-    public async Task RefreshDevicesAsync()
-    {
-        try
-        {
-            // Reconfigure adapter if on Linux
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                _serialAdapter.ConfigureLinuxScan(_settingsService.Current.Connection.LinuxSerialScan);
+                LeftSidebar.SetPreferredActiveSessionId(state.UiState.ActiveSessionId);
             }
 
-            var devices = await _deviceService.ListDevicesAsync();
-            
-            // Remember current selection
-            var currentPort = SelectedDevice?.Port;
-            
-            Dispatcher.UIThread.Post(() =>
-            {
-                Devices.Clear();
-                foreach (var device in devices)
-                {
-                    Devices.Add(device);
-                }
-                
-                // Restore selection if the port still exists
-                if (currentPort != null)
-                {
-                    SelectedDevice = Devices.FirstOrDefault(d => d.Port == currentPort);
-                }
-            });
+            RightToolDock.SetActiveSession(LeftSidebar.ActiveSession);
+            _appLogService.Info("Application UI state initialized.");
         }
         catch (Exception ex)
         {
-            _appLogService.LogException(ex, "Refresh devices failed");
+            _appLogService?.LogException(ex, "UI initialization error");
         }
     }
 
-    public async Task DeleteSessionAsync(string sessionId)
-    {
-        try
-        {
-            await _workspaceService.DeleteSessionAsync(sessionId);
-            
-            var session = Sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session != null)
-            {
-                Sessions.Remove(session);
-                if (ActiveSession?.Id == sessionId)
-                {
-                    ActiveSession = null;
-                    IsConnected = false;
-                }
-            }
-            
-            // Save workspace state
-            await SaveWorkspaceStateAsync();
-        }
-        catch (Exception ex)
-        {
-            _appLogService.LogException(ex, "Delete session failed");
-        }
-    }
+    // Back-compat helpers (used by some code-behind):
+    public Task SendAsync(string message, bool hex, bool addCr, bool addLf)
+        => RightToolDock.SendAsync(message, hex, addCr, addLf);
 
-    public async Task ExportMessagesAsync()
-    {
-        // TODO: Implement export functionality with ExportService
-        await Task.CompletedTask;
-        await Shell.Services.MessageBoxService.ShowInfoAsync(
-            "Export",
-            "Export functionality will be implemented in a future version.");
-    }
+    public void ClearMessages() => RightToolDock.ClearMessages();
 
-    private async Task ReconnectSessionAsync(Session oldSession)
-    {
-        try
-        {
-            // NEW: Delegate to dispatcher. 
-            // The EventBus handler will take care of updating the UI state when the new session is ready.
-            var pluginId = oldSession.PluginId ?? "system.serial";
-            
-            // First disconnect old session if it's still alive (UI might think it's disconnected but Core might have state)
-            await _dispatcher.DispatchAsync(pluginId, oldSession.Id, "disconnect", null);
-
-            // Then connect again
-            await _dispatcher.DispatchAsync(pluginId, null, "connect", new
-            {
-                port = oldSession.Port,
-                baudRate = oldSession.Settings.BaudRate,
-                name = oldSession.Name
-            });
-        }
-        catch (SerialPortAccessDeniedException ex)
-        {
-            _appLogService.LogException(ex, "Serial port access denied");
-            await Shell.Services.MessageBoxService.ShowSerialPortAccessDeniedErrorAsync(oldSession.Port, ex);
-        }
-        catch (Exception ex)
-        {
-            _appLogService.LogException(ex, "Reconnect failed");
-            await Shell.Services.MessageBoxService.ShowErrorAsync(
-                L["connection.error.failed"],
-                string.Format(L["connection.error.failedMessage"], oldSession.Port, ex.Message));
-        }
-    }
-
-    public async Task SendAsync(string message, bool hex, bool addCr, bool addLf)
-    {
-        if (ActiveSession == null || !IsConnected) return;
-
-        try
-        {
-            var format = hex ? MessageFormat.Hex : MessageFormat.Text;
-            await _workspaceService.SendMessageAsync(ActiveSession.Id, message, format, addCr, addLf);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Send failed: {ex.Message}");
-            _appLogService.LogException(ex, "Send failed");
-        }
-    }
-
-    public void ClearMessages()
-    {
-        if (ActiveSession != null)
-        {
-            _workspaceService.ClearMessages(ActiveSession.Id);
-            Messages.Clear();
-        }
-    }
-
-    public async Task ExportAsync(string? filePath = null)
-    {
-        if (ActiveSession == null) return;
-
-        try
-        {
-            await _exportService.ExportAsync(ActiveSession, SearchQuery, filePath);
-        }
-        catch (Exception ex)
-        {
-            _appLogService.LogException(ex, "Export failed");
-        }
-    }
+    public Task ExportAsync(string? filePath = null) => RightToolDock.ExportAsync(filePath);
 
     public void ToggleSettings()
     {
@@ -1062,142 +305,21 @@ public class MainWindowViewModel : BaseViewModel
         }
     }
 
-    private void LoadMessages()
-    {
-        Messages.Clear();
-        if (ActiveSession != null)
-        {
-            var max = _settingsService.Current.Display.MaxMessages;
-            var messages = _messageStream.GetMessages(ActiveSession.Id, 0, max);
-            foreach (var message in messages)
-            {
-                Messages.Add(message);
-            }
-        }
-    }
-
-    private async Task SendCommandAsync(CommandDefinition command)
-    {
-        if (ActiveSession == null || !IsConnected) return;
-
-        try
-        {
-            byte[] data;
-            if (command.Type == CommandPayloadType.Hex)
-            {
-                data = Convert.FromHexString(command.Payload.Replace(" ", ""));
-            }
-            else
-            {
-                var encoding = GetEncoding(command.Encoding);
-                data = encoding.GetBytes(command.Payload);
-            }
-
-            if (command.AppendCr || command.AppendLf)
-            {
-                var suffix = (command.AppendCr ? "\r" : "") + (command.AppendLf ? "\n" : "");
-                var suffixBytes = System.Text.Encoding.UTF8.GetBytes(suffix);
-                data = data.Concat(suffixBytes).ToArray();
-            }
-
-            await _workspaceService.SendDataAsync(ActiveSession.Id, data);
-        }
-        catch (Exception ex)
-        {
-            _appLogService.LogException(ex, "Command send failed");
-        }
-    }
-
-    private static System.Text.Encoding GetEncoding(string name)
-    {
-        try
-        {
-            return System.Text.Encoding.GetEncoding(name);
-        }
-        catch
-        {
-            return System.Text.Encoding.UTF8;
-        }
-    }
-
-    private void FilterMessages()
-    {
-        Messages.Clear();
-        if (ActiveSession != null && !string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            var filtered = _messageStream.Search(ActiveSession.Id, SearchQuery);
-            foreach (var message in filtered)
-            {
-                Messages.Add(message);
-            }
-        }
-        else
-        {
-            LoadMessages();
-        }
-    }
-
-    private void TrimMessages()
-    {
-        var max = _settingsService.Current.Display.MaxMessages;
-        while (Messages.Count > max)
-        {
-            Messages.RemoveAt(0);
-        }
-    }
-
-    private void OnDeviceDisconnected(DeviceDisconnectedEvent @event)
-    {
-        var reason = @event.Reason ?? L["notification.connection.unknownReason"];
-        _ = _notificationService.AddAsync(
-            NotificationCategory.Connection,
-            NotificationLevel.Warning,
-            "notification.connection.disconnected",
-            new object[]
-            {
-                @event.Port,
-                reason
-            });
-    }
+    public ObservableCollection<LogMessage> Messages => MessageStream.Messages;
 
     private async void OnLanguageChanged(object? sender, string cultureCode)
     {
-        OnPropertyChanged(nameof(Title));
-        NotificationCenter.RefreshLocalizedText();
-        CommandCenter.RefreshLocalizedOptions();
-        PluginManager.RefreshLocalizedText();
-        await PluginManager.NotifyLanguageChangedAsync(cultureCode, (runtime, ex, restarted) =>
-        {
-            var message = restarted
-                ? $"Plugin '{runtime.Info.Manifest.Id}' notification failed; plugin restarted."
-                : $"Plugin '{runtime.Info.Manifest.Id}' notification failed; restart failed.";
-            _appLogService.Error(message, ex);
-        });
-    }
-    
-    private async void OnLinuxScanSettingsChanged(object? sender, EventArgs e)
-    {
-        // Linux scan settings changed, automatically refresh device list
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            await RefreshDevicesAsync();
-        }
-    }
-
-    private void OnSettingsChanged(object? sender, AppSettings settings)
-    {
-        _appLogService.Update(settings.AppLogs);
-        OnPropertyChanged(nameof(TimestampFormat));
-        OnPropertyChanged(nameof(AutoScrollEnabled));
-        OnPropertyChanged(nameof(MessageFontFamily));
-        OnPropertyChanged(nameof(MessageFontSize));
+        // 通知核心层同步外部插件语言 (由于 Core 不感知 UI，我们需要从 UI 入口点转发这个通知)
+        await _appHost.NotifyLanguageChangedAsync(cultureCode);
+        
+        // 注意：其他子 ViewModel (NotificationCenter, CommandCenter) 应该自行订阅 
+        // localization.LanguageChanged 事件来刷新自己的本地化文本，而不是由 MainWindowViewModel 强制驱动。
     }
 
     // PropertyChanged implementation inherited from BaseViewModel
 
     private void UpdateCommandStates()
     {
-        (DisconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ClearMessagesCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (ExportMessagesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
@@ -1206,7 +328,7 @@ public class MainWindowViewModel : BaseViewModel
     {
         try
         {
-            await _workspaceService.SaveCurrentStateAsync(Sessions, ActiveSession, AutoScrollEnabled);
+            await _workspaceCoordinator.SaveCurrentStateAsync(Sessions, ActiveSession, Display.AutoScrollEnabled);
         }
         catch (Exception ex)
         {
@@ -1223,46 +345,9 @@ public class MainWindowViewModel : BaseViewModel
         {
             _appLogService.Info("Starting application cleanup...");
             
-            // Disconnect all active sessions with longer timeout
-            foreach (var session in Sessions.Where(s => s.Status == SessionStatus.Connected).ToList())
-            {
-                try
-                {
-                    _appLogService.Info($"Disconnecting session: {session.Name} ({session.Port})");
-                    var disconnectTask = _deviceService.DisconnectAsync(session.Id);
-                    if (!disconnectTask.Wait(TimeSpan.FromSeconds(5)))
-                    {
-                        _appLogService.Warn($"Disconnect timeout for session {session.Id}, forcing close");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _appLogService.Warn($"Error disconnecting session {session.Id}: {ex.Message}");
-                }
-            }
-
-            try
-            {
-                PluginManager.ShutdownAllAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _appLogService.Warn($"Error stopping plugins: {ex.Message}");
-            }
+            // Core will handle session disconnection and plugin shutdown via AppHost
             
-            // Dispose all subscriptions
-            foreach (var subscription in _messageSubscriptions.Values)
-            {
-                try
-                {
-                    subscription?.Dispose();
-                }
-                catch { }
-            }
-            _messageSubscriptions.Clear();
-            
-            // Dispose services
-            _deviceService?.Dispose();
+            MessageStream.SetActiveSession(null);
             
             _appLogService.Info("Application cleanup completed.");
         }
@@ -1338,52 +423,14 @@ public class MainWindowViewModel : BaseViewModel
         {
             _appLogService.Info("Starting application cleanup with progress...");
             
-            var connectedSessions = Sessions.Where(s => s.Status == SessionStatus.Connected).ToList();
+            progressDialog.UpdateStatus(L["shutdown.disconnecting"]);
             
-            // Disconnect all active sessions on background thread
-            foreach (var session in connectedSessions)
+            // Delegate all core shutdown logic to AppHost
+            await Task.Run(async () =>
             {
-                try
-                {
-                    progressDialog.UpdateStatus(string.Format(
-                        L["shutdown.disconnecting"],
-                        session.Name));
-                    
-                    _appLogService.Info($"Disconnecting session: {session.Name} ({session.Port})");
-                    
-                    // Run disconnect on background thread with timeout
-                    await Task.Run(async () =>
-                    {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                        try
-                        {
-                            await _deviceService.DisconnectAsync(session.Id);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            _appLogService.Warn($"Disconnect timeout for session {session.Id}");
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _appLogService.Warn($"Error disconnecting session {session.Id}: {ex.Message}");
-                }
-                
-                // Small delay to ensure cleanup completes
-                await Task.Delay(100);
-            }
+                await _appHost.ShutdownAsync();
+            });
 
-            progressDialog.UpdateStatus(L["shutdown.stoppingPlugins"]);
-            try
-            {
-                await PluginManager.ShutdownAllAsync(TimeSpan.FromSeconds(2));
-            }
-            catch (Exception ex)
-            {
-                _appLogService.Warn($"Error stopping plugins: {ex.Message}");
-            }
-            
             // Save workspace state
             progressDialog.UpdateStatus(L["shutdown.savingState"]);
             await Task.Run(async () =>
@@ -1398,23 +445,11 @@ public class MainWindowViewModel : BaseViewModel
                 }
             });
             
-            // Dispose resources
+            // Dispose UI resources
             progressDialog.UpdateStatus(L["shutdown.cleaningUp"]);
             await Task.Run(() =>
             {
-                // Dispose all subscriptions
-                foreach (var subscription in _messageSubscriptions.Values)
-                {
-                    try
-                    {
-                        subscription?.Dispose();
-                    }
-                    catch { }
-                }
-                _messageSubscriptions.Clear();
-                
-                // Dispose services
-                _deviceService?.Dispose();
+                MessageStream.SetActiveSession(null);
             });
             
             progressDialog.UpdateStatus(L["shutdown.complete"]);
@@ -1435,45 +470,4 @@ public class MainWindowViewModel : BaseViewModel
             }
         }
     }
-}
-
-/// <summary>
-/// Progress dialog view model for cleanup
-/// </summary>
-internal class ProgressDialogViewModel : INotifyPropertyChanged
-{
-    private string _currentStatus = string.Empty;
-    private readonly ILocalizationService _localization;
-
-    public ProgressDialogViewModel(ILocalizationService localization)
-    {
-        _localization = localization;
-        _currentStatus = localization.GetString("shutdown.cleaningUp");
-    }
-
-    public string CurrentStatus
-    {
-        get => _currentStatus;
-        private set
-        {
-            if (_currentStatus != value)
-            {
-                _currentStatus = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentStatus)));
-            }
-        }
-    }
-
-    public void UpdateStatus(string status)
-    {
-        CurrentStatus = status;
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-}
-
-public enum ToolDockTab
-{
-    Send,
-    Commands
 }

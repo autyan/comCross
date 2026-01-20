@@ -21,72 +21,41 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private BusAdapterInfo? _selectedAdapter;
     private Control? _configPanel; // Changed from UserControl to Control
     private string? _activeSessionId;
-    private readonly BusAdapterInfo _serialAdapter;
     private readonly PluginUiRenderer _uiRenderer;
     private readonly PluginUiStateManager _stateManager;
+    private readonly PluginManagerViewModel _pluginManager;
+    private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
+    private IReadOnlyList<PluginCapabilityLaunchOption> _lastOptions = Array.Empty<PluginCapabilityLaunchOption>();
 
-    public BusAdapterSelectorViewModel(ILocalizationService localization, PluginUiRenderer uiRenderer, PluginUiStateManager stateManager)
+    public BusAdapterSelectorViewModel(
+        ILocalizationService localization,
+        PluginUiRenderer uiRenderer,
+        PluginUiStateManager stateManager,
+        PluginManagerViewModel pluginManager,
+        ComCross.Core.Services.PluginUiConfigService pluginUiConfigService)
         : base(localization)
     {
         _uiRenderer = uiRenderer;
         _stateManager = stateManager;
-        // Initialize available adapters
-        _serialAdapter = new BusAdapterInfo
-        {
-            Id = "serial",
-            Name = "Serial (RS232)",
-            Icon = "🔌",
-            Description = "Serial port communication (RS232/RS485/RS422)",
-            IsEnabled = true,
-            PluginId = "system.serial",
-            CapabilityId = "serial",
-            UiSchema = "{\"fields\":[" +
-                "{\"key\":\"port\",\"labelKey\":\"sidebar.selectPort\",\"type\":\"select\",\"optionsStatePath\":\"system.serial.ports\"}," +
-                "{\"key\":\"baudRate\",\"labelKey\":\"sidebar.baudRate\",\"type\":\"select\",\"options\":[\"9600\",\"19200\",\"38400\",\"57600\",\"115200\",\"230400\",\"460800\"]}," +
-                "{\"key\":\"dataBits\",\"labelKey\":\"sidebar.dataBits\",\"type\":\"select\",\"options\":[\"7\",\"8\"]}," +
-                "{\"key\":\"parity\",\"labelKey\":\"sidebar.parity\",\"type\":\"select\",\"options\":[\"None\",\"Odd\",\"Even\"]}," +
-                "{\"key\":\"stopBits\",\"labelKey\":\"sidebar.stopBits\",\"type\":\"select\",\"options\":[\"1\",\"1.5\",\"2\"]}" +
-                "],\"actions\":[" +
-                "{\"id\":\"refresh\",\"labelKey\":\"sidebar.refreshPorts\",\"icon\":\"refresh\"}," +
-                "{\"id\":\"connect\",\"labelKey\":\"menu.connect\"}" +
-                "]}"
-        };
+        _pluginManager = pluginManager;
+        _pluginUiConfigService = pluginUiConfigService;
+        
+        AvailableAdapters = new ObservableCollection<BusAdapterInfo>();
 
-        AvailableAdapters = new ObservableCollection<BusAdapterInfo>
+        Localization.LanguageChanged += (_, _) =>
         {
-            _serialAdapter,
-            // Future adapters (disabled for now)
-            new BusAdapterInfo
+            if (_lastOptions.Count > 0)
             {
-                Id = "tcp-client",
-                Name = "TCP/IP Client",
-                Icon = "🌐",
-                Description = "TCP/IP client connection",
-                IsEnabled = false,
-                ConfigPanelType = null // TODO: Create TcpClientConfigPanel
-            },
-            new BusAdapterInfo
+                UpdatePluginAdapters(_lastOptions);
+            }
+
+            // Refresh current config panel so plugin UI labels/layout switch with language.
+            if (_selectedAdapter?.PluginId != null && _selectedAdapter.CapabilityId != null)
             {
-                Id = "tcp-server",
-                Name = "TCP/IP Server",
-                Icon = "🌐",
-                Description = "TCP/IP server (listen for connections)",
-                IsEnabled = false,
-                ConfigPanelType = null // TODO: Create TcpServerConfigPanel
-            },
-            new BusAdapterInfo
-            {
-                Id = "udp",
-                Name = "UDP",
-                Icon = "📡",
-                Description = "UDP datagram communication",
-                IsEnabled = false,
-                ConfigPanelType = null // TODO: Create UdpConfigPanel
+                _uiRenderer.ClearCache(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, _activeSessionId, "sidebar-config");
+                _ = LoadConfigPanelAsync();
             }
         };
-
-        // Select Serial adapter by default
-        SelectedAdapter = AvailableAdapters[0];
     }
 
     /// <summary>
@@ -96,28 +65,26 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
     {
+        _lastOptions = options;
+
         var previouslySelectedId = SelectedAdapter?.Id;
 
-        // Remove existing plugin-backed adapters.
-        for (var index = AvailableAdapters.Count - 1; index >= 0; index--)
-        {
-            var existing = AvailableAdapters[index];
-            if (existing.Id.StartsWith(PluginAdapterPrefix, StringComparison.Ordinal))
-            {
-                AvailableAdapters.RemoveAt(index);
-            }
-        }
+        AvailableAdapters.Clear();
 
         if (options.Count > 0)
         {
             foreach (var option in options)
             {
+                var pluginName = TryGetLocalized($"{option.PluginId}.name") ?? option.PluginName;
+                var capName = TryGetLocalized($"{option.PluginId}.capability.{option.CapabilityId}.name") ?? option.CapabilityName;
+                var capDesc = TryGetLocalized($"{option.PluginId}.capability.{option.CapabilityId}.description") ?? option.CapabilityDescription;
+
                 AvailableAdapters.Add(new BusAdapterInfo
                 {
                     Id = $"{PluginAdapterPrefix}{option.PluginId}:{option.CapabilityId}",
-                    Name = $"{option.PluginName} / {option.CapabilityName}",
+                    Name = $"{pluginName} / {capName}",
                     Icon = "🧩",
-                    Description = option.CapabilityDescription,
+                    Description = capDesc,
                     IsEnabled = true,
                     ConfigPanelType = null,
                     PluginId = option.PluginId,
@@ -129,7 +96,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
         }
 
-        // Restore selection if possible; otherwise fall back to Serial.
+        // Restore selection if possible
         if (!string.IsNullOrWhiteSpace(previouslySelectedId))
         {
             var match = AvailableAdapters.FirstOrDefault(a => string.Equals(a.Id, previouslySelectedId, StringComparison.Ordinal));
@@ -140,7 +107,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
         }
 
-        SelectedAdapter = _serialAdapter;
+        if (AvailableAdapters.Count > 0)
+        {
+            SelectedAdapter = AvailableAdapters[0];
+        }
     }
 
     public void SelectAdapterById(string? id)
@@ -166,7 +136,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             {
                 _selectedAdapter = value;
                 OnPropertyChanged();
-                LoadConfigPanel();
+                _ = LoadConfigPanelAsync();
             }
         }
     }
@@ -202,17 +172,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 _stateManager.UpdateSessionState(session.Id, session.ParametersJson);
             }
         }
-        else
-        {
-            // Reset to Serial if no active session
-            SelectAdapterById("serial");
-        }
     }
 
     /// <summary>
     /// Load the configuration panel for the selected adapter
     /// </summary>
-    private void LoadConfigPanel()
+    private async System.Threading.Tasks.Task LoadConfigPanelAsync()
     {
         if (_selectedAdapter?.ConfigPanelType != null)
         {
@@ -232,12 +197,66 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         {
              // Plugin-backed adapter: Use PluginUiRenderer
              var uiSchema = PluginUiSchema.TryParse(_selectedAdapter.UiSchema);
+             var jsonSchema = TryParseJsonSchema(_selectedAdapter.JsonSchema);
              var fields = uiSchema?.Fields;
+
+             if (fields != null && fields.Count > 0 && jsonSchema != null)
+             {
+                 EnrichFieldsFromJsonSchema(fields, jsonSchema.Value);
+             }
+
+             // Pull UI state (ports, defaults, etc.) so select/options populate.
+             try
+             {
+                 if (_selectedAdapter.CapabilityId != null)
+                 {
+                     var uiState = await _pluginManager.TryGetUiStateAsync(
+                         _selectedAdapter.PluginId,
+                         _selectedAdapter.CapabilityId,
+                         sessionId: _activeSessionId,
+                         viewId: "sidebar-config",
+                         timeout: TimeSpan.FromSeconds(2));
+
+                     if (uiState is not null && uiState.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                     {
+                         var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(uiState.Value.GetRawText());
+                         if (dict != null)
+                         {
+                             _stateManager.UpdateStates(_activeSessionId, dict);
+                             if (fields != null && fields.Count > 0)
+                             {
+                                 var projected = ProjectDefaults(dict, fields);
+                                 if (projected.Count > 0)
+                                 {
+                                     _stateManager.UpdateStates(_activeSessionId, projected);
+                                 }
+                             }
+                         }
+                     }
+                 }
+             }
+             catch
+             {
+                 // best-effort
+             }
              
              // If no fields, we don't show a panel (or could fallback to JsonSchema, but keeping it simple for now)
              if (fields != null && fields.Count > 0 && _selectedAdapter.CapabilityId != null)
              {
-                 var schema = new PluginUiSchema { Fields = fields };
+                 // Preserve UiSchemaVersion1 layout/title metadata if present.
+                 var schema = uiSchema ?? new PluginUiSchema { Fields = fields };
+                 schema.Fields = fields;
+
+                 if (_activeSessionId is null)
+                 {
+                     await _pluginUiConfigService.SeedStateAsync(
+                         _selectedAdapter.PluginId,
+                         _selectedAdapter.CapabilityId,
+                         schema,
+                         sessionId: null,
+                         viewId: "sidebar-config");
+                 }
+
                  var container = _uiRenderer.GetOrRender(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, schema, _activeSessionId, "sidebar-config");
                  if (container is AvaloniaPluginUiContainer avaloniaContainer)
                  {
@@ -258,5 +277,138 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             // No custom config panel, use default or null
             ConfigPanel = null;
         }
+    }
+
+    private string? TryGetLocalized(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        var value = Localization.GetString(key);
+        if (string.Equals(value, $"[{key}]", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return value;
+    }
+
+    private static System.Text.Json.JsonElement? TryParseJsonSchema(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void EnrichFieldsFromJsonSchema(List<PluginUiField> fields, System.Text.Json.JsonElement schema)
+    {
+        // Minimal enum extraction: { properties: { fieldName: { enum: [...] } } }
+        if (!schema.TryGetProperty("properties", out var props) || props.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var field in fields)
+        {
+            if (!field.EnumFromSchema || field.GetOptionsAsOptionList().Count > 0)
+            {
+                continue;
+            }
+
+            var name = !string.IsNullOrWhiteSpace(field.Name) ? field.Name : field.Key;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            if (!props.TryGetProperty(name, out var propSchema) || propSchema.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (!propSchema.TryGetProperty("enum", out var enums) || enums.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var list = new List<string>();
+            foreach (var item in enums.EnumerateArray())
+            {
+                if (item.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var s = item.GetString();
+                    if (!string.IsNullOrWhiteSpace(s))
+                    {
+                        list.Add(s);
+                    }
+                }
+            }
+
+            if (list.Count > 0)
+            {
+                field.Options = System.Text.Json.JsonSerializer.SerializeToElement(list);
+            }
+        }
+    }
+
+    private static Dictionary<string, object> ProjectDefaults(Dictionary<string, object> uiState, List<PluginUiField> fields)
+    {
+        var projected = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        foreach (var field in fields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key) || string.IsNullOrWhiteSpace(field.DefaultStatePath))
+            {
+                continue;
+            }
+
+            if (TryGetPath(uiState, field.DefaultStatePath!, out var value) && value is not null)
+            {
+                projected[field.Key] = value;
+            }
+        }
+
+        return projected;
+    }
+
+    private static bool TryGetPath(Dictionary<string, object> root, string path, out object? value)
+    {
+        value = null;
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        object? current = root;
+        foreach (var seg in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current is Dictionary<string, object> dict)
+            {
+                if (!dict.TryGetValue(seg, out current)) return false;
+                continue;
+            }
+
+            if (current is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (!je.TryGetProperty(seg, out var child)) return false;
+                current = child;
+                continue;
+            }
+
+            return false;
+        }
+
+        value = current;
+        return true;
     }
 }

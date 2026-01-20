@@ -1,8 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,6 +23,9 @@ public sealed class NotificationCenterViewModel : BaseViewModel
     {
         _notificationService = notificationService;
         _notificationService.NotificationAdded += OnNotificationAdded;
+        
+        // 构造时同步加载数据
+        _ = LoadAsync();
     }
 
     public ObservableCollection<NotificationItemViewModel> Items { get; } = new();
@@ -107,17 +108,6 @@ public sealed class NotificationCenterViewModel : BaseViewModel
         });
     }
 
-    public void RefreshLocalizedText()
-    {
-        foreach (var item in Items)
-        {
-            item.RefreshMessage(Localization);
-        }
-
-        OnPropertyChanged(nameof(HasNotifications));
-        OnPropertyChanged(nameof(IsEmpty));
-    }
-
     private void OnNotificationAdded(object? sender, NotificationItem item)
     {
         Dispatcher.UIThread.Post(() =>
@@ -135,15 +125,16 @@ public sealed class NotificationCenterViewModel : BaseViewModel
     }
 }
 
-public sealed class NotificationItemViewModel : INotifyPropertyChanged
+public sealed class NotificationItemViewModel : BaseViewModel
 {
     private readonly NotificationItem _item;
-    private string _message;
+    private readonly object[] _args;
 
     public NotificationItemViewModel(NotificationItem item, ILocalizationService localization)
+        : base(localization)
     {
         _item = item;
-        _message = FormatMessage(localization, item);
+        _args = ParseArgs(item.MessageArgsJson);
     }
 
     public string Id => _item.Id;
@@ -152,17 +143,7 @@ public sealed class NotificationItemViewModel : INotifyPropertyChanged
 
     public string Message
     {
-        get => _message;
-        private set
-        {
-            if (_message == value)
-            {
-                return;
-            }
-
-            _message = value;
-            OnPropertyChanged();
-        }
+        get => Localization.GetString(_item.MessageKey, _args);
     }
 
     public bool IsRead
@@ -178,17 +159,6 @@ public sealed class NotificationItemViewModel : INotifyPropertyChanged
             _item.IsRead = value;
             OnPropertyChanged();
         }
-    }
-
-    public void RefreshMessage(ILocalizationService localization)
-    {
-        Message = FormatMessage(localization, _item);
-    }
-
-    private static string FormatMessage(ILocalizationService localization, NotificationItem item)
-    {
-        var args = ParseArgs(item.MessageArgsJson);
-        return localization.GetString(item.MessageKey, args);
     }
 
     private static object[] ParseArgs(string json)
@@ -227,10 +197,4 @@ public sealed class NotificationItemViewModel : INotifyPropertyChanged
         };
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }

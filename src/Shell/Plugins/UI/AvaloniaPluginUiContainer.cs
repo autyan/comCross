@@ -16,6 +16,7 @@ public class AvaloniaPluginUiContainer : IPluginUiContainer
         {
             Spacing = 8
         };
+        Grid.SetIsSharedSizeScope(_panel, true);
     }
 
     /// <summary>
@@ -31,6 +32,11 @@ public class AvaloniaPluginUiContainer : IPluginUiContainer
         {
             _panel.Children.Add(avaloniaControl.AvaloniaControl);
         }
+    }
+
+    public void AddElement(Control element)
+    {
+        _panel.Children.Add(element);
     }
 
     public void Clear()

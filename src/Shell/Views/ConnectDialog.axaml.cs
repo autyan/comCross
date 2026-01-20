@@ -19,6 +19,7 @@ public partial class ConnectDialog : BaseWindow
     private readonly PluginUiRenderer _uiRenderer;
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginActionExecutor _actionExecutor;
+    private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
     private PluginUiAction? _primaryAction;
     private IPluginUiContainer? _currentContainer;
 
@@ -33,6 +34,7 @@ public partial class ConnectDialog : BaseWindow
         _uiRenderer = App.ServiceProvider.GetRequiredService<PluginUiRenderer>();
         _stateManager = App.ServiceProvider.GetRequiredService<PluginUiStateManager>();
         _actionExecutor = App.ServiceProvider.GetRequiredService<PluginActionExecutor>();
+        _pluginUiConfigService = App.ServiceProvider.GetRequiredService<ComCross.Core.Services.PluginUiConfigService>();
         
         Opened += async (_, _) => await OnDialogOpenedAsync();
     }
@@ -40,11 +42,13 @@ public partial class ConnectDialog : BaseWindow
     public ConnectDialog(
         PluginUiRenderer uiRenderer,
         PluginUiStateManager stateManager,
-        PluginActionExecutor actionExecutor)
+        PluginActionExecutor actionExecutor,
+        ComCross.Core.Services.PluginUiConfigService pluginUiConfigService)
     {
         _uiRenderer = uiRenderer;
         _stateManager = stateManager;
         _actionExecutor = actionExecutor;
+        _pluginUiConfigService = pluginUiConfigService;
         
         InitializeComponent();
         Opened += async (_, _) => await OnDialogOpenedAsync();
@@ -70,13 +74,23 @@ public partial class ConnectDialog : BaseWindow
         PluginCapabilityComboBox.ItemsSource = options;
         PluginCapabilityComboBox.ItemTemplate = new FuncDataTemplate<PluginCapabilityLaunchOption>((item, _) =>
         {
+            if (item is null)
+            {
+                return new TextBlock { Text = string.Empty };
+            }
+
+            var pluginName = string.IsNullOrWhiteSpace(item.PluginName) ? "<unknown plugin>" : item.PluginName;
+            var capabilityName = string.IsNullOrWhiteSpace(item.CapabilityName) ? "<unknown capability>" : item.CapabilityName;
+            var pluginId = string.IsNullOrWhiteSpace(item.PluginId) ? "<unknown>" : item.PluginId;
+            var capabilityId = string.IsNullOrWhiteSpace(item.CapabilityId) ? "<unknown>" : item.CapabilityId;
+
             return new StackPanel
             {
                 Spacing = 2,
                 Children =
                 {
-                    new TextBlock { Text = $"{item.PluginName} / {item.CapabilityName}" },
-                    new TextBlock { Text = $"{item.PluginId}::{item.CapabilityId}", FontSize = 11, Foreground = Avalonia.Media.Brushes.Gray }
+                    new TextBlock { Text = $"{pluginName} / {capabilityName}" },
+                    new TextBlock { Text = $"{pluginId}::{capabilityId}", FontSize = 11, Foreground = Avalonia.Media.Brushes.Gray }
                 }
             };
         });
@@ -95,42 +109,7 @@ public partial class ConnectDialog : BaseWindow
 
         await LoadCapabilityUiAsync(vm, (PluginCapabilityLaunchOption?)PluginCapabilityComboBox.SelectedItem);
 
-        Action<string, PluginHostUiStateInvalidatedEvent>? invalidationHandler = null;
-        invalidationHandler = (pluginId, invalidated) =>
-        {
-            var selected = (PluginCapabilityLaunchOption?)PluginCapabilityComboBox.SelectedItem;
-            if (selected is null)
-            {
-                return;
-            }
-
-            if (!string.Equals(pluginId, selected.PluginId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (!string.Equals(invalidated.CapabilityId, selected.CapabilityId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(invalidated.ViewId) &&
-                !string.Equals(invalidated.ViewId, "connect-dialog", StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            Dispatcher.UIThread.Post(() => _ = LoadCapabilityUiAsync(vm, selected, refreshOnly: true));
-        };
-
-        vm.PluginUiStateInvalidated += invalidationHandler;
-        Closed += (_, _) =>
-        {
-            if (invalidationHandler is not null)
-            {
-                vm.PluginUiStateInvalidated -= invalidationHandler;
-            }
-        };
+        // NOTE: Plugin UI invalidation events can be wired here if/when exposed via VM or a shared event bus.
     }
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
@@ -177,6 +156,8 @@ public partial class ConnectDialog : BaseWindow
         {
             SchemaHintText.IsVisible = false;
 
+            Dictionary<string, object>? uiStateDict = null;
+
             // 获取 UI 状态（硬件枚举等）
             var uiState = await vm.PluginManager.TryGetUiStateAsync(
                 selected.PluginId,
@@ -188,10 +169,10 @@ public partial class ConnectDialog : BaseWindow
             // 更新 StateManager
             if (uiState != null && uiState.Value.ValueKind == JsonValueKind.Object)
             {
-                var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(uiState.Value.GetRawText());
-                if (dict != null)
+                uiStateDict = JsonSerializer.Deserialize<Dictionary<string, object>>(uiState.Value.GetRawText());
+                if (uiStateDict != null)
                 {
-                    _stateManager.UpdateStates(null, dict);
+                    _stateManager.UpdateStates(null, uiStateDict);
                 }
             }
 
@@ -203,6 +184,65 @@ public partial class ConnectDialog : BaseWindow
             {
                 // 暂时使用旧的 ToDefaultFields 逻辑来转换
                 fields = ToDefaultFields(jsonSchema);
+            }
+
+            // Enrich select fields from JSON schema enums.
+            if (fields is not null && jsonSchema is not null)
+            {
+                foreach (var f in fields)
+                {
+                    if (f.EnumFromSchema && f.GetOptionsAsOptionList().Count == 0)
+                    {
+                        var name = !string.IsNullOrWhiteSpace(f.Name) ? f.Name : f.Key;
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            var opts = jsonSchema.GetEnumOptions(name);
+                            if (opts.Count > 0)
+                            {
+                                f.Options = JsonSerializer.SerializeToElement(opts);
+                            }
+                        }
+                    }
+
+                    // Prefer schema `control` when present.
+                    if (string.IsNullOrWhiteSpace(f.Type) && !string.IsNullOrWhiteSpace(f.Control))
+                    {
+                        f.Type = f.Control;
+                    }
+                    else if (string.IsNullOrWhiteSpace(f.Control) && !string.IsNullOrWhiteSpace(f.Type))
+                    {
+                        f.Control = f.Type;
+                    }
+
+                    // Ensure state key exists.
+                    if (string.IsNullOrWhiteSpace(f.Key) && !string.IsNullOrWhiteSpace(f.Name))
+                    {
+                        f.Key = f.Name;
+                    }
+                }
+            }
+
+            // Project nested default values into flat keys expected by StateManager.
+            if (uiStateDict is not null && fields is not null)
+            {
+                var projected = new Dictionary<string, object>();
+                foreach (var f in fields)
+                {
+                    if (string.IsNullOrWhiteSpace(f.Key) || string.IsNullOrWhiteSpace(f.DefaultStatePath))
+                    {
+                        continue;
+                    }
+
+                    if (TryGetPath(uiStateDict, f.DefaultStatePath!, out var v) && v is not null)
+                    {
+                        projected[f.Key] = v;
+                    }
+                }
+
+                if (projected.Count > 0)
+                {
+                    _stateManager.UpdateStates(null, projected);
+                }
             }
 
             if (fields is null || fields.Count == 0)
@@ -232,8 +272,20 @@ public partial class ConnectDialog : BaseWindow
                 ConnectButton.Content = vm.L["dialog.connect.connect"];
             }
 
-            // 使用新架构渲染
-            var schema = new PluginUiSchema { Fields = fields! };
+            // 使用新架构渲染（保留 Layout），并确保 Fields 与解析后的字段一致
+            var schema = uiSchema ?? new PluginUiSchema { Fields = fields! };
+            schema.Fields = fields!;
+
+            // Seed: persisted values win; only apply defaults when host has no record.
+            await _pluginUiConfigService.SeedStateAsync(
+                selected.PluginId,
+                selected.CapabilityId,
+                schema,
+                sessionId: null,
+                viewId: "connect-dialog");
+
+            // Ensure UI is up-to-date (schema/label/language changes).
+            _uiRenderer.ClearCache(selected.PluginId, selected.CapabilityId, null, "connect-dialog");
             var container = _uiRenderer.GetOrRender(selected.PluginId, selected.CapabilityId, schema, null, "connect-dialog");
             
             if (container is AvaloniaPluginUiContainer avaloniaContainer)
@@ -248,6 +300,34 @@ public partial class ConnectDialog : BaseWindow
             SchemaHintText.Text = ex.Message;
             SchemaHintText.IsVisible = true;
         }
+    }
+
+    private static bool TryGetPath(Dictionary<string, object> root, string path, out object? value)
+    {
+        value = null;
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        object? current = root;
+        foreach (var seg in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current is Dictionary<string, object> dict)
+            {
+                if (!dict.TryGetValue(seg, out current)) return false;
+                continue;
+            }
+
+            if (current is JsonElement je && je.ValueKind == JsonValueKind.Object)
+            {
+                if (!je.TryGetProperty(seg, out var child)) return false;
+                current = child;
+                continue;
+            }
+
+            return false;
+        }
+
+        value = current;
+        return true;
     }
 
     private static List<PluginUiField>? ToDefaultFields(JsonSchemaView? jsonSchema)

@@ -14,63 +14,106 @@ namespace ComCross.Shell;
 public partial class App : Application
 {
     private static IServiceProvider? _serviceProvider;
+    private Core.Application.IAppHost? _appHost;
     private MainWindowViewModel? _viewModel;
     private bool _isShuttingDown = false;
     
     /// <summary>
     /// Global service provider for accessing DI services.
-    /// Used by base classes (BaseWindow, BaseUserControl) via Service Locator pattern.
     /// </summary>
-    public static IServiceProvider ServiceProvider
-    {
-        get => _serviceProvider ?? throw new InvalidOperationException(
-            "ServiceProvider not initialized. Call Initialize() first.");
-        internal set => _serviceProvider = value; // For testing
-    }
-    
+    public static IServiceProvider ServiceProvider => _serviceProvider ?? throw new InvalidOperationException("App not initialized");
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
         
-        // Configure DI container
+        // 1. Configure DI container
         var services = new ServiceCollection();
-        services.AddComCrossServices();
+        services.AddComCrossShell(); 
         _serviceProvider = services.BuildServiceProvider();
+
+        // 2. Get the AppHost from DI
+        _appHost = _serviceProvider.GetRequiredService<Core.Application.IAppHost>();
         
-        // Capture global unhandled exceptions
+        // 3. Setup Global Exception Handlers
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
     }
-    
-    private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+
+    private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
     {
-        var ex = e.ExceptionObject as Exception;
-        System.Diagnostics.Debug.WriteLine($"[FATAL] Unhandled exception: {ex?.Message}");
-        System.Diagnostics.Debug.WriteLine($"[FATAL] Stack trace: {ex?.StackTrace}");
-        if (ex?.InnerException != null)
+        try
         {
-            System.Diagnostics.Debug.WriteLine($"[FATAL] Inner exception: {ex.InnerException.Message}");
+            Console.Error.WriteLine($"UNHANDLED EXCEPTION: {e.ExceptionObject}");
+        }
+        catch
+        {
+            // Best-effort logging only.
+        }
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        try
+        {
+            Console.Error.WriteLine($"UNOBSERVED TASK EXCEPTION: {e.Exception}");
+            e.SetObserved();
+        }
+        catch
+        {
+            // Best-effort logging only.
         }
     }
     
-    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[ERROR] Unobserved task exception: {e.Exception?.Message}");
-        System.Diagnostics.Debug.WriteLine($"[ERROR] Stack trace: {e.Exception?.StackTrace}");
-        e.SetObserved(); // Prevent application crash
-    }
-
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Create MainWindow using DI
-            _viewModel = ServiceProvider.GetRequiredService<MainWindowViewModel>();
-            var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
-            mainWindow.DataContext = _viewModel;
-            desktop.MainWindow = mainWindow;
-            
-            desktop.ShutdownRequested += OnShutdownRequested;
+            try 
+            {
+                Console.Error.WriteLine("[Shell] Framework initialization started");
+                // 4. Initialize Core Engine (Database, Configuration, Plugins)
+                if (_appHost != null)
+                {
+                    Console.Error.WriteLine("[Shell] Initializing Core Engine...");
+                    await _appHost.InitializeAsync();
+                    Console.Error.WriteLine("[Shell] Core Engine initialized");
+                }
+
+                // Initialize static services
+                var localization = _serviceProvider!.GetRequiredService<Shared.Services.ILocalizationService>();
+                Shell.Services.MessageBoxService.Initialize(localization);
+                Console.Error.WriteLine("[Shell] Services initialized");
+
+                // 5. Build UI
+                _viewModel = _serviceProvider!.GetRequiredService<MainWindowViewModel>();
+                var mainWindow = _serviceProvider!.GetRequiredService<MainWindow>();
+                mainWindow.DataContext = _viewModel;
+                desktop.MainWindow = mainWindow;
+                // Defensive: explicitly show the window, but do it asynchronously.
+                // Calling Show()/Activate() synchronously here can race the dispatcher startup on Wayland.
+                mainWindow.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterScreen;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        desktop.MainWindow?.Show();
+                        desktop.MainWindow?.Activate();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[Shell] Failed to show MainWindow: {ex}");
+                    }
+                });
+                Console.Error.WriteLine("[Shell] MainWindow created");
+                
+                desktop.ShutdownRequested += OnShutdownRequested;
+            }
+            catch (Exception ex)
+            {
+                // Fallback for fatal startup errors
+                Console.Error.WriteLine($"FATAL STARTUP ERROR: {ex}");
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -93,12 +136,18 @@ public partial class App : Application
         {
             try
             {
-                // Clean up resources with 5 second timeout
+                // 1. UI Cleanup
                 if (_viewModel != null)
                 {
                     var cleanupTask = _viewModel.CleanupWithProgressAsync();
-                    var timeoutTask = Task.Delay(5000);
+                    var timeoutTask = Task.Delay(2000);
                     await Task.WhenAny(cleanupTask, timeoutTask);
+                }
+
+                // 2. Core Cleanup (Stop Plugins, Drivers, DB)
+                if (_appHost != null)
+                {
+                    await _appHost.ShutdownAsync();
                 }
             }
             catch (Exception ex)

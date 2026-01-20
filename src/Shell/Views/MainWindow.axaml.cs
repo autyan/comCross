@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ComCross.PluginSdk.UI;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,7 +41,7 @@ public partial class MainWindow : Window
             try
             {
                 // Ensure default workload exists
-                await vm.WorkloadService.EnsureDefaultWorkloadAsync();
+                await vm.WorkspaceCoordinator.EnsureDefaultWorkloadAsync();
                 
                 // Then load all workloads
                 await vm.WorkloadTabsViewModel.LoadWorkloadsAsync();
@@ -154,7 +155,14 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainWindowViewModel vm)
         {
-            await vm.DisconnectAsync();
+            var session = vm.ActiveSession;
+            if (session?.PluginId is not { Length: > 0 })
+            {
+                return;
+            }
+
+            var executor = App.ServiceProvider.GetRequiredService<PluginActionExecutor>();
+            await executor.ExecuteDisconnectAsync(session.PluginId, session.Id);
         }
     }
 

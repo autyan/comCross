@@ -25,6 +25,19 @@ public abstract class BaseViewModel : INotifyPropertyChanged
     protected BaseViewModel(ILocalizationService localization)
     {
         _localization = localization;
+
+        // Ensure all bindings refresh on language changes.
+        // This covers:
+        // - XAML binding to ViewModel properties that compute values from L[...]
+        // - Any cached string properties when they are exposed via computed getters
+        _localization.LanguageChanged += (_, _) =>
+        {
+            // Explicitly notify L so bindings like {Binding L[some.key]} re-evaluate.
+            OnPropertyChanged(nameof(L));
+
+            // Also refresh any computed properties on the ViewModel.
+            OnPropertyChanged(null);
+        };
     }
 
     #region INotifyPropertyChanged

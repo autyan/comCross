@@ -5,6 +5,7 @@ using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Views;
 
@@ -17,52 +18,49 @@ public partial class LeftSidebar : BaseUserControl
     
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (TopLevel.GetTopLevel(this) is not Window owner)
         {
-            await vm.QuickConnectAsync();
+            return;
         }
-    }
-    
-    private async void OnDisconnectClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
+
+        if (owner.DataContext is MainWindowViewModel vm)
         {
-            await vm.DisconnectAsync();
-        }
-    }
-    
-    private async void OnRefreshPortsClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            await vm.RefreshDevicesAsync();
+            var dialog = App.ServiceProvider.GetRequiredService<ConnectDialog>();
+            dialog.DataContext = vm;
+
+            await dialog.ShowDialog(owner);
         }
     }
     
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button button && button.DataContext is Session session && DataContext is MainWindowViewModel vm)
+        if (sender is not Button button || button.DataContext is not Session session)
         {
-            var flyout = new MenuFlyout();
-            
-            var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
-            renameItem.Click += async (s, args) => await ShowRenameDialogAsync(session, vm);
-            
-            var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
-            deleteItem.Click += async (s, args) =>
-            {
-                if (DataContext is MainWindowViewModel viewModel)
-                {
-                    await viewModel.DeleteSessionAsync(session.Id);
-                }
-            };
-            
-            flyout.Items.Add(renameItem);
-            flyout.Items.Add(new Separator());
-            flyout.Items.Add(deleteItem);
-            
-            flyout.ShowAt(button);
+            return;
         }
+
+        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var flyout = new MenuFlyout();
+        
+        var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
+        renameItem.Click += async (s, args) => await ShowRenameDialogAsync(session, vm);
+        
+        var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
+        deleteItem.Click += async (s, args) =>
+        {
+            var newActive = await vm.SessionsVm.DeleteSessionAsync(vm.Sessions, vm.ActiveSession, session.Id);
+            vm.ActiveSession = newActive;
+        };
+        
+        flyout.Items.Add(renameItem);
+        flyout.Items.Add(new Separator());
+        flyout.Items.Add(deleteItem);
+        
+        flyout.ShowAt(button);
     }
     
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)

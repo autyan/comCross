@@ -53,7 +53,7 @@ public partial class MessageStreamView : BaseUserControl
             _currentMessages = null;
         }
 
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is MessageStreamViewModel vm)
         {
             _currentMessages = vm.Messages;
             _currentMessages.CollectionChanged += OnMessagesChanged;
@@ -62,12 +62,12 @@ public partial class MessageStreamView : BaseUserControl
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not MessageStreamViewModel vm)
         {
             return;
         }
 
-        if (!vm.AutoScrollEnabled || vm.Messages.Count == 0)
+        if (!vm.Display.AutoScrollEnabled || vm.Messages.Count == 0)
         {
             return;
         }

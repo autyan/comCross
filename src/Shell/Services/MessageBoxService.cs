@@ -143,7 +143,8 @@ public static class MessageBoxService
             SizeToContent = SizeToContent.WidthAndHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = Avalonia.Media.Brushes.Transparent
+            // Must be opaque; transparent windows cause unreadable overlays on Linux/Wayland.
+            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#1B1F24"))
         };
 
         var iconText = icon switch

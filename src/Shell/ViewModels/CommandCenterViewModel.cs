@@ -15,6 +15,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
     private readonly CommandService _commandService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
+    private readonly Core.Services.IWorkspaceCoordinator _workspaceCoordinator;
     private string? _sessionId;
     private string _sessionName = string.Empty;
     private CommandDefinition? _selectedCommand;
@@ -33,13 +34,17 @@ public sealed class CommandCenterViewModel : BaseViewModel
         ILocalizationService localization,
         CommandService commandService,
         SettingsService settingsService,
-        NotificationService notificationService)
+        NotificationService notificationService,
+        Core.Services.IWorkspaceCoordinator workspaceCoordinator)
         : base(localization)
     {
         _commandService = commandService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        RefreshLocalizedOptions();
+        _workspaceCoordinator = workspaceCoordinator;
+
+        // 构造时自动根据当前 Session 加载数据
+        _ = LoadAsync();
     }
 
     public ObservableCollection<CommandDefinition> Commands { get; } = new();
@@ -210,8 +215,19 @@ public sealed class CommandCenterViewModel : BaseViewModel
         }
     }
 
-    public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions { get; private set; } = Array.Empty<CommandOption<CommandPayloadType>>();
-    public IReadOnlyList<CommandOption<CommandScope>> ScopeOptions { get; private set; } = Array.Empty<CommandOption<CommandScope>>();
+    public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions =>
+        new[]
+        {
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, L["tool.commands.type.text"]),
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, L["tool.commands.type.hex"])
+        };
+
+    public IReadOnlyList<CommandOption<CommandScope>> ScopeOptions =>
+        new[]
+        {
+            new CommandOption<CommandScope>(CommandScope.Global, L["tool.commands.scope.global"]),
+            new CommandOption<CommandScope>(CommandScope.Session, L["tool.commands.scope.session"])
+        };
 
     public CommandOption<CommandPayloadType>? SelectedPayloadType
     {
@@ -311,14 +327,40 @@ public sealed class CommandCenterViewModel : BaseViewModel
 
     public async Task SendSelectedAsync()
     {
-        if (SelectedCommand == null)
+        if (SelectedCommand == null || string.IsNullOrEmpty(_sessionId))
         {
             return;
         }
 
-        if (SendRequested != null)
+        try
         {
-            await SendRequested.Invoke(SelectedCommand);
+            byte[] data;
+            if (SelectedCommand.Type == CommandPayloadType.Hex)
+            {
+                data = Convert.FromHexString(SelectedCommand.Payload.Replace(" ", ""));
+            }
+            else
+            {
+                var encoding = Shared.Helpers.EncodingHelper.GetEncoding(SelectedCommand.Encoding);
+                data = encoding.GetBytes(SelectedCommand.Payload);
+            }
+
+            if (SelectedCommand.AppendCr || SelectedCommand.AppendLf)
+            {
+                var suffix = (SelectedCommand.AppendCr ? "\r" : "") + (SelectedCommand.AppendLf ? "\n" : "");
+                var suffixBytes = System.Text.Encoding.UTF8.GetBytes(suffix);
+                data = data.Concat(suffixBytes).ToArray();
+            }
+
+            await _workspaceCoordinator.SendDataAsync(_sessionId, data);
+        }
+        catch (Exception ex)
+        {
+            await _notificationService.AddAsync(
+                NotificationCategory.System,
+                NotificationLevel.Error,
+                "command.send.failed",
+                new object[] { ex.Message });
         }
     }
 
@@ -342,26 +384,6 @@ public sealed class CommandCenterViewModel : BaseViewModel
             : filePath;
         await _commandService.ImportAsync(sourcePath);
         await LoadAsync();
-    }
-
-    public void RefreshLocalizedOptions()
-    {
-        PayloadTypeOptions = new[]
-        {
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, L["tool.commands.type.text"]),
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, L["tool.commands.type.hex"])
-        };
-
-        ScopeOptions = new[]
-        {
-            new CommandOption<CommandScope>(CommandScope.Global, L["tool.commands.scope.global"]),
-            new CommandOption<CommandScope>(CommandScope.Session, L["tool.commands.scope.session"])
-        };
-
-        OnPropertyChanged(nameof(PayloadTypeOptions));
-        OnPropertyChanged(nameof(ScopeOptions));
-        OnPropertyChanged(nameof(SelectedPayloadType));
-        OnPropertyChanged(nameof(SelectedScope));
     }
 
     private void LoadEditor(CommandDefinition? command)

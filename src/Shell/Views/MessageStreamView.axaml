@@ -5,11 +5,11 @@
              xmlns:vm="using:ComCross.Shell.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
-             x:DataType="vm:MainWindowViewModel"
+             x:DataType="vm:MessageStreamViewModel"
              x:Name="Root"
-             TimestampFormat="{Binding TimestampFormat}"
-             MessageFontFamily="{Binding MessageFontFamily}"
-             MessageFontSize="{Binding MessageFontSize}">
+             TimestampFormat="{Binding Display.TimestampFormat}"
+             MessageFontFamily="{Binding Display.MessageFontFamily}"
+             MessageFontSize="{Binding Display.MessageFontSize}">
     
     <Grid RowDefinitions="Auto,Auto,*">
         <!-- Search Bar -->

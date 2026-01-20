@@ -15,14 +15,50 @@ public class AvaloniaPluginUiControlFactory : IPluginUiControlFactory
         _localization = localization;
     }
 
-    public IPluginUiControl CreateControl(PluginUiField field)
+    public IPluginUiControl CreateControl(PluginUiField field, bool wrapLabel = true)
     {
-        // 根据 field.Type 选择具体的适配器
-        return field.Type switch
+        // Prefer `control` (schema v0.4+); fall back to legacy `type`.
+        var kind = !string.IsNullOrWhiteSpace(field.Control) ? field.Control : field.Type;
+        kind = kind?.Trim().ToLowerInvariant() ?? "text";
+
+        var label = ResolveLabel(field);
+
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            field.Label = label;
+        }
+
+        AvaloniaPluginUiControl inner = kind switch
         {
             "select" => new AvaloniaComboBoxControl(field),
+            "number" => new AvaloniaNumberControl(field),
+            "checkbox" => new AvaloniaCheckBoxControl(field),
             "text" or _ => new AvaloniaTextBoxControl(field)
         };
+
+        if (wrapLabel && !string.IsNullOrWhiteSpace(label) && inner is not AvaloniaCheckBoxControl)
+        {
+            return new AvaloniaLabeledControl(field.Key, label, inner);
+        }
+
+        // Checkbox renders its own label.
+        return inner;
+    }
+
+    private string ResolveLabel(PluginUiField field)
+    {
+        if (!string.IsNullOrWhiteSpace(field.LabelKey))
+        {
+            return _localization.Strings[field.LabelKey];
+        }
+
+        if (!string.IsNullOrWhiteSpace(field.Label))
+        {
+            return field.Label;
+        }
+
+        // fallback: show the field name for debugging usability
+        return field.Name;
     }
 
     public IPluginUiControl CreateActionControl(PluginUiAction action, Func<Task> executeAction)
