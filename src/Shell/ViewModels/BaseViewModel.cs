@@ -35,7 +35,8 @@ public abstract class BaseViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(L));
 
             // Also refresh any computed properties on the ViewModel.
-            OnPropertyChanged(null);
+            // NOTE: Avalonia bindings reliably treat string.Empty as "all properties".
+            OnPropertyChanged(string.Empty);
         };
 
         // Ensure all bindings refresh on language changes.

@@ -64,10 +64,28 @@ public class PluginUiField
                 continue;
             }
 
+            if (item.ValueKind == JsonValueKind.Number)
+            {
+                if (TryGetInt64(item, out var i64))
+                {
+                    result.Add(new PluginUiOption(i64, Label: i64.ToString()));
+                }
+                else if (item.TryGetDouble(out var d))
+                {
+                    result.Add(new PluginUiOption(d, Label: d.ToString()));
+                }
+
+                continue;
+            }
+
             if (item.ValueKind == JsonValueKind.Object)
             {
-                var value = TryGetString(item, "value") ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(value))
+                if (!TryGetProperty(item, "value", out var valueNode))
+                {
+                    continue;
+                }
+
+                if (!TryCoerceOptionValue(valueNode, out var value))
                 {
                     continue;
                 }
@@ -84,6 +102,16 @@ public class PluginUiField
 
     private static string? TryGetString(JsonElement obj, string propertyName)
     {
+        if (!TryGetProperty(obj, propertyName, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    }
+
+    private static bool TryGetProperty(JsonElement obj, string propertyName, out JsonElement value)
+    {
         foreach (var prop in obj.EnumerateObject())
         {
             if (!string.Equals(prop.Name, propertyName, System.StringComparison.OrdinalIgnoreCase))
@@ -91,13 +119,67 @@ public class PluginUiField
                 continue;
             }
 
-            if (prop.Value.ValueKind == JsonValueKind.String)
-            {
-                return prop.Value.GetString();
-            }
+            value = prop.Value;
+            return true;
         }
 
-        return null;
+        value = default;
+        return false;
+    }
+
+    private static bool TryCoerceOptionValue(JsonElement node, out object value)
+    {
+        value = string.Empty;
+
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.String:
+            {
+                var s = node.GetString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(s))
+                {
+                    return false;
+                }
+
+                value = s;
+                return true;
+            }
+            case JsonValueKind.Number:
+            {
+                if (TryGetInt64(node, out var i64))
+                {
+                    value = i64;
+                    return true;
+                }
+
+                if (node.TryGetDouble(out var d))
+                {
+                    value = d;
+                    return true;
+                }
+
+                return false;
+            }
+            case JsonValueKind.True:
+                value = true;
+                return true;
+            case JsonValueKind.False:
+                value = false;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryGetInt64(JsonElement node, out long value)
+    {
+        value = 0;
+        if (node.ValueKind != JsonValueKind.Number)
+        {
+            return false;
+        }
+
+        return node.TryGetInt64(out value);
     }
 }
 
@@ -192,13 +274,14 @@ public class PluginUiAction
     public string Name { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
     public string LabelKey { get; set; } = string.Empty; // 多语言 Key
+    public string Icon { get; set; } = string.Empty; // Optional icon text (e.g. "⟳")
     public string Kind { get; set; } = "plugin"; // plugin, host
     public string? HostAction { get; set; }
     public JsonElement? ExtraParameters { get; set; }
 }
 
 public sealed record PluginUiOption(
-    string Value,
+    object Value,
     string? LabelKey = null,
     string? Label = null);
 
@@ -277,6 +360,11 @@ public sealed class PluginUiLayoutFieldRef : PluginUiLayoutNode
     public string Key { get; set; } = string.Empty;
 
     public PluginUiLabelPlacement LabelPlacement { get; set; } = PluginUiLabelPlacement.Left;
+
+    /// <summary>
+    /// Optional action id to render as a small suffix button inline with the input.
+    /// </summary>
+    public string? SuffixActionId { get; set; }
 
     // Ratio-based widths for this field row.
     public int LabelWidth { get; set; } = 3;

@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\ComCross.Plugin.Manifest.json" />
+    <EmbeddedResource Include="Resources\Schemas\*.json" />
   </ItemGroup>
 
   <ItemGroup>

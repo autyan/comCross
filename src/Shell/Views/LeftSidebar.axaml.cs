@@ -28,7 +28,10 @@ public partial class LeftSidebar : BaseUserControl
         {
             var dialog = App.ServiceProvider.GetRequiredService<ConnectDialog>();
             var objectFactory = App.ServiceProvider.GetRequiredService<IObjectFactory>();
-            dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, vm.BusAdapterSelectorViewModel);
+            // Create a dedicated selector VM for the dialog so its rendered controls
+            // are not shared with the sidebar's visual tree.
+            var selectorVm = objectFactory.Create<BusAdapterSelectorViewModel>(vm.PluginManager, "connect-dialog");
+            dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, selectorVm);
 
             await dialog.ShowDialog(owner);
         }

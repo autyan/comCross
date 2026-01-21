@@ -154,7 +154,7 @@ public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<Notif
     {
         _item = item;
         _args = ParseArgs(item.MessageArgsJson);
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     public string Id => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Id;

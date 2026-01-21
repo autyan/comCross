@@ -72,7 +72,7 @@ public sealed class WorkloadItemViewModel : LocalizedItemViewModelBase<WorkloadI
 
         OnPropertyChanged(nameof(SessionCount));
         OnPropertyChanged(nameof(DisplayName));
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ public sealed class SessionItemViewModel : INotifyPropertyChanged, IInitializabl
         Id = context.SessionId;
         _workloadId = context.WorkloadId;
         _name = context.Name;
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     /// <summary>

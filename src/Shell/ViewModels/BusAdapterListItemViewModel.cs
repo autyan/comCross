@@ -17,7 +17,7 @@ public sealed class BusAdapterListItemViewModel : LocalizedItemViewModelBase<Bus
     protected override void OnInit(BusAdapterInfo adapter)
     {
         _adapter = adapter;
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     public string Icon => Adapter.Icon;

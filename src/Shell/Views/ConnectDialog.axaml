@@ -3,7 +3,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:ComCross.Shell.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="350"
+        xmlns:views="using:ComCross.Shell.Views"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="520"
         x:Class="ComCross.Shell.Views.ConnectDialog"
         x:DataType="vm:ConnectDialogViewModel"
         Title="{Binding L[dialog.connect.title]}"
@@ -12,25 +13,11 @@
         CanResize="False">
 
     <Grid RowDefinitions="*,Auto" Margin="24">
-        <StackPanel Grid.Row="0" Spacing="16">
-            <!-- Plugin-driven connect UI -->
-            <StackPanel x:Name="PluginPanel" Spacing="12">
-                <TextBlock Text="{Binding L[dialog.connect.plugin.capability]}" FontWeight="SemiBold" />
-                <ComboBox x:Name="PluginCapabilityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch" />
+        <!-- Reuse the exact same entry UI as the sidebar -->
+        <views:BusAdapterSelector Grid.Row="0" DataContext="{Binding BusAdapterSelectorViewModel}" />
 
-                <TextBlock x:Name="SchemaHintText"
-                           IsVisible="False"
-                           Foreground="#C05050"
-                           TextWrapping="Wrap" />
-
-                <StackPanel x:Name="DynamicFieldsPanel" Spacing="10" />
-            </StackPanel>
-        </StackPanel>
-
-        <!-- Buttons -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
             <Button Content="{Binding L[dialog.connect.cancel]}" Width="100" Click="OnCancelClick" />
-            <Button x:Name="ConnectButton" Content="{Binding L[dialog.connect.connect]}" Width="120" Classes="accent" Click="OnConnectClick" />
         </StackPanel>
     </Grid>
 </Window>

@@ -85,6 +85,9 @@ public class PluginUiRenderer
 
         var wrapLabel = schema.Layout is null;
 
+        // Snapshot current state once; used for initial value/options hydration.
+        var currentState = _stateManager.GetState(sessionId);
+
         // Fields
         foreach (var field in schema.Fields)
         {
@@ -103,10 +106,15 @@ public class PluginUiRenderer
             if (!string.IsNullOrEmpty(field.OptionsStatePath))
             {
                 _stateManager.RegisterControl(sessionId, field.OptionsStatePath, control);
+
+                // init options from current state cache
+                if (currentState.TryGetValue(field.OptionsStatePath, out var optionsValue))
+                {
+                    control.UpdateFromState(optionsValue);
+                }
             }
 
-            // init from current state cache
-            var currentState = _stateManager.GetState(sessionId);
+            // init value from current state cache
             if (currentState.TryGetValue(field.Key, out var value))
             {
                 control.UpdateFromState(value);

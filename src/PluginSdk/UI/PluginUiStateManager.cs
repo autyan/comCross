@@ -13,8 +13,8 @@ public class PluginUiStateManager
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, object>> _states = new();
     
     // SessionId -> (FieldKey -> List of Controls)
-    // 一个状态位可能对应多个 UI 表现（虽然目前通常是 1:1）
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, List<IPluginUiControl>>> _registrations = new();
+    // Use weak refs to avoid keeping detached controls alive indefinitely.
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, List<WeakReference<IPluginUiControl>>>> _registrations = new();
 
     private const string DefaultStateKey = "__default__";
 
@@ -43,8 +43,24 @@ public class PluginUiStateManager
         
         lock (keyRegs)
         {
-            if (!keyRegs.Contains(control))
-                keyRegs.Add(control);
+            // prune dead refs
+            for (var i = keyRegs.Count - 1; i >= 0; i--)
+            {
+                if (!keyRegs[i].TryGetTarget(out _))
+                {
+                    keyRegs.RemoveAt(i);
+                }
+            }
+
+            foreach (var existing in keyRegs)
+            {
+                if (existing.TryGetTarget(out var target) && ReferenceEquals(target, control))
+                {
+                    return;
+                }
+            }
+
+            keyRegs.Add(new WeakReference<IPluginUiControl>(control));
         }
     }
 
@@ -71,8 +87,14 @@ public class PluginUiStateManager
             {
                 lock (controls)
                 {
-                    foreach (var control in controls)
+                    for (var i = controls.Count - 1; i >= 0; i--)
                     {
+                        if (!controls[i].TryGetTarget(out var control))
+                        {
+                            controls.RemoveAt(i);
+                            continue;
+                        }
+
                         control.UpdateFromState(value);
                     }
                 }
@@ -118,8 +140,14 @@ public class PluginUiStateManager
             {
                 lock (controls)
                 {
-                    foreach (var control in controls)
+                    for (var i = controls.Count - 1; i >= 0; i--)
                     {
+                        if (!controls[i].TryGetTarget(out var control))
+                        {
+                            controls.RemoveAt(i);
+                            continue;
+                        }
+
                         if (ReferenceEquals(control, source))
                         {
                             continue;
@@ -191,8 +219,14 @@ public class PluginUiStateManager
             {
                 lock (reg.Value)
                 {
-                    foreach (var control in reg.Value)
+                    for (var i = reg.Value.Count - 1; i >= 0; i--)
                     {
+                        if (!reg.Value[i].TryGetTarget(out var control))
+                        {
+                            reg.Value.RemoveAt(i);
+                            continue;
+                        }
+
                         control.UpdateFromState(value);
                     }
                 }

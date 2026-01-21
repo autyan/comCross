@@ -17,6 +17,24 @@
     <ComboBox ItemsSource="{Binding AdapterItems}"
               SelectedItem="{Binding SelectedAdapterItem}"
               HorizontalAlignment="Stretch">
+      <!--
+        The dropdown list shows icon + name; the selection box should be compact.
+        Some systems can't render emoji icons, which leaves a visible leading gap.
+      -->
+      <ComboBox.SelectionBoxItemTemplate>
+        <DataTemplate x:DataType="vm:BusAdapterListItemViewModel">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding Name}"
+                       FontSize="13"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ComingSoonLabel}"
+                       FontSize="11"
+                       Foreground="#87909B"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding !IsEnabled}" />
+          </StackPanel>
+        </DataTemplate>
+      </ComboBox.SelectionBoxItemTemplate>
       <ComboBox.ItemTemplate>
         <DataTemplate x:DataType="vm:BusAdapterListItemViewModel">
           <StackPanel Orientation="Horizontal" Spacing="8">

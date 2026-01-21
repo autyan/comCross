@@ -54,7 +54,7 @@ public sealed class WorkspaceService
     public async Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null, CancellationToken cancellationToken = default)
     {
         var sessionId = $"session-{Guid.NewGuid()}";
-        var name = sessionName ?? $"{pluginId}:{capabilityId}";
+        var name = string.IsNullOrWhiteSpace(sessionName) ? null : sessionName;
 
         try
         {

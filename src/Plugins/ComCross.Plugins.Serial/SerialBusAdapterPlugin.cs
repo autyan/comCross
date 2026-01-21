@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO.Ports;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
@@ -13,6 +14,9 @@ namespace ComCross.Plugins.Serial;
 public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPluginUiStateProvider, IPluginUiStateEventSource
 {
     private readonly CancellationTokenSource _cts = new();
+
+    private const string SerialParametersSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.parameters.schema.json";
+    private const string SerialConnectUiSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.connect.ui.schema.json";
 
     private string[] _lastPorts = Array.Empty<string>();
     private volatile bool _connected;
@@ -43,8 +47,8 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
                 Name = "Serial (RS232)",
                 Description = "Serial port communication (RS232/RS485/RS422)",
                 Icon = "🔌",
-                JsonSchema = GetSerialParametersSchemaJson(),
-                UiSchema = GetSerialConnectUiSchemaJson(),
+                JsonSchema = ReadEmbeddedResource(SerialParametersSchemaResource),
+                UiSchema = ReadEmbeddedResource(SerialConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
                 SharedMemoryRequest = new SharedMemoryRequest
                 {
@@ -113,14 +117,47 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
             return Task.FromResult(new PluginConnectResult(false, "Missing required parameter: port"));
         }
 
-        var baudRate = 115200;
-        if (command.Parameters.TryGetProperty("baudRate", out var baudProp) && baudProp.ValueKind == JsonValueKind.Number)
+        if (!TryReadInt(command.Parameters, "baudRate", out var baudRate))
         {
-            if (!baudProp.TryGetInt32(out baudRate))
-            {
-                baudRate = 115200;
-            }
+            baudRate = 115200;
         }
+
+        if (baudRate < 1 || baudRate > 10_000_000)
+        {
+            return Task.FromResult(new PluginConnectResult(false, "Invalid baudRate (expected 1..10000000)."));
+        }
+
+        if (!TryReadInt(command.Parameters, "dataBits", out var dataBits))
+        {
+            dataBits = 8;
+        }
+
+        if (dataBits is < 5 or > 8)
+        {
+            return Task.FromResult(new PluginConnectResult(false, "Invalid dataBits (expected 5..8)."));
+        }
+
+        var parityText = TryReadString(command.Parameters, "parity") ?? "None";
+        if (!TryParseParity(parityText, out var parity))
+        {
+            return Task.FromResult(new PluginConnectResult(false, "Invalid parity (expected: None/Odd/Even/Mark/Space)."));
+        }
+
+        var stopBitsText = TryReadString(command.Parameters, "stopBits") ?? "One";
+        if (!TryParseStopBits(stopBitsText, out var stopBits))
+        {
+            return Task.FromResult(new PluginConnectResult(false, "Invalid stopBits (expected: None/One/Two/OnePointFive)."));
+        }
+
+        var flowControlText = TryReadString(command.Parameters, "flowControl") ?? "None";
+        if (!TryParseHandshake(flowControlText, out var handshake))
+        {
+            return Task.FromResult(new PluginConnectResult(false, "Invalid flowControl (expected: None/XOnXOff/RequestToSend/RequestToSendXOnXOff)."));
+        }
+
+        // Optional: allow connect dialog to pass an explicit session name.
+        // (The host may also manage this separately.)
+        var sessionName = TryReadString(command.Parameters, "sessionName");
 
         // Best-effort connection test only (current host pipeline does not stream bytes from plugin yet).
         // We just validate that the port can be opened.
@@ -128,7 +165,11 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
         {
             using var serial = new SerialPort(port)
             {
-                BaudRate = baudRate
+                BaudRate = baudRate,
+                DataBits = dataBits,
+                Parity = parity,
+                StopBits = stopBits,
+                Handshake = handshake
             };
 
             serial.Open();
@@ -191,16 +232,6 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
         {
             var ports = new HashSet<string>(SerialPort.GetPortNames().Where(p => !string.IsNullOrWhiteSpace(p)), StringComparer.Ordinal);
 
-            // On Linux, SerialPort.GetPortNames can be incomplete depending on distro/container.
-            // Add a conservative scan of common device patterns.
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                foreach (var path in ScanLinuxPorts("/dev/ttyUSB*")) ports.Add(path);
-                foreach (var path in ScanLinuxPorts("/dev/ttyACM*")) ports.Add(path);
-                foreach (var path in ScanLinuxPorts("/dev/ttyAMA*")) ports.Add(path);
-                foreach (var path in ScanLinuxPorts("/dev/ttyS*")) ports.Add(path);
-            }
-
             return ports.OrderBy(p => p, StringComparer.Ordinal).ToArray();
         }
         catch
@@ -251,112 +282,84 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
         }
     }
 
-    private static string GetSerialParametersSchemaJson()
+    private static string ReadEmbeddedResource(string resourceName)
     {
-        // schema-lite compatible subset
-        return "{\"type\":\"object\",\"properties\":{" +
-               "\"port\":{\"type\":\"string\"}," +
-               "\"baudRate\":{\"type\":\"integer\"}," +
-               "\"dataBits\":{\"type\":\"integer\"}," +
-               "\"parity\":{\"type\":\"string\",\"enum\":[\"None\",\"Odd\",\"Even\",\"Mark\",\"Space\"]}," +
-               "\"stopBits\":{\"type\":\"string\",\"enum\":[\"None\",\"One\",\"Two\",\"OnePointFive\"]}," +
-               "\"flowControl\":{\"type\":\"string\",\"enum\":[\"None\",\"XOnXOff\",\"RequestToSend\",\"RequestToSendXOnXOff\"]}," +
-               "\"sessionName\":{\"type\":\"string\"}" +
-               "},\"required\":[\"port\"]}";
+        var assembly = typeof(SerialBusAdapterPlugin).Assembly;
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream is null)
+        {
+            throw new InvalidOperationException($"Missing embedded resource: {resourceName}. Available: {string.Join(", ", assembly.GetManifestResourceNames())}");
+        }
+
+        using var reader = new System.IO.StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
-    private static string GetSerialConnectUiSchemaJson()
+    private static bool TryReadInt(JsonElement obj, string propertyName, out int value)
     {
-                // UiSchemaVersion1: declarative layout tree + stable field keys.
-                return """
-                {
-                    "uiSchemaVersion": 1,
-                    "titleKey": "serial.adapter.connect.title",
-                    "fields": [
-                        {
-                            "key": "port",
-                            "control": "select",
-                            "labelKey": "serial.adapter.connect.port",
-                            "optionsStatePath": "ports",
-                            "defaultStatePath": "defaultParameters.port",
-                            "required": true
-                        },
-                        {
-                            "key": "baudRate",
-                            "control": "number",
-                            "labelKey": "serial.adapter.connect.baudRate",
-                            "defaultStatePath": "defaultParameters.baudRate"
-                        },
-                        {
-                            "key": "dataBits",
-                            "control": "number",
-                            "labelKey": "serial.adapter.connect.dataBits",
-                            "defaultStatePath": "defaultParameters.dataBits"
-                        },
-                        {
-                            "key": "parity",
-                            "control": "select",
-                            "labelKey": "serial.adapter.connect.parity",
-                            "enumFromSchema": true,
-                            "defaultStatePath": "defaultParameters.parity"
-                        },
-                        {
-                            "key": "stopBits",
-                            "control": "select",
-                            "labelKey": "serial.adapter.connect.stopBits",
-                            "enumFromSchema": true,
-                            "defaultStatePath": "defaultParameters.stopBits"
-                        },
-                        {
-                            "key": "flowControl",
-                            "control": "select",
-                            "labelKey": "serial.adapter.connect.flowControl",
-                            "enumFromSchema": true,
-                            "defaultStatePath": "defaultParameters.flowControl"
-                        },
-                        {
-                            "key": "sessionName",
-                            "control": "text",
-                            "labelKey": "serial.adapter.connect.sessionName"
-                        }
-                    ],
-                    "layout": {
-                        "kind": "stack",
-                        "orientation": "vertical",
-                        "spacing": 12,
-                        "children": [
-                            {
-                                "kind": "field",
-                                "key": "port"
-                            },
-                            {
-                                "kind": "stack",
-                                "orientation": "vertical",
-                                "spacing": 12,
-                                "children": [
-                                    { "kind": "field", "key": "baudRate" },
-                                    { "kind": "field", "key": "dataBits" },
-                                    { "kind": "field", "key": "parity" },
-                                    { "kind": "field", "key": "stopBits" },
-                                    { "kind": "field", "key": "flowControl" }
-                                ]
-                            },
-                            {
-                                "kind": "field",
-                                "key": "sessionName"
-                            }
-                        ]
-                    },
-                    "actions": [
-                        {
-                            "id": "connect",
-                            "labelKey": "serial.adapter.connect.action.connect",
-                            "kind": "host",
-                            "hostAction": "comcross.session.connect",
-                            "extraParameters": { "adapter": "serial" }
-                        }
-                    ]
-                }
-                """;
+        value = 0;
+        if (!obj.TryGetProperty(propertyName, out var prop))
+        {
+            return false;
+        }
+
+        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out value))
+        {
+            return true;
+        }
+
+        if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out value))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string? TryReadString(JsonElement obj, string propertyName)
+    {
+        if (!obj.TryGetProperty(propertyName, out var prop))
+        {
+            return null;
+        }
+
+        return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
+    }
+
+    private static bool TryParseParity(string value, out Parity parity)
+    {
+        return value switch
+        {
+            "None" => (parity = Parity.None) == Parity.None,
+            "Odd" => (parity = Parity.Odd) == Parity.Odd,
+            "Even" => (parity = Parity.Even) == Parity.Even,
+            "Mark" => (parity = Parity.Mark) == Parity.Mark,
+            "Space" => (parity = Parity.Space) == Parity.Space,
+            _ => Enum.TryParse(value, ignoreCase: true, out parity)
+        };
+    }
+
+    private static bool TryParseStopBits(string value, out StopBits stopBits)
+    {
+        return value switch
+        {
+            "None" => (stopBits = StopBits.None) == StopBits.None,
+            "One" => (stopBits = StopBits.One) == StopBits.One,
+            "Two" => (stopBits = StopBits.Two) == StopBits.Two,
+            "OnePointFive" => (stopBits = StopBits.OnePointFive) == StopBits.OnePointFive,
+            _ => Enum.TryParse(value, ignoreCase: true, out stopBits)
+        };
+    }
+
+    private static bool TryParseHandshake(string value, out Handshake handshake)
+    {
+        return value switch
+        {
+            "None" => (handshake = Handshake.None) == Handshake.None,
+            "XOnXOff" => (handshake = Handshake.XOnXOff) == Handshake.XOnXOff,
+            "RequestToSend" => (handshake = Handshake.RequestToSend) == Handshake.RequestToSend,
+            "RequestToSendXOnXOff" => (handshake = Handshake.RequestToSendXOnXOff) == Handshake.RequestToSendXOnXOff,
+            _ => Enum.TryParse(value, ignoreCase: true, out handshake)
+        };
     }
 }

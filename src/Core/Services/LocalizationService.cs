@@ -323,6 +323,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
                 ["dialog.connect.plugin.success"] = "Connect request sent: {0}/{1}",
                 ["dialog.connect.plugin.failed"] = "Connect failed: {0}",
 
+            // Connect Dialog Validation
+            ["dialog.connect.validation.requiredField"] = "Please fill required field: {0}",
+
             // Notifications
             ["notification.plugin.i18n.duplicateKey"] = "Plugin i18n key is duplicated and was not registered: {0}",
             ["notification.plugin.i18n.invalidKeyPrefix"] = "Plugin i18n key is invalid (missing domain prefix) and was not registered: {0}",

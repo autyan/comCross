@@ -7,6 +7,7 @@ using ComCross.Shell.Models;
 using ComCross.Shared.Services;
 using ComCross.PluginSdk.UI;
 using ComCross.Shell.Plugins.UI;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.ViewModels;
 
@@ -16,6 +17,9 @@ namespace ComCross.Shell.ViewModels;
 public sealed class BusAdapterSelectorViewModel : BaseViewModel
 {
     private const string PluginAdapterPrefix = "plugin:";
+    private const string SerialPluginId = SerialPortsHostService.SerialPluginId;
+    private const string SerialCapabilityId = SerialPortsHostService.SerialCapabilityId;
+    private readonly string _viewId;
     private BusAdapterInfo? _selectedAdapter;
     private BusAdapterListItemViewModel? _selectedAdapterItem;
     private Control? _configPanel; // Changed from UserControl to Control
@@ -24,6 +28,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerViewModel _pluginManager;
     private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
+    private readonly SerialPortsHostService _serialPorts;
     private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
     private IReadOnlyList<PluginCapabilityLaunchOption> _lastOptions = Array.Empty<PluginCapabilityLaunchOption>();
     private bool _isSyncingSelection;
@@ -35,13 +40,17 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginUiStateManager stateManager,
         PluginManagerViewModel pluginManager,
         ComCross.Core.Services.PluginUiConfigService pluginUiConfigService,
-        IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory)
+        SerialPortsHostService serialPorts,
+        IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory,
+        string viewId = "sidebar-config")
         : base(localization)
     {
+        _viewId = string.IsNullOrWhiteSpace(viewId) ? "sidebar-config" : viewId;
         _uiRenderer = uiRenderer;
         _stateManager = stateManager;
         _pluginManager = pluginManager;
         _pluginUiConfigService = pluginUiConfigService;
+        _serialPorts = serialPorts;
         _adapterItemFactory = adapterItemFactory;
 
         AdapterItems = new ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo>(_adapterItemFactory);
@@ -56,7 +65,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             // Refresh current config panel so plugin UI labels/layout switch with language.
             if (_selectedAdapter?.PluginId != null && _selectedAdapter.CapabilityId != null)
             {
-                _uiRenderer.ClearCache(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, _activeSessionId, "sidebar-config");
+                _uiRenderer.ClearCache(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, _activeSessionId, _viewId);
                 _ = LoadConfigPanelAsync();
             }
         };
@@ -272,8 +281,18 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                          _selectedAdapter.PluginId,
                          _selectedAdapter.CapabilityId,
                          sessionId: _activeSessionId,
-                         viewId: "sidebar-config",
+                         viewId: _viewId,
                          timeout: TimeSpan.FromSeconds(2));
+
+                     if (uiState is null && !string.IsNullOrWhiteSpace(_activeSessionId))
+                     {
+                         uiState = await _pluginManager.TryGetUiStateAsync(
+                             _selectedAdapter.PluginId,
+                             _selectedAdapter.CapabilityId,
+                             sessionId: null,
+                             viewId: _viewId,
+                             timeout: TimeSpan.FromSeconds(2));
+                     }
 
                      if (uiState is not null && uiState.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
                      {
@@ -312,10 +331,22 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                          _selectedAdapter.CapabilityId,
                          schema,
                          sessionId: null,
-                         viewId: "sidebar-config");
+                         viewId: _viewId);
                  }
 
-                 var container = _uiRenderer.GetOrRender(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, schema, _activeSessionId, "sidebar-config");
+                 // Host-side serial initialization: apply defaults and load ports once.
+                 if (_selectedAdapter.CapabilityId != null
+                     && string.Equals(_selectedAdapter.PluginId, SerialPluginId, StringComparison.Ordinal)
+                     && string.Equals(_selectedAdapter.CapabilityId, SerialCapabilityId, StringComparison.Ordinal))
+                 {
+                     await _serialPorts.InitializeSerialUiAsync(
+                         _selectedAdapter.PluginId,
+                         _selectedAdapter.CapabilityId,
+                         _activeSessionId,
+                         schema);
+                 }
+
+                 var container = _uiRenderer.GetOrRender(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, schema, _activeSessionId, _viewId);
                  if (container is AvaloniaPluginUiContainer avaloniaContainer)
                  {
                      ConfigPanel = avaloniaContainer.GetPanel();

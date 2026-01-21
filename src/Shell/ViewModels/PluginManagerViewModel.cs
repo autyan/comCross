@@ -6,6 +6,7 @@ using System.Linq;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.PluginSdk.UI;
 using System.Text.Json;
 using ComCross.Shell.Services;
 
@@ -368,6 +369,43 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 timeout);
 
             return ok && snapshot is not null ? snapshot.State : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public object? TryGetSettingsFieldDefaultValue(string pluginId, string pageId, string fieldKey)
+    {
+        try
+        {
+            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            if (runtime is null || runtime.State != PluginLoadState.Loaded)
+            {
+                return null;
+            }
+
+            var pages = runtime.Info.Manifest.SettingsPages;
+            if (pages is null || pages.Count == 0)
+            {
+                return null;
+            }
+
+            var page = pages.FirstOrDefault(p => string.Equals(p.Id, pageId, StringComparison.Ordinal));
+            if (page?.UiSchema is null)
+            {
+                return null;
+            }
+
+            var schema = PluginUiSchema.TryParse(page.UiSchema.Value.GetRawText());
+            if (schema?.Fields is null)
+            {
+                return null;
+            }
+
+            var field = schema.Fields.FirstOrDefault(f => string.Equals(f.Key, fieldKey, StringComparison.Ordinal));
+            return field?.DefaultValue;
         }
         catch
         {

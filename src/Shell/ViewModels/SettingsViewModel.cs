@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
@@ -7,6 +8,7 @@ using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia;
+using Avalonia.Threading;
 using ComCross.Platform;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
@@ -21,6 +23,7 @@ public sealed class SettingsViewModel : BaseViewModel
     private readonly SettingsService _settingsService;
     private readonly PluginManagerViewModel _pluginManager;
     private readonly PluginUiRenderer _uiRenderer;
+    private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly PluginUiConfigService _pluginUiConfigService;
     private readonly List<LocaleCultureInfo> _availableLanguages;
     private readonly List<string> _logFormats = new() { "txt", "json" };
@@ -33,6 +36,19 @@ public sealed class SettingsViewModel : BaseViewModel
     private PluginSettingsPageOption? _selectedPluginSettingsPage;
     private Control? _pluginSettingsPanel;
 
+    // Lazy-rendered plugin settings pages: per-culture control cache.
+    // NOTE: cache controls, not authoritative state. We re-apply state on swaps.
+    private readonly Dictionary<string, Dictionary<(string PluginId, string PageId), Control>> _pluginSettingsPanelsByCulture = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<(string PluginId, string PageId)>> _renderedPluginSettingsPagesByCulture = new(StringComparer.Ordinal);
+
+    private readonly object _pluginSettingsWarmupGate = new();
+    private CancellationTokenSource? _pluginSettingsWarmupCts;
+    private int _pluginSettingsWarmupGeneration;
+
+    // Final/serialized switching: coalesce bursts of language toggles.
+    private CancellationTokenSource? _pluginSettingsWarmupRequestCts;
+    private int _pluginSettingsWarmupRequestId;
+
     private IReadOnlyList<SettingsNavEntry> _navigationEntries = Array.Empty<SettingsNavEntry>();
     private SettingsNavEntry? _selectedNavigationEntry;
 
@@ -44,12 +60,14 @@ public sealed class SettingsViewModel : BaseViewModel
         SettingsService settingsService,
         PluginManagerViewModel pluginManager,
         PluginUiRenderer uiRenderer,
+        PluginUiStateManager pluginUiStateManager,
         PluginUiConfigService pluginUiConfigService)
         : base(localization)
     {
         _settingsService = settingsService;
         _pluginManager = pluginManager;
         _uiRenderer = uiRenderer;
+        _pluginUiStateManager = pluginUiStateManager;
         _pluginUiConfigService = pluginUiConfigService;
         _availableLanguages = localization.AvailableCultures.ToList();
         _selectedLanguage = ResolveLanguage(settingsService.Current.Language);
@@ -57,6 +75,10 @@ public sealed class SettingsViewModel : BaseViewModel
 
         InvalidateNavigationCache();
         EnsureNavigationCache();
+
+        // Kick off lazy plugin settings rendering as early as possible,
+        // but after the constructor returns (avoid crashing Settings page on init).
+        RequestPluginSettingsWarmup(resetAllCaches: true);
 
         _pluginManager.PluginsReloaded += (_, _) =>
         {
@@ -68,6 +90,8 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
             OnPropertyChanged(nameof(IsPluginManagerSelected));
+
+            RequestPluginSettingsWarmup(resetAllCaches: true);
         };
 
         Localization.LanguageChanged += (_, _) =>
@@ -80,7 +104,47 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
             OnPropertyChanged(nameof(IsPluginManagerSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
+
+            // Rebuild plugin settings panels via the same lazy warm-up pipeline.
+            RequestPluginSettingsWarmup(resetAllCaches: false);
         };
+    }
+
+    private void RequestPluginSettingsWarmup(bool resetAllCaches)
+    {
+        // Debounce and ensure last request wins.
+        _pluginSettingsWarmupRequestCts?.Cancel();
+        _pluginSettingsWarmupRequestCts?.Dispose();
+        _pluginSettingsWarmupRequestCts = new CancellationTokenSource();
+        var cts = _pluginSettingsWarmupRequestCts;
+        var requestId = ++_pluginSettingsWarmupRequestId;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // Coalesce rapid language toggles.
+                var delayMs = resetAllCaches ? 0 : 150;
+                if (delayMs > 0)
+                {
+                    await Task.Delay(delayMs, cts.Token);
+                }
+            }
+            catch
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (cts.IsCancellationRequested || requestId != _pluginSettingsWarmupRequestId)
+                {
+                    return;
+                }
+
+                _ = WarmUpPluginSettingsPagesAsync(Localization.CurrentCulture, resetAllCaches);
+            });
+        });
     }
     public PluginManagerViewModel PluginManager => _pluginManager;
     public bool IsLinux => PlatformInfo.IsLinux;
@@ -160,7 +224,26 @@ public sealed class SettingsViewModel : BaseViewModel
 
             _selectedPluginSettingsPage = value;
             OnPropertyChanged();
-            RenderSelectedPluginSettingsPage();
+
+            if (_selectedPluginSettingsPage is null)
+            {
+                PluginSettingsPanel = null;
+                return;
+            }
+
+            var key = (_selectedPluginSettingsPage.PluginId, _selectedPluginSettingsPage.PageId);
+            if (TryGetPluginSettingsPanel(Localization.CurrentCulture, key, out var panel))
+            {
+                PluginSettingsPanel = panel;
+
+                // Ensure final consistency: re-apply current state to the newly shown tree.
+                Dispatcher.UIThread.Post(() => _pluginUiStateManager.SwitchContext(sessionId: null));
+            }
+            else
+            {
+                // If a page somehow gets selected before it's rendered, show nothing.
+                PluginSettingsPanel = null;
+            }
         }
     }
 
@@ -192,6 +275,16 @@ public sealed class SettingsViewModel : BaseViewModel
             return;
         }
 
+        HashSet<(string PluginId, string PageId)> renderedPages;
+        lock (_pluginSettingsWarmupGate)
+        {
+            renderedPages = _renderedPluginSettingsPagesByCulture.TryGetValue(culture, out var set)
+                ? new HashSet<(string PluginId, string PageId)>(set)
+                : new HashSet<(string PluginId, string PageId)>();
+        }
+
+        var previousSelection = _selectedNavigationEntry;
+
         try
         {
             var pages = new List<PluginSettingsPageOption>();
@@ -210,8 +303,37 @@ public sealed class SettingsViewModel : BaseViewModel
                     pluginName = pluginId;
                 }
 
+                // Prefer runtime-provided i18n key: "{pluginId}.name".
+                var localizedPluginName = L[$"{pluginId}.name"];
+                if (!string.IsNullOrWhiteSpace(localizedPluginName)
+                    && !string.Equals(localizedPluginName, $"[{pluginId}.name]", StringComparison.Ordinal))
+                {
+                    pluginName = localizedPluginName;
+                }
+
                 var manifestPages = runtime.Info.Manifest.SettingsPages;
                 if (manifestPages is null || manifestPages.Count == 0)
+                {
+                    continue;
+                }
+
+                // Only show this plugin section when at least one of its settings pages is rendered.
+                var hasAnyRenderedPage = false;
+                foreach (var page in manifestPages)
+                {
+                    if (string.IsNullOrWhiteSpace(page.Id) || page.UiSchema is null)
+                    {
+                        continue;
+                    }
+
+                    if (renderedPages.Contains((pluginId, page.Id)))
+                    {
+                        hasAnyRenderedPage = true;
+                        break;
+                    }
+                }
+
+                if (!hasAnyRenderedPage)
                 {
                     continue;
                 }
@@ -221,6 +343,12 @@ public sealed class SettingsViewModel : BaseViewModel
                 foreach (var page in manifestPages)
                 {
                     if (string.IsNullOrWhiteSpace(page.Id) || page.UiSchema is null)
+                    {
+                        continue;
+                    }
+
+                    // Hide page until it's rendered.
+                    if (!renderedPages.Contains((pluginId, page.Id)))
                     {
                         continue;
                     }
@@ -240,20 +368,20 @@ public sealed class SettingsViewModel : BaseViewModel
             _pluginSettingsPages = pages;
             _navigationEntries = entries;
 
-            // Keep selection if still available; otherwise default to System Settings.
-            if (_selectedNavigationEntry is not null)
+            // Preserve selection across cache rebuild (titles change with language).
+            _selectedNavigationEntry = previousSelection?.Kind switch
             {
-                var keep = entries.FirstOrDefault(e => e.Kind == _selectedNavigationEntry.Kind
-                                                       && e.PluginId == _selectedNavigationEntry.PluginId
-                                                       && e.PageId == _selectedNavigationEntry.PageId
-                                                       && e.IsSelectable);
-                _selectedNavigationEntry = keep;
-            }
+                SettingsNavKind.System => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.System && e.IsSelectable),
+                SettingsNavKind.PluginManager => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.PluginManager && e.IsSelectable),
+                SettingsNavKind.PluginPage => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.PluginPage
+                    && e.IsSelectable
+                    && string.Equals(e.PluginId, previousSelection.PluginId, StringComparison.Ordinal)
+                    && string.Equals(e.PageId, previousSelection.PageId, StringComparison.Ordinal)),
+                _ => null
+            };
 
-            if (_selectedNavigationEntry is null)
-            {
-                _selectedNavigationEntry = entries.FirstOrDefault(e => e.Kind == SettingsNavKind.System && e.IsSelectable);
-            }
+            // Default to System Settings.
+            _selectedNavigationEntry ??= entries.FirstOrDefault(e => e.Kind == SettingsNavKind.System && e.IsSelectable);
 
             // Sync right panel content.
             if (_selectedNavigationEntry?.Kind == SettingsNavKind.PluginPage)
@@ -276,58 +404,209 @@ public sealed class SettingsViewModel : BaseViewModel
         {
             _pluginSettingsPages = Array.Empty<PluginSettingsPageOption>();
             _navigationEntries = Array.Empty<SettingsNavEntry>();
+            _selectedNavigationEntry = null;
+            SelectedPluginSettingsPage = null;
             _navigationCacheCulture = culture;
             _navigationCacheInvalidated = false;
         }
     }
 
-    private async void RenderSelectedPluginSettingsPage()
+    private bool TryGetPluginSettingsPanel(string culture, (string PluginId, string PageId) key, out Control panel)
     {
-        if (_selectedPluginSettingsPage is null)
+        lock (_pluginSettingsWarmupGate)
         {
-            PluginSettingsPanel = null;
-            return;
-        }
+            if (_pluginSettingsPanelsByCulture.TryGetValue(culture, out var panels)
+                && panels.TryGetValue(key, out panel!))
+            {
+                return true;
+            }
 
-        var selectedPageSnapshot = _selectedPluginSettingsPage;
+            panel = null!;
+            return false;
+        }
+    }
+
+    private async Task WarmUpPluginSettingsPagesAsync(string culture, bool resetAllCaches)
+    {
+        CancellationTokenSource cts;
+        int generation;
+
+        lock (_pluginSettingsWarmupGate)
+        {
+            _pluginSettingsWarmupCts?.Cancel();
+            _pluginSettingsWarmupCts?.Dispose();
+            _pluginSettingsWarmupCts = new CancellationTokenSource();
+            cts = _pluginSettingsWarmupCts;
+            generation = ++_pluginSettingsWarmupGeneration;
+
+            if (resetAllCaches)
+            {
+                // Plugin reload / cold start: discard all cultures.
+                _pluginSettingsPanelsByCulture.Clear();
+                _renderedPluginSettingsPagesByCulture.Clear();
+            }
+        }
 
         try
         {
-            var schema = PluginUiSchema.TryParse(_selectedPluginSettingsPage.UiSchemaJson);
-            if (schema is null)
-            {
-                PluginSettingsPanel = null;
-                return;
-            }
-
-            var capabilityId = $"settings:{_selectedPluginSettingsPage.PageId}";
-
-            // Seed: persisted values win; only apply defaults when no record exists.
-            await _pluginUiConfigService.SeedStateAsync(
-                _selectedPluginSettingsPage.PluginId,
-                capabilityId,
-                schema,
-                sessionId: null,
-                viewId: "settings");
-
-            if (!ReferenceEquals(_selectedPluginSettingsPage, selectedPageSnapshot))
+            // Only proceed if the requested culture is still current.
+            if (!string.Equals(Localization.CurrentCulture, culture, StringComparison.Ordinal))
             {
                 return;
             }
 
-            var container = _uiRenderer.GetOrRender(_selectedPluginSettingsPage.PluginId, capabilityId, schema, sessionId: null, viewId: "settings");
-            if (container is AvaloniaPluginUiContainer avaloniaContainer)
+            // Immediately reflect hidden state in the UI on full reset.
+            if (resetAllCaches)
             {
-                PluginSettingsPanel = avaloniaContainer.GetPanel();
+                InvalidateNavigationCache();
+                EnsureNavigationCache();
+                OnPropertyChanged(nameof(PluginSettingsPages));
+                OnPropertyChanged(nameof(NavigationEntries));
+                OnPropertyChanged(nameof(SelectedNavigationEntry));
+                OnPropertyChanged(nameof(IsPluginSettingsSelected));
             }
-            else
+
+            // Snapshot pages to render.
+            var targets = new List<PluginSettingsPageOption>();
+            foreach (var runtime in _pluginManager.GetAllRuntimes())
             {
-                PluginSettingsPanel = null;
+                var pluginId = runtime.Info.Manifest.Id;
+                var manifestPages = runtime.Info.Manifest.SettingsPages;
+                if (manifestPages is null || manifestPages.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (var page in manifestPages)
+                {
+                    if (string.IsNullOrWhiteSpace(page.Id) || page.UiSchema is null)
+                    {
+                        continue;
+                    }
+
+                    var title = !string.IsNullOrWhiteSpace(page.TitleKey) ? L[page.TitleKey] : page.Title;
+                    if (string.IsNullOrWhiteSpace(title))
+                    {
+                        title = $"{pluginId}:{page.Id}";
+                    }
+
+                    targets.Add(new PluginSettingsPageOption(pluginId, page.Id, title, page.UiSchema.Value.GetRawText()));
+                }
+            }
+
+            foreach (var target in targets)
+            {
+                if (cts.IsCancellationRequested || generation != _pluginSettingsWarmupGeneration)
+                {
+                    return;
+                }
+
+                if (!string.Equals(Localization.CurrentCulture, culture, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                var schema = PluginUiSchema.TryParse(target.UiSchemaJson);
+                if (schema is null)
+                {
+                    continue;
+                }
+
+                var capabilityId = $"settings:{target.PageId}";
+
+                // Skip if already cached for this culture.
+                lock (_pluginSettingsWarmupGate)
+                {
+                    if (_pluginSettingsPanelsByCulture.TryGetValue(culture, out var existingPanels)
+                        && existingPanels.ContainsKey((target.PluginId, target.PageId)))
+                    {
+                        if (!_renderedPluginSettingsPagesByCulture.TryGetValue(culture, out var existingRendered))
+                        {
+                            existingRendered = new HashSet<(string PluginId, string PageId)>();
+                            _renderedPluginSettingsPagesByCulture[culture] = existingRendered;
+                        }
+
+                        existingRendered.Add((target.PluginId, target.PageId));
+                        continue;
+                    }
+                }
+
+                // Seed persisted state (I/O) off the UI thread.
+                await _pluginUiConfigService.SeedStateAsync(
+                    target.PluginId,
+                    capabilityId,
+                    schema,
+                    sessionId: null,
+                    viewId: "settings");
+
+                if (cts.IsCancellationRequested || generation != _pluginSettingsWarmupGeneration)
+                {
+                    return;
+                }
+
+                // Render controls on the UI thread.
+                var panel = await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (_uiRenderer is ComCross.Shell.Plugins.UI.AvaloniaPluginUiRenderer avalonia)
+                    {
+                        return avalonia.RenderNewPanel(target.PluginId, capabilityId, schema, sessionId: null, viewId: "settings");
+                    }
+
+                    // Fallback: replace the renderer cache (no multi-culture support).
+                    _uiRenderer.ClearCache(target.PluginId, capabilityId, sessionId: null, viewId: "settings");
+                    var container = _uiRenderer.GetOrRender(target.PluginId, capabilityId, schema, sessionId: null, viewId: "settings");
+                    return container is AvaloniaPluginUiContainer avaloniaContainer ? avaloniaContainer.GetPanel() : null;
+                });
+
+                if (panel is null)
+                {
+                    continue;
+                }
+
+                lock (_pluginSettingsWarmupGate)
+                {
+                    if (cts.IsCancellationRequested || generation != _pluginSettingsWarmupGeneration)
+                    {
+                        return;
+                    }
+
+                    if (!_pluginSettingsPanelsByCulture.TryGetValue(culture, out var panels))
+                    {
+                        panels = new Dictionary<(string PluginId, string PageId), Control>();
+                        _pluginSettingsPanelsByCulture[culture] = panels;
+                    }
+
+                    if (!_renderedPluginSettingsPagesByCulture.TryGetValue(culture, out var rendered))
+                    {
+                        rendered = new HashSet<(string PluginId, string PageId)>();
+                        _renderedPluginSettingsPagesByCulture[culture] = rendered;
+                    }
+
+                    panels[(target.PluginId, target.PageId)] = panel;
+                    rendered.Add((target.PluginId, target.PageId));
+                }
+
+                // Make the page visible as soon as it's ready.
+                InvalidateNavigationCache();
+                EnsureNavigationCache();
+                OnPropertyChanged(nameof(PluginSettingsPages));
+                OnPropertyChanged(nameof(NavigationEntries));
+
+                if (_selectedPluginSettingsPage is not null
+                    && string.Equals(_selectedPluginSettingsPage.PluginId, target.PluginId, StringComparison.Ordinal)
+                    && string.Equals(_selectedPluginSettingsPage.PageId, target.PageId, StringComparison.Ordinal))
+                {
+                    PluginSettingsPanel = panel;
+                    _pluginUiStateManager.SwitchContext(sessionId: null);
+                }
+
+                // Yield so we don't block the UI thread with a long chain of renders.
+                await Task.Yield();
             }
         }
         catch
         {
-            PluginSettingsPanel = null;
+            // best-effort warm-up
         }
     }
 

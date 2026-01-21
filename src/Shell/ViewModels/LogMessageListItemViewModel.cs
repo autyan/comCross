@@ -28,7 +28,7 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
         _isInitialized = true;
         _message = context.Message;
         _timestampText = FormatTimestamp(context.Message.Timestamp, context.TimestampFormat);
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

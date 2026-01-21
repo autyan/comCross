@@ -48,7 +48,7 @@ public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<Wor
         RenameCommand = context.RenameCommand;
         CopyCommand = context.CopyCommand;
 
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     /// <summary>

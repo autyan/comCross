@@ -21,6 +21,9 @@ public sealed class DeviceService : IDisposable
     private readonly SharedMemorySessionService _shmSessionService;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
 
+    // Non-persistent default naming counters: adapterKey -> nextIndex
+    private readonly ConcurrentDictionary<string, int> _defaultSessionNameCounters = new(StringComparer.Ordinal);
+
     public DeviceService(
         PluginManagerService pluginManager,
         IEventBus eventBus,
@@ -52,12 +55,16 @@ public sealed class DeviceService : IDisposable
         string pluginId,
         string capabilityId,
         string sessionId,
-        string name,
+        string? name,
         JsonElement parameters,
         CancellationToken cancellationToken = default)
     {
         var runtime = _pluginManager.GetRuntime(pluginId) 
             ?? throw new InvalidOperationException($"Plugin {pluginId} not found");
+
+        var finalName = !string.IsNullOrWhiteSpace(name)
+            ? name!
+            : GenerateDefaultSessionName(runtime, pluginId, capabilityId);
 
         var port = TryGetString(parameters, "port") ?? TryGetString(parameters, "Port") ?? $"{pluginId}:{capabilityId}";
         var baudRate = TryGetInt(parameters, "baudRate") ?? TryGetInt(parameters, "BaudRate") ?? 0;
@@ -65,7 +72,7 @@ public sealed class DeviceService : IDisposable
         var session = new Session
         {
             Id = sessionId,
-            Name = name,
+            Name = finalName,
             Port = port,
             BaudRate = baudRate,
             AdapterId = $"plugin:{pluginId}:{capabilityId}",
@@ -169,6 +176,20 @@ public sealed class DeviceService : IDisposable
     }
 
     private sealed record SessionState(Session Session, string PluginId);
+
+    private string GenerateDefaultSessionName(PluginRuntime runtime, string pluginId, string capabilityId)
+    {
+        var adapterKey = $"plugin:{pluginId}:{capabilityId}";
+
+        // Prefer capabilityId as the adapter name (e.g., "serial", "tcp").
+        // Fallback to plugin manifest name/id.
+        var display = !string.IsNullOrWhiteSpace(capabilityId)
+            ? capabilityId
+            : (!string.IsNullOrWhiteSpace(runtime.Info.Manifest.Name) ? runtime.Info.Manifest.Name : pluginId);
+
+        var index = _defaultSessionNameCounters.AddOrUpdate(adapterKey, 1, (_, current) => checked(current + 1));
+        return $"{display} #{index}";
+    }
 
     private static string? TryGetString(JsonElement element, string propertyName)
     {

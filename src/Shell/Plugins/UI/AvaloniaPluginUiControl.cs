@@ -4,6 +4,7 @@ using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using ComCross.PluginSdk.UI;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.Plugins.UI;
 
@@ -55,23 +56,58 @@ public sealed class AvaloniaLabeledControl : AvaloniaPluginUiControl
     private readonly string _name;
     private readonly AvaloniaPluginUiControl _inner;
     private readonly StackPanel _panel;
+    private readonly TextBlock _label;
+    private readonly ILocalizationService? _localization;
+    private readonly string? _labelKey;
+    private EventHandler<string>? _languageChanged;
 
     public AvaloniaLabeledControl(string name, string label, AvaloniaPluginUiControl inner)
+        : this(name, label, inner, localization: null, labelKey: null)
+    {
+    }
+
+    public AvaloniaLabeledControl(string name, string label, AvaloniaPluginUiControl inner, ILocalizationService? localization, string? labelKey)
     {
         _name = name;
         _inner = inner;
+        _localization = localization;
+        _labelKey = labelKey;
         _panel = new StackPanel
         {
             Spacing = 4,
             Orientation = Orientation.Vertical
         };
 
-        _panel.Children.Add(new TextBlock
+        _label = new TextBlock
         {
             Text = label,
             FontSize = 11,
             Foreground = Avalonia.Media.Brushes.LightGray
-        });
+        };
+
+        if (_localization is not null && !string.IsNullOrWhiteSpace(_labelKey))
+        {
+            _label.Text = _localization.Strings[_labelKey!];
+
+            _languageChanged = (_, _) =>
+            {
+                _label.Text = _localization.Strings[_labelKey!];
+            };
+
+            _localization.LanguageChanged += _languageChanged;
+
+            _panel.DetachedFromVisualTree += (_, _) =>
+            {
+                if (_localization is not null && _languageChanged is not null)
+                {
+                    _localization.LanguageChanged -= _languageChanged;
+                }
+
+                _languageChanged = null;
+            };
+        }
+
+        _panel.Children.Add(_label);
         _panel.Children.Add(_inner.AvaloniaControl);
 
         _inner.ValueChanged += (_, v) => ValueChanged?.Invoke(this, v);
@@ -99,17 +135,44 @@ public class AvaloniaTextBoxControl : AvaloniaPluginUiControl
 {
     private readonly TextBox _textBox;
     private readonly string _name;
+    private readonly ILocalizationService _localization;
+    private readonly string? _labelKey;
+    private EventHandler<string>? _languageChanged;
     public override Control AvaloniaControl => _textBox;
     public override string Name => _name;
 
-    public AvaloniaTextBoxControl(PluginUiField field)
+    public AvaloniaTextBoxControl(PluginUiField field, ILocalizationService localization)
     {
         _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
+        _localization = localization;
+        _labelKey = string.IsNullOrWhiteSpace(field.LabelKey) ? null : field.LabelKey;
+
         _textBox = new TextBox
         {
             Watermark = field.Label,
             UseFloatingWatermark = true
         };
+
+        if (!string.IsNullOrWhiteSpace(_labelKey))
+        {
+            _textBox.Watermark = _localization.Strings[_labelKey!];
+            _languageChanged = (_, _) =>
+            {
+                _textBox.Watermark = _localization.Strings[_labelKey!];
+            };
+            _localization.LanguageChanged += _languageChanged;
+
+            _textBox.DetachedFromVisualTree += (_, _) =>
+            {
+                if (_languageChanged is not null)
+                {
+                    _localization.LanguageChanged -= _languageChanged;
+                }
+
+                _languageChanged = null;
+            };
+        }
+
         _textBox.TextChanged += (s, e) => ValueChanged?.Invoke(this, _textBox.Text);
     }
 
@@ -132,33 +195,40 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
 {
     private readonly ComboBox _comboBox;
     private readonly string _name;
+    private readonly ILocalizationService _localization;
+
+    private sealed class OptionItem
+    {
+        public OptionItem(object value, string display)
+        {
+            Value = value;
+            Display = display;
+        }
+
+        public object Value { get; }
+        public string Display { get; }
+
+        public override string ToString() => Display;
+    }
+
     public override Control AvaloniaControl => _comboBox;
     public override string Name => _name;
 
-    public AvaloniaComboBoxControl(PluginUiField field)
+    public AvaloniaComboBoxControl(PluginUiField field, ILocalizationService localization)
     {
         _name = !string.IsNullOrWhiteSpace(field.Key) ? field.Key : field.Name;
+        _localization = localization;
         _comboBox = new ComboBox();
-        var initialOptions = field.GetOptionsAsOptionList();
-        if (initialOptions.Count > 0)
-        {
-            var items = new List<string>(initialOptions.Count);
-            foreach (var opt in initialOptions)
-            {
-                if (!string.IsNullOrWhiteSpace(opt.Value))
-                {
-                    items.Add(opt.Value);
-                }
-            }
-            _comboBox.ItemsSource = items;
-        }
-        _comboBox.SelectionChanged += (s, e) => ValueChanged?.Invoke(this, _comboBox.SelectedItem);
+
+        ApplyOptions(field.GetOptionsAsOptionList());
+
+        _comboBox.SelectionChanged += (_, _) => ValueChanged?.Invoke(this, GetSelectedValue());
     }
 
     public override object? Value 
     { 
-        get => _comboBox.SelectedItem; 
-        set => _comboBox.SelectedItem = value; 
+        get => GetSelectedValue();
+        set => SetSelectedValue(value);
     }
 
     public override event EventHandler<object?>? ValueChanged;
@@ -167,21 +237,31 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
     {
         if (value is System.Collections.IEnumerable enumerable && value is not string)
         {
-            var list = new System.Collections.Generic.List<string>();
+            var items = new List<OptionItem>();
             foreach (var item in enumerable)
             {
-                list.Add(item?.ToString() ?? "");
+                if (item is null)
+                {
+                    continue;
+                }
+
+                items.Add(new OptionItem(item, item.ToString() ?? string.Empty));
             }
-            _comboBox.ItemsSource = list;
+
+            ApplyItems(items);
         }
         else if (value is JsonElement element && element.ValueKind == JsonValueKind.Array)
         {
-            var list = new System.Collections.Generic.List<string>();
+            var items = new List<OptionItem>();
             foreach (var item in element.EnumerateArray())
             {
-                list.Add(item.ToString());
+                if (TryParseOptionItem(item, out var parsed))
+                {
+                    items.Add(parsed);
+                }
             }
-            _comboBox.ItemsSource = list;
+
+            ApplyItems(items);
         }
         else
         {
@@ -190,6 +270,232 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
     }
 
     public override void Reset() => _comboBox.SelectedIndex = -1;
+
+    private void ApplyOptions(IReadOnlyList<PluginUiOption> options)
+    {
+        if (options.Count <= 0)
+        {
+            return;
+        }
+
+        var items = new List<OptionItem>(options.Count);
+        foreach (var opt in options)
+        {
+            if (opt.Value is null)
+            {
+                continue;
+            }
+
+            var label = ResolveOptionLabel(opt);
+            items.Add(new OptionItem(opt.Value, label));
+        }
+
+        ApplyItems(items);
+    }
+
+    private string ResolveOptionLabel(PluginUiOption opt)
+    {
+        if (!string.IsNullOrWhiteSpace(opt.LabelKey))
+        {
+            return _localization.Strings[opt.LabelKey];
+        }
+
+        if (!string.IsNullOrWhiteSpace(opt.Label))
+        {
+            return opt.Label;
+        }
+
+        return opt.Value?.ToString() ?? string.Empty;
+    }
+
+    private void ApplyItems(List<OptionItem> items)
+    {
+        var current = GetSelectedValue();
+        _comboBox.ItemsSource = items;
+        SetSelectedValue(current);
+    }
+
+    private object? GetSelectedValue()
+    {
+        return _comboBox.SelectedItem is OptionItem item ? item.Value : _comboBox.SelectedItem;
+    }
+
+    private void SetSelectedValue(object? value)
+    {
+        if (_comboBox.ItemsSource is IEnumerable<OptionItem> items)
+        {
+            foreach (var item in items)
+            {
+                if (AreOptionValuesEqual(item.Value, value))
+                {
+                    _comboBox.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        _comboBox.SelectedItem = value;
+    }
+
+    private static bool AreOptionValuesEqual(object? optionValue, object? selectedValue)
+    {
+        if (optionValue is null || selectedValue is null)
+        {
+            return false;
+        }
+
+        // JsonElement comparison (common when state comes from JSON)
+        if (selectedValue is JsonElement je)
+        {
+            return je.ValueKind switch
+            {
+                JsonValueKind.String => AreOptionValuesEqual(optionValue, je.GetString()),
+                JsonValueKind.Number => je.TryGetInt64(out var i64)
+                    ? AreOptionValuesEqual(optionValue, i64)
+                    : je.TryGetDouble(out var d)
+                        ? AreOptionValuesEqual(optionValue, d)
+                        : optionValue.ToString() == je.ToString(),
+                JsonValueKind.True or JsonValueKind.False => AreOptionValuesEqual(optionValue, je.GetBoolean()),
+                _ => optionValue.ToString() == je.ToString()
+            };
+        }
+
+        if (TryGetDecimal(optionValue, out var a) && TryGetDecimal(selectedValue, out var b))
+        {
+            return a == b;
+        }
+
+        if (optionValue is string s1 && selectedValue is string s2)
+        {
+            return string.Equals(s1, s2, StringComparison.Ordinal);
+        }
+
+        return Equals(optionValue, selectedValue) || string.Equals(optionValue.ToString(), selectedValue.ToString(), StringComparison.Ordinal);
+    }
+
+    private static bool TryGetDecimal(object value, out decimal result)
+    {
+        result = 0;
+        switch (value)
+        {
+            case byte b:
+                result = b;
+                return true;
+            case short s:
+                result = s;
+                return true;
+            case int i:
+                result = i;
+                return true;
+            case long l:
+                result = l;
+                return true;
+            case float f:
+                result = (decimal)f;
+                return true;
+            case double d:
+                result = (decimal)d;
+                return true;
+            case decimal m:
+                result = m;
+                return true;
+            case JsonElement je when je.ValueKind == JsonValueKind.Number:
+                if (je.TryGetInt64(out var i64))
+                {
+                    result = i64;
+                    return true;
+                }
+
+                if (je.TryGetDouble(out var jd))
+                {
+                    result = (decimal)jd;
+                    return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private bool TryParseOptionItem(JsonElement element, out OptionItem item)
+    {
+        item = new OptionItem(string.Empty, string.Empty);
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var s = element.GetString();
+            if (string.IsNullOrWhiteSpace(s))
+            {
+                return false;
+            }
+
+            item = new OptionItem(s, s);
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number)
+        {
+            if (element.TryGetInt64(out var i64))
+            {
+                item = new OptionItem(i64, i64.ToString());
+                return true;
+            }
+
+            if (element.TryGetDouble(out var d))
+            {
+                item = new OptionItem(d, d.ToString());
+                return true;
+            }
+
+            return false;
+        }
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            // Option object: { value, labelKey?, label? }
+            if (!element.TryGetProperty("value", out var valueNode))
+            {
+                return false;
+            }
+
+            object? value = valueNode.ValueKind switch
+            {
+                JsonValueKind.String => valueNode.GetString(),
+                JsonValueKind.Number => valueNode.TryGetInt64(out var i64) ? i64 : valueNode.TryGetDouble(out var d) ? d : valueNode.ToString(),
+                JsonValueKind.True or JsonValueKind.False => valueNode.GetBoolean(),
+                _ => valueNode.ToString()
+            };
+
+            if (value is null || string.IsNullOrWhiteSpace(value.ToString()))
+            {
+                return false;
+            }
+
+            string? labelKey = null;
+            if (element.TryGetProperty("labelKey", out var labelKeyNode) && labelKeyNode.ValueKind == JsonValueKind.String)
+            {
+                labelKey = labelKeyNode.GetString();
+            }
+
+            string? label = null;
+            if (element.TryGetProperty("label", out var labelNode) && labelNode.ValueKind == JsonValueKind.String)
+            {
+                label = labelNode.GetString();
+            }
+
+            var display = !string.IsNullOrWhiteSpace(labelKey)
+                ? _localization.Strings[labelKey]
+                : !string.IsNullOrWhiteSpace(label)
+                    ? label
+                    : value.ToString() ?? string.Empty;
+
+            item = new OptionItem(value, display);
+            return true;
+        }
+
+        return false;
+    }
 }
 
 public sealed class AvaloniaNumberControl : AvaloniaPluginUiControl

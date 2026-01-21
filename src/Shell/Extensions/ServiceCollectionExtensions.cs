@@ -21,6 +21,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ComCross.PluginSdk.UI.PluginUiRenderer, ComCross.Shell.Plugins.UI.AvaloniaPluginUiRenderer>();
         services.AddSingleton<ComCross.PluginSdk.UI.IPluginCommunicationLink, ComCross.Shell.Plugins.UI.ShellPluginCommunicationLink>();
 
+        // Host-side helpers for plugin UI.
+        services.AddSingleton<SerialPortsHostService>();
+
         // Cross-cutting factories (avoid manual `new` for Views/ViewModels)
         services.AddTransient<IObjectFactory, ComCross.Shell.Services.ObjectFactory>();
 

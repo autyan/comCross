@@ -27,7 +27,7 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
         _session.PropertyChanged += OnSessionPropertyChanged;
 
         // Ensure UI refresh on initial attach.
-        OnPropertyChanged(null);
+        OnPropertyChanged(string.Empty);
     }
 
     public Session Session => _session ?? throw new InvalidOperationException("SessionListItemViewModel not initialized.");

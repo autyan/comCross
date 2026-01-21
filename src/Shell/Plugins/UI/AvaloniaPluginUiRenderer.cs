@@ -28,6 +28,13 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
         return new AvaloniaPluginUiContainer();
     }
 
+    public Control? RenderNewPanel(string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId = null, string? viewId = null)
+    {
+        var container = new AvaloniaPluginUiContainer();
+        RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewId);
+        return container.GetPanel();
+    }
+
     protected override void RenderToContainer(IPluginUiContainer container, string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId, string? viewId)
     {
         if (schema.Layout is null)
@@ -75,6 +82,9 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
         // For now: actions render as a bottom row (until we add explicit action layout nodes).
         if (schema.Actions.Count > 0)
         {
+            var referencedActions = new HashSet<string>(StringComparer.Ordinal);
+            CollectReferencedActionIds(schema.Layout, referencedActions);
+
             var actionsRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -84,6 +94,11 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
 
             foreach (var action in schema.Actions)
             {
+                if (referencedActions.Contains(action.Id))
+                {
+                    continue;
+                }
+
                 if (!controls.TryGetValue(action.Id, out var actionControl))
                 {
                     continue;
@@ -99,6 +114,50 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
             {
                 avaloniaContainer.AddElement(actionsRow);
             }
+        }
+    }
+
+    private static void CollectReferencedActionIds(PluginUiLayoutNode? node, HashSet<string> output)
+    {
+        if (node is null)
+        {
+            return;
+        }
+
+        switch (node)
+        {
+            case PluginUiLayoutFieldRef fieldRef:
+                if (!string.IsNullOrWhiteSpace(fieldRef.SuffixActionId))
+                {
+                    output.Add(fieldRef.SuffixActionId);
+                }
+                return;
+            case PluginUiLayoutStack stack:
+                foreach (var child in stack.Children)
+                {
+                    CollectReferencedActionIds(child, output);
+                }
+                return;
+            case PluginUiLayoutFlow flow:
+                foreach (var child in flow.Children)
+                {
+                    CollectReferencedActionIds(child, output);
+                }
+                return;
+            case PluginUiLayoutGroup group:
+                foreach (var child in group.Children)
+                {
+                    CollectReferencedActionIds(child, output);
+                }
+                return;
+            case PluginUiLayoutGrid grid:
+                foreach (var item in grid.Items)
+                {
+                    CollectReferencedActionIds(item.Child, output);
+                }
+                return;
+            default:
+                return;
         }
     }
 
@@ -168,7 +227,6 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
 
             case PluginUiLayoutGroup group:
             {
-                var header = ResolveText(group.TitleKey, group.Title);
                 var inner = new StackPanel { Spacing = 10 };
                 foreach (var child in group.Children)
                 {
@@ -176,14 +234,14 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
                 }
 
                 var panel = new StackPanel { Spacing = 8 };
+                var header = ResolveText(group.TitleKey, group.Title);
                 if (!string.IsNullOrWhiteSpace(header))
                 {
-                    panel.Children.Add(new TextBlock
+                    panel.Children.Add(CreateLocalizedTextBlock(group.TitleKey, group.Title, tb =>
                     {
-                        Text = header,
-                        FontWeight = FontWeight.SemiBold,
-                        Foreground = Brushes.LightGray
-                    });
+                        tb.FontWeight = FontWeight.SemiBold;
+                        tb.Foreground = Brushes.LightGray;
+                    }));
                 }
                 panel.Children.Add(inner);
 
@@ -276,9 +334,39 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
                 var input = avaloniaControl.AvaloniaControl;
                 input.HorizontalAlignment = HorizontalAlignment.Stretch;
 
+                Control? suffixAction = null;
+                if (!string.IsNullOrWhiteSpace(fieldRef.SuffixActionId)
+                    && controls.TryGetValue(fieldRef.SuffixActionId, out var suffix)
+                    && suffix is AvaloniaPluginUiControl suffixAvalonia)
+                {
+                    suffixAction = suffixAvalonia.AvaloniaControl;
+                    suffixAction.VerticalAlignment = VerticalAlignment.Center;
+                }
+
                 if (fieldRef.LabelPlacement == PluginUiLabelPlacement.Hidden)
                 {
-                    return input;
+                    if (suffixAction is null)
+                    {
+                        return input;
+                    }
+
+                    var g = new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions
+                        {
+                            new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+                            new ColumnDefinition(GridLength.Auto)
+                        },
+                        RowDefinitions = new RowDefinitions("Auto"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    };
+                    Grid.SetColumn(input, 0);
+                    Grid.SetColumn(suffixAction, 1);
+                    suffixAction.Margin = new Thickness(6, 0, 0, 0);
+                    g.Children.Add(input);
+                    g.Children.Add(suffixAction);
+                    return g;
                 }
 
                 if (fieldRef.LabelPlacement == PluginUiLabelPlacement.Top)
@@ -290,16 +378,37 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
                         HorizontalAlignment = HorizontalAlignment.Stretch
                     };
 
-                    panel.Children.Add(new TextBlock
+                    panel.Children.Add(CreateLocalizedTextBlock(field?.LabelKey, field?.Label, tb =>
                     {
-                        Text = labelText,
-                        Foreground = Brushes.LightGray,
-                        FontSize = 11,
-                        TextWrapping = TextWrapping.Wrap,
-                        TextTrimming = TextTrimming.CharacterEllipsis
-                    });
+                        tb.Foreground = Brushes.LightGray;
+                        tb.FontSize = 11;
+                        tb.TextWrapping = TextWrapping.Wrap;
+                        tb.TextTrimming = TextTrimming.CharacterEllipsis;
+                    }));
 
-                    panel.Children.Add(input);
+                    if (suffixAction is null)
+                    {
+                        panel.Children.Add(input);
+                        return panel;
+                    }
+
+                    var g = new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions
+                        {
+                            new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+                            new ColumnDefinition(GridLength.Auto)
+                        },
+                        RowDefinitions = new RowDefinitions("Auto"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    };
+                    Grid.SetColumn(input, 0);
+                    Grid.SetColumn(suffixAction, 1);
+                    suffixAction.Margin = new Thickness(6, 0, 0, 0);
+                    g.Children.Add(input);
+                    g.Children.Add(suffixAction);
+                    panel.Children.Add(g);
                     return panel;
                 }
 
@@ -309,38 +418,44 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
                     {
                         // Auto label column avoids clipping (especially in narrow sidebars).
                         new ColumnDefinition(GridLength.Auto) { SharedSizeGroup = "PluginFieldLabel" },
-                        new ColumnDefinition(new GridLength(1, GridUnitType.Star))
+                        new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+                        new ColumnDefinition(GridLength.Auto)
                     },
                     RowDefinitions = new RowDefinitions("Auto"),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Stretch
                 };
 
-                var label = new TextBlock
+                var label = CreateLocalizedTextBlock(field?.LabelKey, field?.Label, tb =>
                 {
-                    Text = labelText,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = Brushes.LightGray,
-                    FontSize = 11,
-                    MaxWidth = 160,
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    Margin = new Thickness(0, 0, 10, 0)
-                };
+                    tb.VerticalAlignment = VerticalAlignment.Center;
+                    tb.Foreground = Brushes.LightGray;
+                    tb.FontSize = 11;
+                    tb.MaxWidth = 160;
+                    tb.TextWrapping = TextWrapping.NoWrap;
+                    tb.TextTrimming = TextTrimming.CharacterEllipsis;
+                    tb.Margin = new Thickness(0, 0, 10, 0);
+                });
                 Grid.SetColumn(label, 0);
                 Grid.SetColumn(input, 1);
 
                 row.Children.Add(label);
                 row.Children.Add(input);
+
+                if (suffixAction is not null)
+                {
+                    Grid.SetColumn(suffixAction, 2);
+                    suffixAction.Margin = new Thickness(6, 0, 0, 0);
+                    row.Children.Add(suffixAction);
+                }
                 return row;
             }
 
             case PluginUiLayoutLabel label:
-                return new TextBlock
+                return CreateLocalizedTextBlock(label.TextKey, label.Text, tb =>
                 {
-                    Text = ResolveText(label.TextKey, label.Text),
-                    Foreground = Brushes.LightGray
-                };
+                    tb.Foreground = Brushes.LightGray;
+                });
 
             case PluginUiLayoutSeparator:
                 return new Separator
@@ -365,5 +480,32 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
         }
 
         return fallback ?? string.Empty;
+    }
+
+    private TextBlock CreateLocalizedTextBlock(string? key, string? fallback, Action<TextBlock>? init = null)
+    {
+        var tb = new TextBlock
+        {
+            Text = ResolveText(key, fallback)
+        };
+
+        init?.Invoke(tb);
+
+        if (!string.IsNullOrWhiteSpace(key))
+        {
+            EventHandler<string>? languageChanged = null;
+            languageChanged = (_, _) => tb.Text = ResolveText(key, fallback);
+            _localization.LanguageChanged += languageChanged;
+
+            tb.DetachedFromVisualTree += (_, _) =>
+            {
+                if (languageChanged is not null)
+                {
+                    _localization.LanguageChanged -= languageChanged;
+                }
+            };
+        }
+
+        return tb;
     }
 }
