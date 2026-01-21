@@ -3,10 +3,12 @@ using Avalonia.Interactivity;
 using Avalonia;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ComCross.Shell.Services;
+using ComCross.PluginSdk.UI;
 
 namespace ComCross.Shell.Views;
 
@@ -30,10 +32,15 @@ public partial class LeftSidebar : BaseUserControl
             var objectFactory = App.ServiceProvider.GetRequiredService<IObjectFactory>();
             // Create a dedicated selector VM for the dialog so its rendered controls
             // are not shared with the sidebar's visual tree.
-            var selectorVm = objectFactory.Create<BusAdapterSelectorViewModel>(vm.PluginManager, "connect-dialog");
+            var viewInstanceId = Guid.NewGuid().ToString("N");
+            var selectorVm = objectFactory.Create<BusAdapterSelectorViewModel>(vm.PluginManager, BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId);
             dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, selectorVm);
 
             await dialog.ShowDialog(owner);
+
+            // Clean up per-instance registrations; shared state is preserved by ViewKind.
+            var stateManager = App.ServiceProvider.GetRequiredService<PluginUiStateManager>();
+            stateManager.ClearViewScope(new PluginUiViewScope(BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId));
         }
     }
     

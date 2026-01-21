@@ -84,23 +84,39 @@ publish_project() {
 
 build_plugins() {
   local config_name="$1"
-  dotnet build src/Plugins/ComCross.Plugins.Stats/ComCross.Plugins.Stats.csproj -c "${config_name}"
-  dotnet build src/Plugins/ComCross.Plugins.Protocol/ComCross.Plugins.Protocol.csproj -c "${config_name}"
-  dotnet build src/Plugins/ComCross.Plugins.Flow/ComCross.Plugins.Flow.csproj -c "${config_name}"
+  for plugin_proj in src/Plugins/*/*.csproj; do
+    dotnet build "${plugin_proj}" -c "${config_name}"
+  done
 }
 
 copy_plugins() {
   local out_path="$1"
+  local rid="$2"
   local plugins_dir="${out_path}/plugins"
   
   mkdir -p "${plugins_dir}"
   
-  # Copy official plugins from src/Plugins/*/bin/<config>/<tfm>/
-  for plugin_dir in src/Plugins/*/; do
-    if [[ -d "${plugin_dir}bin/${config}/${target_framework}/" ]]; then
-      # Copy plugin DLL (not ComCross.Shared.dll as it's already in main directory)
-      find "${plugin_dir}bin/${config}/${target_framework}/" -maxdepth 1 -name "ComCross.Plugins.*.dll" -exec cp {} "${plugins_dir}/" \;
-    fi
+  # Publish official plugins into isolated folders so each plugin carries its own deps + native assets.
+  # This fixes runtime load failures like missing System.IO.Ports / IO.Serial in the plugin process.
+  for plugin_proj in src/Plugins/*/*.csproj; do
+    local plugin_id
+    plugin_id="$(python - <<'PY'
+import uuid
+print(uuid.uuid4().hex)
+PY
+)"
+    local plugin_out
+    plugin_out="${plugins_dir}/${plugin_id}"
+
+    rm -rf "${plugin_out}"
+    mkdir -p "${plugin_out}"
+
+    dotnet publish "${plugin_proj}" \
+      -c "${config}" \
+      -r "${rid}" \
+      --self-contained false \
+      -o "${plugin_out}" \
+      "${symbol_args[@]}"
   done
   
   echo "Copied plugins to ${plugins_dir}"
@@ -141,11 +157,11 @@ for rid in "${rids[@]}"; do
 
   publish_project src/Shell/ComCross.Shell.csproj "${fd_out}" "${rid}" false
   publish_project src/PluginHost/ComCross.PluginHost.csproj "${fd_out}" "${rid}" false
-  copy_plugins "${fd_out}"
+  copy_plugins "${fd_out}" "${rid}"
 
   publish_project src/Shell/ComCross.Shell.csproj "${sc_out}" "${rid}" true
   publish_project src/PluginHost/ComCross.PluginHost.csproj "${sc_out}" "${rid}" true
-  copy_plugins "${sc_out}"
+  copy_plugins "${sc_out}" "${rid}"
 
   if [[ "${package_outputs}" == "true" ]]; then
     if [[ "${rid}" == win-* ]]; then

@@ -9,4 +9,5 @@ namespace ComCross.Shared.Models;
 public sealed record PluginHostGetUiStatePayload(
     string CapabilityId,
     string? SessionId = null,
-    string? ViewId = null);
+    string? ViewKind = null,
+    string? ViewInstanceId = null);

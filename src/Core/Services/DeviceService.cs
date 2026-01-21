@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Core.Services;
 
 namespace ComCross.Core.Services;
 
@@ -66,21 +68,9 @@ public sealed class DeviceService : IDisposable
             ? name!
             : GenerateDefaultSessionName(runtime, pluginId, capabilityId);
 
-        var port = TryGetString(parameters, "port") ?? TryGetString(parameters, "Port") ?? $"{pluginId}:{capabilityId}";
-        var baudRate = TryGetInt(parameters, "baudRate") ?? TryGetInt(parameters, "BaudRate") ?? 0;
-
-        var session = new Session
-        {
-            Id = sessionId,
-            Name = finalName,
-            Port = port,
-            BaudRate = baudRate,
-            AdapterId = $"plugin:{pluginId}:{capabilityId}",
-            Status = SessionStatus.Connecting,
-            PluginId = pluginId,
-            CapabilityId = capabilityId,
-            ParametersJson = parameters.GetRawText()
-        };
+        // Sessions are host-level entries. ParametersJson is committed only on successful connect.
+        var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
+        session.Status = SessionStatus.Connecting;
 
         // 1. Allocate Shared Memory
         // TODO: Get requested size from capability descriptor
@@ -108,26 +98,34 @@ public sealed class DeviceService : IDisposable
         if (response is not { Ok: true })
         {
             await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            session.Status = SessionStatus.Disconnected;
             throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
         }
 
         session.Status = SessionStatus.Connected;
         session.StartTime = DateTime.UtcNow;
 
-        _sessions[sessionId] = new SessionState(session, pluginId);
+        // Commit last successful connection parameters.
+        session.ParametersJson = parameters.GetRawText();
+
+        _sessions[sessionId] = new SessionState(session);
         
         // Start reading loop in background if not already started by service
         _shmSessionService.StartReading(sessionId);
 
+        // Publish as an upsert signal (new session or updated committed parameters).
         _eventBus.Publish(new SessionCreatedEvent(session));
         return session;
     }
 
     public async Task DisconnectAsync(string sessionId, string? reason = null)
     {
-        if (_sessions.TryRemove(sessionId, out var state))
+        if (_sessions.TryGetValue(sessionId, out var state))
         {
-            var runtime = _pluginManager.GetRuntime(state.PluginId);
+            var runtime = !string.IsNullOrWhiteSpace(state.Session.PluginId)
+                ? _pluginManager.GetRuntime(state.Session.PluginId)
+                : null;
+
             if (runtime?.Client != null)
             {
                 var payload = new PluginHostDisconnectPayload(sessionId, reason);
@@ -141,6 +139,7 @@ public sealed class DeviceService : IDisposable
             }
 
             await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            state.Session.Status = SessionStatus.Disconnected;
             _eventBus.Publish(new SessionClosedEvent(sessionId, reason));
         }
     }
@@ -156,15 +155,68 @@ public sealed class DeviceService : IDisposable
         // but typically plugins read from their own input (e.g. Serial port reads).
         // For outgoing data to the plugin, we typically use a command.
         
-        // TODO: Implement Plugin Send Command if needed, or plugins can manage it.
-        // For now, let's assume the plugin handles its own Tx logic.
-        
-        return 0;
+        // v0.4.x: Plugins do not yet expose a standardized TX command.
+        // Still append a TX log entry so the UI stays responsive and consistent.
+        var content = format == MessageFormat.Hex
+            ? $"TX: {BitConverter.ToString(data).Replace("-", " ")}" 
+            : $"TX: {Encoding.UTF8.GetString(data)}";
+
+        _messageStream.Append(sessionId, new LogMessage
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow,
+            Content = content,
+            Level = LogLevel.Info,
+            Source = "tx",
+            RawData = data,
+            Format = format
+        });
+
+        _eventBus.Publish(new DataSentEvent(sessionId, data, data.Length));
+        return data.Length;
     }
 
     public Session? GetSession(string sessionId) => _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;
 
     public IReadOnlyList<Session> GetAllSessions() => _sessions.Values.Select(s => s.Session).ToList();
+
+    public void RestoreSession(SessionDescriptor descriptor)
+    {
+        if (descriptor is null || string.IsNullOrWhiteSpace(descriptor.Id))
+        {
+            return;
+        }
+
+        var session = new Session
+        {
+            Id = descriptor.Id,
+            Name = string.IsNullOrWhiteSpace(descriptor.Name) ? descriptor.Id : descriptor.Name,
+            AdapterId = string.IsNullOrWhiteSpace(descriptor.AdapterId) ? "serial" : descriptor.AdapterId,
+            PluginId = descriptor.PluginId,
+            CapabilityId = descriptor.CapabilityId,
+            ParametersJson = descriptor.ParametersJson,
+            EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
+            Status = SessionStatus.Disconnected
+        };
+
+        var state = _sessions.GetOrAdd(descriptor.Id, _ => new SessionState(session));
+        // If it already existed, keep instance but update fields.
+        if (!ReferenceEquals(state.Session, session))
+        {
+            state.Session.Name = session.Name;
+            state.Session.AdapterId = session.AdapterId;
+            state.Session.PluginId = session.PluginId;
+            state.Session.CapabilityId = session.CapabilityId;
+            state.Session.ParametersJson = session.ParametersJson;
+            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            if (state.Session.Status != SessionStatus.Connected)
+            {
+                state.Session.Status = SessionStatus.Disconnected;
+            }
+        }
+
+        _eventBus.Publish(new SessionCreatedEvent(state.Session));
+    }
 
     public void Dispose()
     {
@@ -175,7 +227,43 @@ public sealed class DeviceService : IDisposable
         _sessions.Clear();
     }
 
-    private sealed record SessionState(Session Session, string PluginId);
+    private sealed record SessionState(Session Session);
+
+    private Session GetOrCreateSession(string sessionId, string name, string pluginId, string capabilityId)
+    {
+        if (_sessions.TryGetValue(sessionId, out var existing))
+        {
+            // Session host entry already exists.
+            existing.Session.Name = name;
+            if (string.IsNullOrWhiteSpace(existing.Session.PluginId))
+            {
+                existing.Session.PluginId = pluginId;
+            }
+            if (string.IsNullOrWhiteSpace(existing.Session.CapabilityId))
+            {
+                existing.Session.CapabilityId = capabilityId;
+            }
+            if (string.IsNullOrWhiteSpace(existing.Session.AdapterId))
+            {
+                existing.Session.AdapterId = $"plugin:{pluginId}:{capabilityId}";
+            }
+
+            return existing.Session;
+        }
+
+        var session = new Session
+        {
+            Id = sessionId,
+            Name = name,
+            AdapterId = $"plugin:{pluginId}:{capabilityId}",
+            Status = SessionStatus.Disconnected,
+            PluginId = pluginId,
+            CapabilityId = capabilityId
+        };
+
+        _sessions[sessionId] = new SessionState(session);
+        return session;
+    }
 
     private string GenerateDefaultSessionName(PluginRuntime runtime, string pluginId, string capabilityId)
     {

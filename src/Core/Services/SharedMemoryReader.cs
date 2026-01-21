@@ -14,18 +14,20 @@ public class SharedMemoryReader : IDisposable
     private readonly ILogger<SharedMemoryReader> _logger;
     private readonly Channel<PhysicalFrame> _frameChannel;
     private readonly CancellationTokenSource _cancellationSource = new();
-    private readonly Dictionary<string, Task> _readerTasks = new();
+    private readonly Dictionary<string, (Task Task, CancellationTokenSource Cts)> _readerTasks = new();
+    private readonly object _gate = new();
     private bool _disposed;
     
     public SharedMemoryReader(ILogger<SharedMemoryReader> logger)
     {
         _logger = logger;
-        
-        // 创建无界Channel（暂存物理帧）
-        _frameChannel = Channel.CreateUnbounded<PhysicalFrame>(new UnboundedChannelOptions
+
+        // Use a bounded channel to avoid unbounded memory growth if UI is slow.
+        _frameChannel = Channel.CreateBounded<PhysicalFrame>(new BoundedChannelOptions(2048)
         {
             SingleReader = false,
-            SingleWriter = false
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropOldest
         });
     }
     
@@ -34,16 +36,20 @@ public class SharedMemoryReader : IDisposable
     /// </summary>
     public void StartReading(string sessionId, SessionSegment segment)
     {
-        if (_readerTasks.ContainsKey(sessionId))
+        lock (_gate)
         {
-            _logger.LogWarning("Session {SessionId} 读取任务已存在", sessionId);
-            return;
+            if (_readerTasks.ContainsKey(sessionId))
+            {
+                _logger.LogWarning("Session {SessionId} 读取任务已存在", sessionId);
+                return;
+            }
+
+            var linked = CancellationTokenSource.CreateLinkedTokenSource(_cancellationSource.Token);
+            var task = Task.Run(() => ReadLoopAsync(sessionId, segment, linked.Token));
+            _readerTasks[sessionId] = (task, linked);
+
+            _logger.LogInformation("Session {SessionId} 读取任务已启动", sessionId);
         }
-        
-        var task = Task.Run(() => ReadLoopAsync(sessionId, segment, _cancellationSource.Token));
-        _readerTasks[sessionId] = task;
-        
-        _logger.LogInformation("Session {SessionId} 读取任务已启动", sessionId);
     }
     
     /// <summary>
@@ -51,14 +57,47 @@ public class SharedMemoryReader : IDisposable
     /// </summary>
     public async Task StopReadingAsync(string sessionId)
     {
-        if (_readerTasks.TryGetValue(sessionId, out var task))
+        (Task Task, CancellationTokenSource Cts)? entry = null;
+
+        lock (_gate)
         {
-            // 等待任务结束（带超时）
-            await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(2)));
-            _readerTasks.Remove(sessionId);
-            
-            _logger.LogInformation("Session {SessionId} 读取任务已停止", sessionId);
+            if (_readerTasks.TryGetValue(sessionId, out var existing))
+            {
+                entry = existing;
+                _readerTasks.Remove(sessionId);
+            }
         }
+
+        if (entry is null)
+        {
+            return;
+        }
+
+        try
+        {
+            entry.Value.Cts.Cancel();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await Task.WhenAny(entry.Value.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            entry.Value.Cts.Dispose();
+        }
+        catch
+        {
+        }
+
+        _logger.LogInformation("Session {SessionId} 读取任务已停止", sessionId);
     }
     
     /// <summary>
@@ -98,7 +137,8 @@ public class SharedMemoryReader : IDisposable
                     };
                     
                     // 写入Channel
-                    await _frameChannel.Writer.WriteAsync(frame, cancellationToken);
+                    // Best-effort: bounded channel may drop old frames.
+                    _frameChannel.Writer.TryWrite(frame);
                     
                     _logger.LogTrace(
                         "[{SessionId}] 读取物理帧#{FrameId}，大小{Size}字节",
@@ -129,9 +169,33 @@ public class SharedMemoryReader : IDisposable
         if (!_disposed)
         {
             _cancellationSource.Cancel();
-            
-            // 等待所有读取任务结束
-            Task.WaitAll(_readerTasks.Values.ToArray(), TimeSpan.FromSeconds(3));
+
+            (Task Task, CancellationTokenSource Cts)[] tasks;
+            lock (_gate)
+            {
+                tasks = _readerTasks.Values.ToArray();
+                _readerTasks.Clear();
+            }
+
+            try
+            {
+                foreach (var t in tasks)
+                {
+                    try { t.Cts.Cancel(); } catch { }
+                }
+
+                Task.WaitAll(tasks.Select(t => t.Task).ToArray(), TimeSpan.FromSeconds(3));
+            }
+            catch
+            {
+            }
+            finally
+            {
+                foreach (var t in tasks)
+                {
+                    try { t.Cts.Dispose(); } catch { }
+                }
+            }
             
             _frameChannel.Writer.Complete();
             _cancellationSource.Dispose();

@@ -6,5 +6,6 @@ namespace ComCross.Shared.Models;
 public sealed record PluginHostUiStateInvalidatedEvent(
     string CapabilityId,
     string? SessionId = null,
-    string? ViewId = null,
+    string? ViewKind = null,
+    string? ViewInstanceId = null,
     string? Reason = null);

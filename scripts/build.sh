@@ -6,6 +6,30 @@ output_dir="artifacts"
 rids=(linux-x64 linux-arm64 win-x64 win-arm64)
 publish=false
 
+publish_plugins() {
+  local out_path="$1"
+  local rid="$2"
+  local plugins_dir="${out_path}/plugins"
+
+  rm -rf "${plugins_dir}"
+  mkdir -p "${plugins_dir}"
+
+  for plugin_proj in src/Plugins/*/*.csproj; do
+    local plugin_id
+    plugin_id="$(python - <<'PY'
+import uuid
+print(uuid.uuid4().hex)
+PY
+)"
+
+    dotnet publish "${plugin_proj}" \
+      -c "${config}" \
+      -r "${rid}" \
+      --self-contained false \
+      -o "${plugins_dir}/${plugin_id}"
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/build.sh [-c CONFIG] [-o OUTPUT_DIR] [-r RID_LIST] [--publish]
@@ -64,6 +88,7 @@ if [[ "${publish}" == "true" ]]; then
     out_path="${output_dir}/ComCross-${rid}-${config}"
     dotnet publish src/Shell/ComCross.Shell.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
     dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
+    publish_plugins "${out_path}" "${rid}"
   done
 else
   dotnet build src/Shell/ComCross.Shell.csproj -c "${config}"

@@ -7,12 +7,14 @@ namespace ComCross.PluginSdk;
 ///
 /// - When SessionId is null: request "default" (no session selected) state.
 /// - When SessionId is provided: request selected-session state.
-/// - ViewId can be used to scope state for different UI surfaces.
+/// - ViewKind scopes state for different UI surfaces (e.g. connect-dialog, sidebar-config).
+/// - ViewInstanceId is an optional per-open instance identifier; plugins may ignore it.
 /// </summary>
 public sealed record PluginUiStateQuery(
     string CapabilityId,
     string? SessionId = null,
-    string? ViewId = null);
+    string? ViewKind = null,
+    string? ViewInstanceId = null);
 
 /// <summary>
 /// Snapshot returned by a plugin for UI rendering/state synchronization.
@@ -31,7 +33,8 @@ public sealed record PluginUiStateSnapshot(
 public sealed record PluginUiStateInvalidatedEvent(
     string CapabilityId,
     string? SessionId = null,
-    string? ViewId = null,
+    string? ViewKind = null,
+    string? ViewInstanceId = null,
     string? Reason = null);
 
 /// <summary>

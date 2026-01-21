@@ -27,7 +27,8 @@ public abstract class AvaloniaPluginUiControl : IPluginUiControl
 
     public abstract event EventHandler<object?>? ValueChanged;
 
-    public abstract void UpdateFromState(object? value);
+    public virtual void UpdateFromState(PluginUiControlUpdate update)
+        => Value = update.Value;
     
     public abstract void Reset();
 }
@@ -47,7 +48,6 @@ public class AvaloniaGenericControl : AvaloniaPluginUiControl
     public override string Name => _name;
     public override object? Value { get; set; }
     public override event EventHandler<object?>? ValueChanged { add { } remove { } }
-    public override void UpdateFromState(object? value) { }
     public override void Reset() { }
 }
 
@@ -124,7 +124,7 @@ public sealed class AvaloniaLabeledControl : AvaloniaPluginUiControl
 
     public override event EventHandler<object?>? ValueChanged;
 
-    public override void UpdateFromState(object? value) => _inner.UpdateFromState(value);
+    public override void UpdateFromState(PluginUiControlUpdate update) => _inner.UpdateFromState(update);
     public override void Reset() => _inner.Reset();
 }
 
@@ -183,8 +183,6 @@ public class AvaloniaTextBoxControl : AvaloniaPluginUiControl
     }
 
     public override event EventHandler<object?>? ValueChanged;
-
-    public override void UpdateFromState(object? value) => Value = value;
     public override void Reset() => _textBox.Clear();
 }
 
@@ -196,6 +194,7 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
     private readonly ComboBox _comboBox;
     private readonly string _name;
     private readonly ILocalizationService _localization;
+    private bool _suppressSelectionChanged;
 
     private sealed class OptionItem
     {
@@ -222,7 +221,15 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
 
         ApplyOptions(field.GetOptionsAsOptionList());
 
-        _comboBox.SelectionChanged += (_, _) => ValueChanged?.Invoke(this, GetSelectedValue());
+        _comboBox.SelectionChanged += (_, _) =>
+        {
+            if (_suppressSelectionChanged)
+            {
+                return;
+            }
+
+            ValueChanged?.Invoke(this, GetSelectedValue());
+        };
     }
 
     public override object? Value 
@@ -233,40 +240,16 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
 
     public override event EventHandler<object?>? ValueChanged;
 
-    public override void UpdateFromState(object? value)
+    public override void UpdateFromState(PluginUiControlUpdate update)
     {
-        if (value is System.Collections.IEnumerable enumerable && value is not string)
+        if (update.Kind == PluginUiControlUpdateKind.Options)
         {
-            var items = new List<OptionItem>();
-            foreach (var item in enumerable)
-            {
-                if (item is null)
-                {
-                    continue;
-                }
-
-                items.Add(new OptionItem(item, item.ToString() ?? string.Empty));
-            }
-
-            ApplyItems(items);
+            ApplyOptionsFromState(update.Value);
+            return;
         }
-        else if (value is JsonElement element && element.ValueKind == JsonValueKind.Array)
-        {
-            var items = new List<OptionItem>();
-            foreach (var item in element.EnumerateArray())
-            {
-                if (TryParseOptionItem(item, out var parsed))
-                {
-                    items.Add(parsed);
-                }
-            }
 
-            ApplyItems(items);
-        }
-        else
-        {
-            Value = value;
-        }
+        // Value update
+        Value = update.Value;
     }
 
     public override void Reset() => _comboBox.SelectedIndex = -1;
@@ -311,8 +294,50 @@ public class AvaloniaComboBoxControl : AvaloniaPluginUiControl
     private void ApplyItems(List<OptionItem> items)
     {
         var current = GetSelectedValue();
-        _comboBox.ItemsSource = items;
-        SetSelectedValue(current);
+        _suppressSelectionChanged = true;
+        try
+        {
+            _comboBox.ItemsSource = items;
+            SetSelectedValue(current);
+        }
+        finally
+        {
+            _suppressSelectionChanged = false;
+        }
+    }
+
+    private void ApplyOptionsFromState(object? value)
+    {
+        if (value is System.Collections.IEnumerable enumerable && value is not string)
+        {
+            var items = new List<OptionItem>();
+            foreach (var item in enumerable)
+            {
+                if (item is null)
+                {
+                    continue;
+                }
+
+                items.Add(new OptionItem(item, item.ToString() ?? string.Empty));
+            }
+
+            ApplyItems(items);
+            return;
+        }
+
+        if (value is JsonElement element && element.ValueKind == JsonValueKind.Array)
+        {
+            var items = new List<OptionItem>();
+            foreach (var item in element.EnumerateArray())
+            {
+                if (TryParseOptionItem(item, out var parsed))
+                {
+                    items.Add(parsed);
+                }
+            }
+
+            ApplyItems(items);
+        }
     }
 
     private object? GetSelectedValue()
@@ -572,8 +597,6 @@ public sealed class AvaloniaNumberControl : AvaloniaPluginUiControl
 
     public override event EventHandler<object?>? ValueChanged;
 
-    public override void UpdateFromState(object? value) => Value = value;
-
     public override void Reset() => _numeric.Value = null;
 }
 
@@ -621,8 +644,6 @@ public sealed class AvaloniaCheckBoxControl : AvaloniaPluginUiControl
     }
 
     public override event EventHandler<object?>? ValueChanged;
-
-    public override void UpdateFromState(object? value) => Value = value;
 
     public override void Reset() => _checkBox.IsChecked = false;
 }

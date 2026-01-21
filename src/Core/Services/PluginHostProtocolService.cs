@@ -71,8 +71,8 @@ public sealed class PluginHostProtocolService
             return (false, "Invalid sessionId.");
         }
 
-        // ADR-010 closure: session-scoped backpressure must target the active exclusive session.
-        if (!runtime.IsExclusiveSession(sessionId))
+        // Multi-session: backpressure is per-session and requires the session to be open.
+        if (!runtime.IsSessionOpen(sessionId))
         {
             _logger.LogDebug(
                 "SetBackpressure rejected: session not active. PluginId={PluginId}, SessionId={SessionId}",
@@ -116,7 +116,8 @@ public sealed class PluginHostProtocolService
         PluginRuntime runtime,
         string capabilityId,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -145,9 +146,8 @@ public sealed class PluginHostProtocolService
         // Sessionless UI (e.g., connect dialog) should pass sessionId: null.
         if (sessionId is not null)
         {
-            // ADR-010 (breaking closure): under the single-session model, session-scoped UI must target
-            // the currently active (exclusive) session.
-            if (!runtime.IsExclusiveSession(sessionId))
+            // Multi-session: session-scoped UI must target an open session.
+            if (!runtime.IsSessionOpen(sessionId))
             {
                 _logger.LogDebug(
                     "GetUiState rejected: session not active. PluginId={PluginId}, SessionId={SessionId}, CapabilityId={CapabilityId}",
@@ -171,7 +171,7 @@ public sealed class PluginHostProtocolService
         }
 
         var payload = JsonSerializer.SerializeToElement(
-            new PluginHostGetUiStatePayload(capabilityId, sessionId, viewId),
+            new PluginHostGetUiStatePayload(capabilityId, sessionId, viewKind, viewInstanceId),
             JsonOptions);
 
         var response = await runtime.Client.SendAsync(
@@ -231,15 +231,6 @@ public sealed class PluginHostProtocolService
 
         var sessionId = $"session-{Guid.NewGuid():N}";
 
-        // ADR-010 finalization: current writer injection model is single-session per runtime.
-        if (!runtime.TryBeginExclusiveSession(sessionId))
-        {
-            _logger.LogWarning(
-                "Connect rejected: another session already active. PluginId={PluginId}, CapabilityId={CapabilityId}",
-                runtime.Info.Manifest.Id,
-                capabilityId);
-            return new PluginConnectResult(false, "Another session is already active for this plugin runtime.");
-        }
         runtime.BeginSessionRegistration(sessionId);
 
         _logger.LogInformation(
@@ -257,7 +248,7 @@ public sealed class PluginHostProtocolService
 
         if (response is null)
         {
-            runtime.EndExclusiveSession(sessionId);
+            runtime.EndSession(sessionId);
             return new PluginConnectResult(false, "Plugin host unavailable.");
         }
 
@@ -270,7 +261,7 @@ public sealed class PluginHostProtocolService
                 {
                     if (!result.Ok)
                     {
-                        runtime.EndExclusiveSession(sessionId);
+                        runtime.EndSession(sessionId);
                         return result with { SessionId = sessionId };
                     }
 
@@ -436,7 +427,7 @@ public sealed class PluginHostProtocolService
 
         if (!response.Ok)
         {
-            runtime.EndExclusiveSession(sessionId);
+            runtime.EndSession(sessionId);
             return new PluginConnectResult(false, response.Error);
         }
 
@@ -548,12 +539,6 @@ public sealed class PluginHostProtocolService
             sessionId,
             reason);
 
-        // ADR-010 closure: disconnect is session-scoped under the single-session runtime model.
-        if (!string.IsNullOrWhiteSpace(sessionId) && !runtime.IsExclusiveSession(sessionId))
-        {
-            return new PluginCommandResult(false, "Session is not active.");
-        }
-
         async Task CleanupAsync()
         {
             if (string.IsNullOrWhiteSpace(sessionId))
@@ -571,7 +556,7 @@ public sealed class PluginHostProtocolService
 
             try
             {
-                runtime.EndExclusiveSession(sessionId);
+                runtime.EndSession(sessionId);
             }
             catch
             {
@@ -627,7 +612,7 @@ public sealed class PluginHostProtocolService
             return new SegmentUpgradeResult(false, "Missing sessionId.");
         }
 
-        if (!runtime.IsExclusiveSession(sessionId))
+        if (!runtime.IsSessionOpen(sessionId))
         {
             return new SegmentUpgradeResult(false, "Session is not active.");
         }
@@ -691,7 +676,7 @@ public sealed class PluginHostProtocolService
             return new SegmentUpgradeResult(false, "Missing sessionId.");
         }
 
-        if (!runtime.IsExclusiveSession(sessionId))
+        if (!runtime.IsSessionOpen(sessionId))
         {
             return new SegmentUpgradeResult(false, "Session is not active.");
         }

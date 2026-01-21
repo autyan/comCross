@@ -121,13 +121,6 @@
       "icon": "⟳",
       "kind": "host",
       "hostAction": "comcross.serial.refreshPorts"
-    },
-    {
-      "id": "connect",
-      "labelKey": "serial.adapter.connect.action.connect",
-      "kind": "host",
-      "hostAction": "comcross.session.connect",
-      "extraParameters": { "adapter": "serial" }
     }
   ]
 }

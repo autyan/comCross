@@ -84,7 +84,7 @@
                                     <!-- Session Info -->
                                     <StackPanel Grid.Row="0" Grid.Column="1">
                                         <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding Port}" FontSize="11" Foreground="#87909B" />
+                                        <TextBlock Text="{Binding Endpoint}" FontSize="11" Foreground="#87909B" />
                                     </StackPanel>
                                     
                                     <!-- Settings Button -->

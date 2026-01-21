@@ -20,6 +20,8 @@ public sealed class WorkspaceService
     private readonly WorkloadService _workloadService;
     private readonly WorkspaceMigrationService _migrationService;
 
+    private bool _sessionsRestored;
+
     public WorkspaceService(
         DeviceService deviceService,
         IMessageStreamService messageStream,
@@ -196,8 +198,68 @@ public sealed class WorkspaceService
         
         // Ensure default workload exists
         state.EnsureDefaultWorkload();
+
+        // Restore persisted sessions as disconnected (no auto-reconnect).
+        if (!_sessionsRestored)
+        {
+            RestoreSessionsFromState(state);
+            _sessionsRestored = true;
+        }
         
         return state;
+    }
+
+    private void RestoreSessionsFromState(WorkspaceState state)
+    {
+        // Prefer v0.4+ descriptors.
+        if (state.SessionDescriptors is { Count: > 0 })
+        {
+            foreach (var descriptor in state.SessionDescriptors)
+            {
+                _deviceService.RestoreSession(descriptor);
+            }
+
+            return;
+        }
+
+        // Legacy v0.3 sessions: best-effort map to serial.adapter/serial.
+        #pragma warning disable CS0618 // Type or member is obsolete
+        if (state.Sessions is { Count: > 0 })
+        {
+            foreach (var legacy in state.Sessions)
+            {
+                if (string.IsNullOrWhiteSpace(legacy.Id))
+                {
+                    continue;
+                }
+
+                var parameters = new
+                {
+                    port = legacy.Port,
+                    baudRate = legacy.Settings.BaudRate,
+                    dataBits = legacy.Settings.DataBits,
+                    parity = legacy.Settings.Parity.ToString(),
+                    stopBits = legacy.Settings.StopBits.ToString(),
+                    flowControl = legacy.Settings.FlowControl.ToString()
+                };
+
+                state.SessionDescriptors.Add(new SessionDescriptor
+                {
+                    Id = legacy.Id,
+                    Name = legacy.Name,
+                    AdapterId = "plugin:serial.adapter:serial",
+                    PluginId = "serial.adapter",
+                    CapabilityId = "serial",
+                    ParametersJson = System.Text.Json.JsonSerializer.Serialize(parameters)
+                });
+            }
+
+            foreach (var descriptor in state.SessionDescriptors)
+            {
+                _deviceService.RestoreSession(descriptor);
+            }
+        }
+        #pragma warning restore CS0618
     }
     
     /// <summary>
@@ -230,29 +292,25 @@ public sealed class WorkspaceService
     {
         // Get current workloads from WorkloadService
         var workloads = await _workloadService.GetAllWorkloadsAsync();
-        
-        // Build session state with WorkloadId for recovery
-        var sessionStates = sessions.Select(s => new SessionState
+
+        // Persist session definitions (committed state only; no draft).
+        var descriptors = sessions.Select(s => new SessionDescriptor
         {
             Id = s.Id,
-            Port = s.Port,
             Name = s.Name,
-            Settings = s.Settings,
-            Connected = s.Status == SessionStatus.Connected,
-            Metrics = new MetricsState
-            {
-                Rx = s.RxBytes,
-                Tx = s.TxBytes
-            },
-            // Associate session with workload for data recovery
-            WorkloadId = FindWorkloadForSession(workloads, s.Id)
+            AdapterId = s.AdapterId,
+            PluginId = s.PluginId,
+            CapabilityId = s.CapabilityId,
+            ParametersJson = s.ParametersJson,
+            EnableDatabaseStorage = s.EnableDatabaseStorage
         }).ToList();
-        
+
         return new WorkspaceState
         {
             Version = "0.4.0",
             WorkspaceId = "default",
             Workloads = workloads,
+            SessionDescriptors = descriptors,
             UiState = new UiState
             {
                 ActiveSessionId = activeSession?.Id,

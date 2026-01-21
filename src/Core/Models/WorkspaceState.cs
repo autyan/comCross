@@ -40,6 +40,13 @@ public sealed class WorkspaceState
     /// </summary>
     [Obsolete("Use Workloads instead. This property is only for v0.3 migration.")]
     public List<SessionState>? Sessions { get; set; }
+
+    /// <summary>
+    /// Persisted session definitions (v0.4+).
+    /// Sessions are restored as Disconnected on startup; no auto-reconnect.
+    /// ParametersJson represents the last successful connection parameters.
+    /// </summary>
+    public List<SessionDescriptor> SessionDescriptors { get; set; } = new();
     
     /// <summary>
     /// UI state.
@@ -71,6 +78,17 @@ public sealed class WorkspaceState
             Workloads.Insert(0, defaultWorkload);
         }
     }
+}
+
+public sealed class SessionDescriptor
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string AdapterId { get; set; } = string.Empty;
+    public string? PluginId { get; set; }
+    public string? CapabilityId { get; set; }
+    public string? ParametersJson { get; set; }
+    public bool EnableDatabaseStorage { get; set; }
 }
 
 public sealed class SessionState

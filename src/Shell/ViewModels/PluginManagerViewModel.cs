@@ -350,7 +350,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
         string pluginId,
         string capabilityId,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId,
         TimeSpan timeout)
     {
         try
@@ -365,7 +366,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 runtime,
                 capabilityId,
                 sessionId,
-                viewId,
+                viewKind,
+                viewInstanceId,
                 timeout);
 
             return ok && snapshot is not null ? snapshot.State : null;
@@ -533,7 +535,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
         string pluginId,
         string capabilityId,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId,
         TimeSpan timeout)
     {
         var runtime = _pluginManagerService.GetRuntime(pluginId);
@@ -546,7 +549,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
             runtime,
             capabilityId,
             sessionId,
-            viewId,
+            viewKind,
+            viewInstanceId,
             timeout);
 
         if (!result.Ok || result.Snapshot is null)

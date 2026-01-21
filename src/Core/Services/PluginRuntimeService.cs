@@ -196,33 +196,41 @@ public sealed class PluginRuntimeService
 
     private void CleanupRuntimeSessionBestEffort(PluginRuntime runtime, string reason)
     {
-        var sessionId = runtime.GetExclusiveSessionId();
-        if (string.IsNullOrWhiteSpace(sessionId))
+        var sessionIds = runtime.GetOpenSessionIdsSnapshot();
+        if (sessionIds.Count == 0)
         {
             return;
         }
 
-        _logger.LogInformation(
-            "Cleaning up runtime session (best-effort): {PluginId}, SessionId={SessionId}, Reason={Reason}",
-            runtime.Info.Manifest.Id,
-            sessionId,
-            reason);
+        foreach (var sessionId in sessionIds)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                continue;
+            }
 
-        try
-        {
-            runtime.EndExclusiveSession(sessionId);
-        }
-        catch
-        {
-        }
+            _logger.LogInformation(
+                "Cleaning up runtime session (best-effort): {PluginId}, SessionId={SessionId}, Reason={Reason}",
+                runtime.Info.Manifest.Id,
+                sessionId,
+                reason);
 
-        try
-        {
-            // Deterministic cleanup for leaked segments/readers when host crashes or is restarted.
-            _sharedMemorySessionService.CleanupAsync(sessionId).GetAwaiter().GetResult();
-        }
-        catch
-        {
+            try
+            {
+                runtime.EndSession(sessionId);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                // Deterministic cleanup for leaked segments/readers when host crashes or is restarted.
+                _sharedMemorySessionService.CleanupAsync(sessionId).GetAwaiter().GetResult();
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -447,8 +455,7 @@ public sealed class PluginRuntimeService
 
                 if (invalidated.SessionId is not null)
                 {
-                    // Under single-session-per-runtime model, only accept invalidations for the active exclusive session.
-                    if (!runtime.IsExclusiveSession(invalidated.SessionId))
+                    if (!runtime.IsSessionOpen(invalidated.SessionId))
                     {
                         return false;
                     }
@@ -613,15 +620,15 @@ public sealed class PluginRuntime
 
     private readonly object _sessionSync = new();
     private readonly Dictionary<string, TaskCompletionSource<bool>> _sessionRegistrations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _openSessions = new(StringComparer.Ordinal);
     private readonly HashSet<string> _activeSessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<IDisposable>> _sessionDisposables = new(StringComparer.Ordinal);
-    private string? _exclusiveSessionId;
 
-    public string? GetExclusiveSessionId()
+    public IReadOnlyList<string> GetOpenSessionIdsSnapshot()
     {
         lock (_sessionSync)
         {
-            return _exclusiveSessionId;
+            return _openSessions.ToArray();
         }
     }
 
@@ -710,9 +717,9 @@ public sealed class PluginRuntime
         lock (_sessionSync)
         {
             FailAllPendingSessionRegistrationsLocked();
+            _openSessions.Clear();
             _activeSessions.Clear();
             DisposeAllSessionResourcesLocked();
-            _exclusiveSessionId = null;
         }
     }
 
@@ -725,6 +732,7 @@ public sealed class PluginRuntime
 
         lock (_sessionSync)
         {
+            _openSessions.Add(sessionId);
             _activeSessions.Remove(sessionId);
 
             if (_sessionRegistrations.TryGetValue(sessionId, out var existing))
@@ -742,7 +750,7 @@ public sealed class PluginRuntime
         }
     }
 
-    public bool TryBeginExclusiveSession(string sessionId)
+    public bool IsSessionOpen(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -751,26 +759,7 @@ public sealed class PluginRuntime
 
         lock (_sessionSync)
         {
-            if (!string.IsNullOrWhiteSpace(_exclusiveSessionId))
-            {
-                return false;
-            }
-
-            _exclusiveSessionId = sessionId;
-            return true;
-        }
-    }
-
-    public bool IsExclusiveSession(string sessionId)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            return false;
-        }
-
-        lock (_sessionSync)
-        {
-            return string.Equals(_exclusiveSessionId, sessionId, StringComparison.Ordinal);
+            return _openSessions.Contains(sessionId);
         }
     }
 
@@ -787,7 +776,7 @@ public sealed class PluginRuntime
         }
     }
 
-    public void EndExclusiveSession(string? sessionId)
+    public void EndSession(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -796,11 +785,7 @@ public sealed class PluginRuntime
 
         lock (_sessionSync)
         {
-            if (string.Equals(_exclusiveSessionId, sessionId, StringComparison.Ordinal))
-            {
-                _exclusiveSessionId = null;
-            }
-
+            _openSessions.Remove(sessionId);
             _activeSessions.Remove(sessionId);
             DisposeSessionResourcesLocked(sessionId);
             if (_sessionRegistrations.TryGetValue(sessionId, out var pending))
@@ -923,9 +908,8 @@ public sealed class PluginRuntime
         TaskCompletionSource<bool>? tcs;
         lock (_sessionSync)
         {
-            // ADR-010 closure: single-session-per-runtime.
-            // Only accept session-registered events for the current exclusive session.
-            if (!string.Equals(_exclusiveSessionId, sessionId, StringComparison.Ordinal))
+            // Multi-session: only accept session-registered events for sessions we have initiated.
+            if (!_openSessions.Contains(sessionId))
             {
                 return;
             }
@@ -968,8 +952,8 @@ public sealed class PluginRuntime
         lock (_sessionSync)
         {
             FailAllPendingSessionRegistrationsLocked();
+            _openSessions.Clear();
             _activeSessions.Clear();
-            _exclusiveSessionId = null;
         }
     }
 
@@ -1018,9 +1002,9 @@ public sealed class PluginRuntime
         lock (_sessionSync)
         {
             FailAllPendingSessionRegistrationsLocked();
+            _openSessions.Clear();
             _activeSessions.Clear();
             DisposeAllSessionResourcesLocked();
-            _exclusiveSessionId = null;
         }
 
         lock (_sessionSync)
@@ -1037,9 +1021,9 @@ public sealed class PluginRuntime
             }
 
             _sessionRegistrations.Clear();
+            _openSessions.Clear();
             _activeSessions.Clear();
             DisposeAllSessionResourcesLocked();
-            _exclusiveSessionId = null;
         }
     }
 }

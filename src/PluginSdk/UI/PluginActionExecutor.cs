@@ -19,9 +19,9 @@ public class PluginActionExecutor
     /// 执行连接动作
     /// 将从 StateManager 提取当前 UI 状态作为连接参数
     /// </summary>
-    public async Task ExecuteConnectAsync(string pluginId, string capabilityId, string? sessionId = null)
+    public async Task ExecuteConnectAsync(string pluginId, string capabilityId, PluginUiViewScope viewScope, string? sessionId = null)
     {
-        var parameters = _stateManager.GetState(sessionId);
+        var parameters = _stateManager.GetState(viewScope, sessionId);
         
         // 包装成标准连接负载
         var payload = new 
@@ -46,13 +46,13 @@ public class PluginActionExecutor
     /// <summary>
     /// 执行普通业务动作
     /// </summary>
-    public async Task ExecuteActionAsync(string pluginId, string? sessionId, string actionName, object? extraParams = null)
+    public async Task ExecuteActionAsync(string pluginId, PluginUiViewScope viewScope, string? sessionId, string actionName, object? extraParams = null)
     {
         // 可以合并 UI 状态和额外参数
-        var finalParams = _stateManager.GetState(sessionId);
+        var finalParams = _stateManager.GetState(viewScope, sessionId);
         // ... 合并逻辑 (略)
-        
-        await _link.SendActionAsync(pluginId, sessionId, actionName, extraParams);
+
+        await _link.SendActionAsync(pluginId, sessionId, actionName, extraParams ?? finalParams);
     }
 }
 

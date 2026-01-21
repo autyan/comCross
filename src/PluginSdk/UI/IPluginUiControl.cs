@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json;
 
 namespace ComCross.PluginSdk.UI;
 
@@ -30,9 +29,10 @@ public interface IPluginUiControl
     event EventHandler<object?>? ValueChanged;
 
     /// <summary>
-    /// 根据插件下发的 UI State 更新控件内容（如下拉选项、默认值、状态等）
+    /// Update control from host-provided state with explicit context.
+    /// This is the only supported update mechanism.
     /// </summary>
-    void UpdateFromState(object? state);
+    void UpdateFromState(PluginUiControlUpdate update);
 
     /// <summary>
     /// 重置为初始默认状态

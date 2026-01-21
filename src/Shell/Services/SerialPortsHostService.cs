@@ -18,6 +18,10 @@ public sealed class SerialPortsHostService
     public const string SerialCapabilityId = "serial";
     public const string RefreshPortsHostAction = "comcross.serial.refreshPorts";
 
+    private const string BusAdapterViewKind = "bus-adapter";
+    private static readonly PluginUiViewScope BusAdapterScope = new(BusAdapterViewKind);
+    private static readonly PluginUiViewScope SettingsScope = new("settings");
+
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginUiConfigService _pluginUiConfigService;
     private readonly PluginManagerService _pluginManagerService;
@@ -44,23 +48,65 @@ public sealed class SerialPortsHostService
         }
 
         var scanPatterns = await TryGetScanPatternsAsync(pluginId);
-        var ports = SerialPortScanHelper.GetPorts(scanPatterns);
+        var ports = SerialPortScanHelper.GetPorts(scanPatterns).ToList();
 
-        _stateManager.UpdateStates(sessionId, new Dictionary<string, object>
+        // Keep committed port selectable even if the scan list temporarily misses it.
+        var currentState = _stateManager.GetState(BusAdapterScope, sessionId);
+        var committedPort = TryGetCommittedPort(currentState);
+        if (!string.IsNullOrWhiteSpace(committedPort)
+            && !ports.Contains(committedPort, StringComparer.Ordinal))
+        {
+            ports.Insert(0, committedPort);
+        }
+
+        var portsUpdate = new Dictionary<string, object>
         {
             ["ports"] = ports
-        });
+        };
 
-        // If port is unset, pick a reasonable default.
-        var current = _stateManager.GetState(sessionId);
-        if ((!current.TryGetValue("port", out var portObj) || string.IsNullOrWhiteSpace(portObj?.ToString()))
-            && ports.Count > 0)
+        _stateManager.UpdateStates(BusAdapterScope, sessionId, portsUpdate);
+
+        // If port is unset, prefer committed defaultParameters.port, otherwise pick the first scanned port.
+        EnsurePortDefault(BusAdapterScope, sessionId, ports, committedPort);
+    }
+
+    private void EnsurePortDefault(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        IReadOnlyList<string> ports,
+        string? committedPort)
+    {
+        var current = _stateManager.GetState(viewScope, sessionId);
+        if (!current.TryGetValue("port", out var portObj) || string.IsNullOrWhiteSpace(portObj?.ToString()))
         {
-            _stateManager.UpdateStates(sessionId, new Dictionary<string, object>
+            var chosen = !string.IsNullOrWhiteSpace(committedPort)
+                ? committedPort
+                : ports.Count > 0
+                    ? ports[0]
+                    : null;
+
+            if (string.IsNullOrWhiteSpace(chosen))
             {
-                ["port"] = ports[0]
+                return;
+            }
+
+            _stateManager.UpdateStates(viewScope, sessionId, new Dictionary<string, object>
+            {
+                ["port"] = chosen!
             });
         }
+    }
+
+    private static string? TryGetCommittedPort(IDictionary<string, object> state)
+    {
+        if (TryGetPath(state, "defaultParameters.port", out var v) && v is not null)
+        {
+            var unwrapped = UnwrapJsonScalar(v);
+            var s = unwrapped?.ToString();
+            return string.IsNullOrWhiteSpace(s) ? null : s;
+        }
+
+        return null;
     }
 
     public void ApplySchemaDefaults(string? sessionId, PluginUiSchema schema)
@@ -70,7 +116,12 @@ public sealed class SerialPortsHostService
             return;
         }
 
-        var state = _stateManager.GetState(sessionId);
+        ApplySchemaDefaults(BusAdapterScope, sessionId, schema);
+    }
+
+    private void ApplySchemaDefaults(PluginUiViewScope viewScope, string? sessionId, PluginUiSchema schema)
+    {
+        var state = _stateManager.GetState(viewScope, sessionId);
         var updates = new Dictionary<string, object>(StringComparer.Ordinal);
 
         foreach (var field in schema.Fields)
@@ -111,7 +162,7 @@ public sealed class SerialPortsHostService
 
         if (updates.Count > 0)
         {
-            _stateManager.UpdateStates(sessionId, updates);
+            _stateManager.UpdateStates(viewScope, sessionId, updates);
         }
     }
 
@@ -134,7 +185,7 @@ public sealed class SerialPortsHostService
             pluginId,
             capabilityId: "settings:serial-scan",
             sessionId: null,
-            viewId: "settings");
+            viewKind: SettingsScope.ViewKind);
 
         if (persisted is not null && persisted.TryGetValue("scanPatterns", out var v) && v is not null)
         {

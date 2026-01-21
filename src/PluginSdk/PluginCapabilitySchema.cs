@@ -46,6 +46,12 @@ public sealed record PluginCapabilityDescriptor
     /// Shared memory request suggestion for sessions created by this capability.
     /// </summary>
     public SharedMemoryRequest? SharedMemoryRequest { get; init; }
+
+    /// <summary>
+    /// Whether this capability supports multiple concurrent sessions within a single plugin host process.
+    /// Default is false for backward compatibility.
+    /// </summary>
+    public bool SupportsMultiSession { get; init; } = false;
 }
 
 /// <summary>

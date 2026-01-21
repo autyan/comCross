@@ -237,7 +237,8 @@ public sealed class SettingsViewModel : BaseViewModel
                 PluginSettingsPanel = panel;
 
                 // Ensure final consistency: re-apply current state to the newly shown tree.
-                Dispatcher.UIThread.Post(() => _pluginUiStateManager.SwitchContext(sessionId: null));
+                var viewScope = new ComCross.PluginSdk.UI.PluginUiViewScope("settings", Localization.CurrentCulture);
+                Dispatcher.UIThread.Post(() => _pluginUiStateManager.SwitchContext(viewScope, sessionId: null));
             }
             else
             {
@@ -537,7 +538,8 @@ public sealed class SettingsViewModel : BaseViewModel
                     capabilityId,
                     schema,
                     sessionId: null,
-                    viewId: "settings");
+                    viewKind: "settings",
+                    viewInstanceId: culture);
 
                 if (cts.IsCancellationRequested || generation != _pluginSettingsWarmupGeneration)
                 {
@@ -549,12 +551,12 @@ public sealed class SettingsViewModel : BaseViewModel
                 {
                     if (_uiRenderer is ComCross.Shell.Plugins.UI.AvaloniaPluginUiRenderer avalonia)
                     {
-                        return avalonia.RenderNewPanel(target.PluginId, capabilityId, schema, sessionId: null, viewId: "settings");
+                        return avalonia.RenderNewPanel(target.PluginId, capabilityId, schema, sessionId: null, viewKind: "settings", viewInstanceId: culture);
                     }
 
                     // Fallback: replace the renderer cache (no multi-culture support).
-                    _uiRenderer.ClearCache(target.PluginId, capabilityId, sessionId: null, viewId: "settings");
-                    var container = _uiRenderer.GetOrRender(target.PluginId, capabilityId, schema, sessionId: null, viewId: "settings");
+                    _uiRenderer.ClearCache(target.PluginId, capabilityId, sessionId: null, viewKind: "settings", viewInstanceId: culture);
+                    var container = _uiRenderer.GetOrRender(target.PluginId, capabilityId, schema, sessionId: null, viewKind: "settings", viewInstanceId: culture);
                     return container is AvaloniaPluginUiContainer avaloniaContainer ? avaloniaContainer.GetPanel() : null;
                 });
 
@@ -597,7 +599,8 @@ public sealed class SettingsViewModel : BaseViewModel
                     && string.Equals(_selectedPluginSettingsPage.PageId, target.PageId, StringComparison.Ordinal))
                 {
                     PluginSettingsPanel = panel;
-                    _pluginUiStateManager.SwitchContext(sessionId: null);
+                    var viewScope = new ComCross.PluginSdk.UI.PluginUiViewScope("settings", culture);
+                    _pluginUiStateManager.SwitchContext(viewScope, sessionId: null);
                 }
 
                 // Yield so we don't block the UI thread with a long chain of renders.

@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Threading;
@@ -19,6 +20,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     private readonly IDisposable _sessionCreatedSubscription;
     private readonly IDisposable _sessionClosedSubscription;
+
+    private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
 
     private Session? _activeSession;
     private bool _isConnected;
@@ -42,6 +45,14 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
         _sessionClosedSubscription = _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
         SessionItems = new ItemVmCollection<SessionListItemViewModel, Session>(_sessionItemFactory);
+
+        _activeSessionPropertyChangedHandler = (_, args) =>
+        {
+            if (args.PropertyName == nameof(Session.Status) || string.IsNullOrEmpty(args.PropertyName))
+            {
+                IsConnected = _activeSession?.Status == SessionStatus.Connected;
+            }
+        };
     }
 
     public BusAdapterSelectorViewModel BusAdapterSelectorViewModel => _busAdapterSelectorViewModel;
@@ -82,9 +93,24 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         get => _activeSession;
         set
         {
+            var previous = _activeSession;
+            if (previous != null)
+            {
+                previous.PropertyChanged -= _activeSessionPropertyChangedHandler;
+            }
+
             if (!SetProperty(ref _activeSession, value))
             {
+                if (previous != null)
+                {
+                    previous.PropertyChanged += _activeSessionPropertyChangedHandler;
+                }
                 return;
+            }
+
+            if (_activeSession != null)
+            {
+                _activeSession.PropertyChanged += _activeSessionPropertyChangedHandler;
             }
 
             if (!_syncingSelection)
@@ -103,7 +129,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             }
 
             // Sync UI context management (ADR-010 / Plugin UI v0.4.0)
-            _pluginUiStateManager.SwitchContext(_activeSession?.Id);
+            _pluginUiStateManager.SwitchContext(new PluginUiViewScope(BusAdapterSelectorViewModel.BusAdapterViewKind), _activeSession?.Id);
             _busAdapterSelectorViewModel.SetActiveSession(_activeSession);
 
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
@@ -135,6 +161,9 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         var preferred = Sessions.FirstOrDefault(s => string.Equals(s.Id, _preferredActiveSessionId, StringComparison.Ordinal));
         if (preferred is null)
         {
+            // Preferred session is missing (deleted or stale persisted state).
+            // Clear it so new sessions can become active by default.
+            _preferredActiveSessionId = null;
             return;
         }
 
@@ -146,26 +175,72 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     {
         Dispatcher.UIThread.Post(() =>
         {
-            if (!Sessions.Any(s => s.Id == e.Session.Id))
+            var existing = Sessions.FirstOrDefault(s => s.Id == e.Session.Id);
+            if (existing is null)
             {
                 Sessions.Add(e.Session);
+                existing = e.Session;
+            }
+            else
+            {
+                ApplySessionUpdate(existing, e.Session);
             }
 
-            if (!SessionItems.Any(i => i.Session.Id == e.Session.Id))
+            // Keep SessionItems' Session reference consistent with Sessions.
+            var itemIndex = -1;
+            for (var i = 0; i < SessionItems.Count; i++)
             {
-                SessionItems.Add(e.Session);
+                if (SessionItems[i].Session.Id == existing.Id)
+                {
+                    itemIndex = i;
+                    break;
+                }
+            }
+
+            if (itemIndex < 0)
+            {
+                SessionItems.Add(existing);
+            }
+            else if (!ReferenceEquals(SessionItems[itemIndex].Session, existing))
+            {
+                var wasSelected = ReferenceEquals(SelectedSessionItem, SessionItems[itemIndex]);
+                var replacement = SessionItems.ReplaceAt(itemIndex, existing);
+                if (wasSelected)
+                {
+                    SelectedSessionItem = replacement;
+                }
             }
 
             // Prefer restoring last active session (if provided); otherwise activate the newly created one.
             if (!string.IsNullOrWhiteSpace(_preferredActiveSessionId))
             {
                 TryApplyPreferredActiveSession();
+
+                // If the preferred session id was stale/missing (common because sessions are not restored on startup),
+                // fall back to selecting the newly created session.
+                if (ActiveSession is null)
+                {
+                    ActiveSession = existing;
+                }
             }
             else
             {
-                ActiveSession = e.Session;
+                ActiveSession = existing;
             }
         });
+    }
+
+    private static void ApplySessionUpdate(Session target, Session source)
+    {
+        // Keep the existing Session instance to preserve bindings and list item viewmodels.
+        target.Name = source.Name;
+        target.AdapterId = source.AdapterId;
+        target.PluginId = source.PluginId;
+        target.CapabilityId = source.CapabilityId;
+        target.ParametersJson = source.ParametersJson;
+        target.EnableDatabaseStorage = source.EnableDatabaseStorage;
+        target.Status = source.Status;
+        target.StartTime = source.StartTime;
     }
 
     private void OnSessionClosed(SessionClosedEvent e)

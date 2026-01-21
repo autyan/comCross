@@ -56,18 +56,39 @@
   </ItemGroup>
 
   <ItemGroup>
-    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Flow\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Flow*" />
-    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Protocol\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Protocol*" />
-    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Stats\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Stats*" />
-    <BuiltInPluginFiles Include="..\Plugins\ComCross.Plugins.Serial\bin\$(Configuration)\$(TargetFramework)\ComCross.Plugins.Serial*" />
+    <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj">
+      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+    </BuiltInPluginProjects>
+    <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj">
+      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+    </BuiltInPluginProjects>
+    <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj">
+      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+    </BuiltInPluginProjects>
+    <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Serial\ComCross.Plugins.Serial.csproj">
+      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+    </BuiltInPluginProjects>
   </ItemGroup>
 
   <Target Name="CopyPluginHost" AfterTargets="Build">
     <Copy SourceFiles="@(PluginHostFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyBuiltInPlugins" AfterTargets="Build">
-    <MakeDir Directories="$(OutputPath)plugins" />
-    <Copy SourceFiles="@(BuiltInPluginFiles)" DestinationFolder="$(OutputPath)plugins" SkipUnchangedFiles="true" />
+  <Target Name="PublishBuiltInPlugins" AfterTargets="Build">
+    <PropertyGroup>
+      <!-- IMPORTANT: PublishDir must be absolute, otherwise it will be interpreted relative to each plugin project. -->
+      <_BuiltInPluginsOut>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\\$(OutputPath)plugins\\'))</_BuiltInPluginsOut>
+    </PropertyGroup>
+
+    <!-- Clean legacy flat layout to avoid loading stale plugin DLLs without dependencies. -->
+    <RemoveDir Directories="$(_BuiltInPluginsOut)" />
+    <MakeDir Directories="$(_BuiltInPluginsOut)" />
+
+    <!-- Publish each built-in plugin into its own folder so plugin-local managed deps and native assets are present in dev runs. -->
+    <MSBuild
+      Projects="@(BuiltInPluginProjects)"
+      Targets="Publish"
+      BuildInParallel="true"
+      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);PublishDir=$(_BuiltInPluginsOut)%(BuiltInPluginProjects.PluginPackageId)\;SelfContained=false" />
   </Target>
 </Project>

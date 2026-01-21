@@ -16,6 +16,7 @@
     <!-- Adapter Selection ComboBox -->
     <ComboBox ItemsSource="{Binding AdapterItems}"
               SelectedItem="{Binding SelectedAdapterItem}"
+              IsEnabled="{Binding CanEditConfiguration}"
               HorizontalAlignment="Stretch">
       <!--
         The dropdown list shows icon + name; the selection box should be compact.
@@ -63,6 +64,23 @@
     
     <!-- Configuration Panel Placeholder -->
     <!-- The actual config panel will be loaded dynamically based on selected adapter -->
-    <ContentControl Content="{Binding ConfigPanel}" />
+    <ContentControl Content="{Binding ConfigPanel}"
+            IsEnabled="{Binding CanEditConfiguration}" />
+
+    <!-- Connection Controls (Shell-owned, consistent across sidebar/dialog) -->
+    <Grid ColumnDefinitions="*,*" IsVisible="{Binding SelectedAdapterItem.IsEnabled}">
+      <Button Grid.Column="0"
+              Content="{Binding L[dialog.connect.connect]}"
+              Classes="accent"
+              Command="{Binding ConnectCommand}"
+              IsVisible="{Binding CanConnect}"
+              Margin="0,6,4,0" />
+
+      <Button Grid.Column="1"
+              Content="{Binding L[menu.disconnect]}"
+              Command="{Binding DisconnectCommand}"
+              IsVisible="{Binding CanDisconnect}"
+              Margin="4,6,0,0" />
+    </Grid>
   </StackPanel>
 </UserControl>

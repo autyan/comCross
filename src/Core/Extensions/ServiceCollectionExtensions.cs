@@ -48,6 +48,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WorkspaceService>();
         services.AddSingleton<ExportService>();
         services.AddSingleton<CommandService>();
+
+        // Persist committed session definitions (last successful connect parameters)
+        services.AddSingleton<SessionDescriptorPersistenceService>();
         
         // Business Coordinators (Domain Facades)
         services.AddSingleton<IWorkspaceCoordinator, WorkspaceCoordinator>();
@@ -65,6 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SharedMemoryManager>();
         services.AddSingleton<SharedMemoryReader>();
         services.AddSingleton<SharedMemorySessionService>();
+        services.AddSingleton<SharedMemoryFramePumpService>();
 
         // Plugin UI State (Part of Core Logic)
         services.AddSingleton<ComCross.PluginSdk.UI.PluginUiStateManager>();

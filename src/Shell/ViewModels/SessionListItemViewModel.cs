@@ -33,7 +33,7 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     public Session Session => _session ?? throw new InvalidOperationException("SessionListItemViewModel not initialized.");
 
     public string Name => Session.Name;
-    public string Port => Session.Port;
+    public string Endpoint => Session.Endpoint;
     public long RxBytes => Session.RxBytes;
     public long TxBytes => Session.TxBytes;
     public SessionStatus Status => Session.Status;
@@ -47,6 +47,10 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
         {
             case nameof(Session.Name):
                 OnPropertyChanged(nameof(Name));
+                break;
+            case nameof(Session.ParametersJson):
+            case nameof(Session.Endpoint):
+                OnPropertyChanged(nameof(Endpoint));
                 break;
             case nameof(Session.RxBytes):
                 OnPropertyChanged(nameof(RxBytes));

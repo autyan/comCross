@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.IO.MemoryMappedFiles;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -574,7 +575,7 @@ static PluginHostResponse HandleGetUiState(
 
     try
     {
-        var snapshot = provider.GetUiState(new PluginUiStateQuery(payload.CapabilityId, payload.SessionId, payload.ViewId));
+        var snapshot = provider.GetUiState(new PluginUiStateQuery(payload.CapabilityId, payload.SessionId, payload.ViewKind, payload.ViewInstanceId));
         var json = JsonSerializer.Serialize(snapshot, jsonOptions);
         var resultPayload = JsonDocument.Parse(json).RootElement.Clone();
         return new PluginHostResponse(request.Id, true, Payload: resultPayload);
@@ -772,6 +773,7 @@ sealed class HostState
 {
     private readonly string _entryPoint;
     private readonly string _pluginPath;
+    private PluginLoadContext? _loadContext;
 
     public HostState(string entryPoint, string pluginPath)
     {
@@ -794,8 +796,14 @@ sealed class HostState
     private SwitchableSharedMemoryWriter? _switchableWriter;
     private IDisposable? _currentWriterHandle;
 
+    private readonly object _multiWriterLock = new();
+    private readonly Dictionary<string, IDisposable> _writerHandlesBySession = new(StringComparer.Ordinal);
+
     private readonly object _sessionLock = new();
     private string? _activeSessionId;
+    private readonly HashSet<string> _activeSessions = new(StringComparer.Ordinal);
+
+    private bool SupportsMultiSession => Instance is IMultiSessionDevicePlugin;
 
     public void SetHostToken(string? token)
     {
@@ -832,7 +840,9 @@ sealed class HostState
     {
         try
         {
-            var assembly = Assembly.LoadFrom(_pluginPath);
+            UnloadContext();
+            _loadContext = new PluginLoadContext(_pluginPath);
+            var assembly = _loadContext.LoadFromAssemblyPath(Path.GetFullPath(_pluginPath));
             var type = assembly.GetType(_entryPoint, throwOnError: true);
             Instance = Activator.CreateInstance(type!);
             LoadError = null;
@@ -848,6 +858,25 @@ sealed class HostState
         }
     }
 
+    private void UnloadContext()
+    {
+        var ctx = _loadContext;
+        _loadContext = null;
+
+        if (ctx is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ctx.Unload();
+        }
+        catch
+        {
+        }
+    }
+
     public bool TryBeginSession(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
@@ -857,6 +886,12 @@ sealed class HostState
 
         lock (_sessionLock)
         {
+            if (SupportsMultiSession)
+            {
+                _activeSessions.Add(sessionId);
+                return true;
+            }
+
             if (string.IsNullOrWhiteSpace(_activeSessionId))
             {
                 _activeSessionId = sessionId;
@@ -871,6 +906,46 @@ sealed class HostState
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
+            return;
+        }
+
+        if (SupportsMultiSession)
+        {
+            lock (_sessionLock)
+            {
+                _activeSessions.Remove(sessionId);
+            }
+
+            // Dispose per-session writer handle (if any) and clear it from plugin.
+            if (Instance is IMultiSessionDevicePlugin multi)
+            {
+                try
+                {
+                    multi.ClearSharedMemoryWriter(sessionId);
+                }
+                catch
+                {
+                }
+            }
+
+            IDisposable? handle = null;
+            lock (_multiWriterLock)
+            {
+                if (_writerHandlesBySession.TryGetValue(sessionId, out var existing))
+                {
+                    handle = existing;
+                    _writerHandlesBySession.Remove(sessionId);
+                }
+            }
+
+            try
+            {
+                handle?.Dispose();
+            }
+            catch
+            {
+            }
+
             return;
         }
 
@@ -899,6 +974,11 @@ sealed class HostState
 
         lock (_sessionLock)
         {
+            if (SupportsMultiSession)
+            {
+                return _activeSessions.Contains(sessionId);
+            }
+
             return !string.IsNullOrWhiteSpace(_activeSessionId)
                 && string.Equals(_activeSessionId, sessionId, StringComparison.Ordinal);
         }
@@ -906,6 +986,36 @@ sealed class HostState
 
     private void ResetWriterState()
     {
+        // Multi-session writers: dispose all per-session handles.
+        Dictionary<string, IDisposable> handles;
+        lock (_multiWriterLock)
+        {
+            handles = new Dictionary<string, IDisposable>(_writerHandlesBySession, StringComparer.Ordinal);
+            _writerHandlesBySession.Clear();
+        }
+
+        foreach (var kvp in handles)
+        {
+            try
+            {
+                if (Instance is IMultiSessionDevicePlugin multi)
+                {
+                    multi.ClearSharedMemoryWriter(kvp.Key);
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                kvp.Value.Dispose();
+            }
+            catch
+            {
+            }
+        }
+
         lock (_writerLock)
         {
             _switchableWriter = null;
@@ -922,6 +1032,7 @@ sealed class HostState
         lock (_sessionLock)
         {
             _activeSessionId = null;
+            _activeSessions.Clear();
         }
     }
 
@@ -930,6 +1041,59 @@ sealed class HostState
         if (Instance is not IDevicePlugin plugin)
         {
             return false;
+        }
+
+        // Multi-session capable plugins receive a dedicated writer per session.
+        if (plugin is IMultiSessionDevicePlugin multi)
+        {
+            var mapFactory = new SharedMemoryMapFactory();
+            var useFileBackedOnUnix = !string.IsNullOrWhiteSpace(descriptor.UnixFilePath);
+            var handle = mapFactory.Create(new SharedMemoryMapOptions(
+                Name: descriptor.MapName,
+                CapacityBytes: descriptor.MapCapacityBytes,
+                UnixFilePath: descriptor.UnixFilePath,
+                UseFileBackedOnUnix: useFileBackedOnUnix,
+                DeleteUnixFileOnDispose: false));
+
+            var accessor = handle.Map.CreateViewAccessor(
+                descriptor.SegmentOffset,
+                descriptor.SegmentSize,
+                MemoryMappedFileAccess.ReadWrite);
+
+            var segment = new SessionSegment(sessionId, accessor, descriptor.SegmentSize, logger: null, initializeHeader: false);
+            var nextWriter = new MappedSessionSegmentWriter(segment, handle);
+
+            IDisposable? previous = null;
+            lock (_multiWriterLock)
+            {
+                if (_writerHandlesBySession.TryGetValue(sessionId, out var existing))
+                {
+                    previous = existing;
+                }
+
+                _writerHandlesBySession[sessionId] = nextWriter;
+            }
+
+            try
+            {
+                multi.SetSharedMemoryWriter(sessionId, nextWriter);
+            }
+            catch
+            {
+                // If injection fails, rollback the handle.
+                try { nextWriter.Dispose(); } catch { }
+                return false;
+            }
+
+            try
+            {
+                previous?.Dispose();
+            }
+            catch
+            {
+            }
+
+            return true;
         }
 
         lock (_writerLock)
@@ -1047,5 +1211,56 @@ sealed class HostState
         catch
         {
         }
+    }
+}
+
+sealed class PluginLoadContext : AssemblyLoadContext
+{
+    private static readonly HashSet<string> SharedAssemblies = new(StringComparer.Ordinal)
+    {
+        // Shared between host and plugin; must come from the default context to keep type identity.
+        "ComCross.PluginSdk",
+        "ComCross.Shared",
+        "ComCross.Platform",
+    };
+
+    private readonly AssemblyDependencyResolver _resolver;
+
+    public PluginLoadContext(string pluginAssemblyPath)
+        : base($"ComCross-PluginHost-{Path.GetFileNameWithoutExtension(pluginAssemblyPath)}-{Guid.NewGuid():N}", isCollectible: true)
+    {
+        _resolver = new AssemblyDependencyResolver(Path.GetFullPath(pluginAssemblyPath));
+    }
+
+    protected override Assembly? Load(AssemblyName assemblyName)
+    {
+        if (string.IsNullOrWhiteSpace(assemblyName.Name))
+        {
+            return null;
+        }
+
+        if (SharedAssemblies.Contains(assemblyName.Name))
+        {
+            return null;
+        }
+
+        var path = _resolver.ResolveAssemblyToPath(assemblyName);
+        if (path is null)
+        {
+            return null;
+        }
+
+        return LoadFromAssemblyPath(path);
+    }
+
+    protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
+    {
+        var path = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
+        if (path is null)
+        {
+            return IntPtr.Zero;
+        }
+
+        return LoadUnmanagedDllFromPath(path);
     }
 }

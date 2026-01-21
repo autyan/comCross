@@ -34,7 +34,7 @@ public sealed class TextInputDialogFactory : ITextInputDialogFactory
             title,
             label,
             text,
-            watermark,
+            watermark ?? string.Empty,
             okText,
             cancelText);
 

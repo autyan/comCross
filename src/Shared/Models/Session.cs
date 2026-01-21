@@ -9,6 +9,10 @@ namespace ComCross.Shared.Models;
 public sealed class Session : INotifyPropertyChanged
 {
     private string _name = string.Empty;
+    private string _adapterId = "serial";
+    private string? _pluginId;
+    private string? _capabilityId;
+    private string? _parametersJson;
     private SessionStatus _status;
     private DateTime? _startTime;
     private long _rxBytes;
@@ -22,36 +26,100 @@ public sealed class Session : INotifyPropertyChanged
         get => _name;
         set
         {
-            if (_name != value)
-            {
-                _name = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _name, value);
         }
     }
-    
-    public required string Port { get; init; }
-    public required int BaudRate { get; init; }
     
     /// <summary>
     /// Adapter ID used for this session (e.g., "serial", "plugin:com.example:tcp")
     /// </summary>
-    public string AdapterId { get; set; } = "serial";
+    public string AdapterId
+    {
+        get => _adapterId;
+        set => SetField(ref _adapterId, value);
+    }
     
     /// <summary>
     /// Plugin ID if this is a plugin-backed session
     /// </summary>
-    public string? PluginId { get; set; }
+    public string? PluginId
+    {
+        get => _pluginId;
+        set => SetField(ref _pluginId, value);
+    }
 
     /// <summary>
     /// Capability ID if this is a plugin-backed session
     /// </summary>
-    public string? CapabilityId { get; set; }
+    public string? CapabilityId
+    {
+        get => _capabilityId;
+        set => SetField(ref _capabilityId, value);
+    }
 
     /// <summary>
-    /// Additional parameters used to create this session (JSON)
+    /// Committed parameters used to create this session (JSON).
+    /// Represents the last successful connection parameters.
     /// </summary>
-    public string? ParametersJson { get; set; }
+    public string? ParametersJson
+    {
+        get => _parametersJson;
+        set
+        {
+            if (SetField(ref _parametersJson, value))
+            {
+                OnPropertyChanged(nameof(Endpoint));
+            }
+        }
+    }
+
+    /// <summary>
+    /// A best-effort, UI-friendly endpoint label derived from <see cref="ParametersJson"/>.
+    /// This is for display only; sessions do not own bus-specific fields.
+    /// </summary>
+    public string Endpoint
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_parametersJson))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(_parametersJson);
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                {
+                    return string.Empty;
+                }
+
+                // Convention-based common keys across bus adapters.
+                if (TryGetString(doc.RootElement, "port", out var port))
+                {
+                    return port;
+                }
+                if (TryGetString(doc.RootElement, "host", out var host))
+                {
+                    return host;
+                }
+                if (TryGetString(doc.RootElement, "address", out var address))
+                {
+                    return address;
+                }
+                if (TryGetString(doc.RootElement, "endpoint", out var endpoint))
+                {
+                    return endpoint;
+                }
+
+                return string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+    }
 
     /// <summary>
     /// Enable database storage for this session (overrides global default)
@@ -62,11 +130,7 @@ public sealed class Session : INotifyPropertyChanged
         get => _enableDatabaseStorage;
         set
         {
-            if (_enableDatabaseStorage != value)
-            {
-                _enableDatabaseStorage = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _enableDatabaseStorage, value);
         }
     }
     
@@ -75,11 +139,7 @@ public sealed class Session : INotifyPropertyChanged
         get => _status;
         set
         {
-            if (_status != value)
-            {
-                _status = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _status, value);
         }
     }
     
@@ -88,11 +148,7 @@ public sealed class Session : INotifyPropertyChanged
         get => _startTime;
         set
         {
-            if (_startTime != value)
-            {
-                _startTime = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _startTime, value);
         }
     }
     
@@ -101,11 +157,7 @@ public sealed class Session : INotifyPropertyChanged
         get => _rxBytes;
         set
         {
-            if (_rxBytes != value)
-            {
-                _rxBytes = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _rxBytes, value);
         }
     }
     
@@ -114,34 +166,43 @@ public sealed class Session : INotifyPropertyChanged
         get => _txBytes;
         set
         {
-            if (_txBytes != value)
-            {
-                _txBytes = value;
-                OnPropertyChanged();
-            }
+            SetField(ref _txBytes, value);
         }
     }
-    
-    public SerialSettings Settings { get; set; } = new();
-
-    // v0.4.0: Multi-protocol support
-    /// <summary>
-    /// List of protocol IDs enabled for this session.
-    /// Protocols can be switched dynamically during runtime.
-    /// </summary>
-    public List<string> ProtocolIds { get; set; } = new();
-
-    /// <summary>
-    /// Currently active protocol ID for parsing messages.
-    /// If null, raw bytes view is used.
-    /// </summary>
-    public string? ActiveProtocolId { get; set; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return false;
+        }
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private static bool TryGetString(System.Text.Json.JsonElement obj, string key, out string value)
+    {
+        if (obj.TryGetProperty(key, out var prop) && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var s = prop.GetString();
+            if (!string.IsNullOrWhiteSpace(s))
+            {
+                value = s;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 }
 

@@ -67,6 +67,12 @@ public class AppHost : IAppHost
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.InitializeAsync();
 
+            // 3.1 Start shared-memory RX pump (frames -> events + log stream)
+            _ = _serviceProvider.GetRequiredService<SharedMemoryFramePumpService>();
+
+            // 3.2 Start session descriptor persistence (committed state -> workspace-state.json)
+            _ = _serviceProvider.GetRequiredService<SessionDescriptorPersistenceService>();
+
             _isInitialized = true;
             _logger.LogInformation("Core Engine initialized successfully.");
         }

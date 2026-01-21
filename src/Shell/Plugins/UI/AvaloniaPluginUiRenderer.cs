@@ -28,24 +28,37 @@ public class AvaloniaPluginUiRenderer : PluginUiRenderer
         return new AvaloniaPluginUiContainer();
     }
 
-    public Control? RenderNewPanel(string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId = null, string? viewId = null)
+    public Control? RenderNewPanel(
+        string pluginId,
+        string capabilityId,
+        PluginUiSchema schema,
+        string? sessionId = null,
+        string? viewKind = null,
+        string? viewInstanceId = null)
     {
         var container = new AvaloniaPluginUiContainer();
-        RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewId);
+        RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewKind, viewInstanceId);
         return container.GetPanel();
     }
 
-    protected override void RenderToContainer(IPluginUiContainer container, string pluginId, string capabilityId, PluginUiSchema schema, string? sessionId, string? viewId)
+    protected override void RenderToContainer(
+        IPluginUiContainer container,
+        string pluginId,
+        string capabilityId,
+        PluginUiSchema schema,
+        string? sessionId,
+        string? viewKind,
+        string? viewInstanceId)
     {
         if (schema.Layout is null)
         {
-            base.RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewId);
+            base.RenderToContainer(container, pluginId, capabilityId, schema, sessionId, viewKind, viewInstanceId);
             return;
         }
 
         container.Clear();
 
-        var controls = BuildControls(pluginId, capabilityId, schema, sessionId, viewId);
+        var controls = BuildControls(pluginId, capabilityId, schema, sessionId, viewKind, viewInstanceId);
 
         if (container is not AvaloniaPluginUiContainer avaloniaContainer)
         {

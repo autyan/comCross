@@ -45,12 +45,13 @@ public sealed class PluginUiConfigService
         string pluginId,
         string capabilityId,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId = null,
         CancellationToken cancellationToken = default)
     {
         await EnsureLoadedAsync(cancellationToken);
 
-        var key = MakeRecordKey(pluginId, capabilityId, sessionId, viewId);
+        var key = MakeRecordKey(pluginId, capabilityId, sessionId, viewKind);
         lock (_gate)
         {
             if (!_records.TryGetValue(key, out var record))
@@ -79,18 +80,20 @@ public sealed class PluginUiConfigService
         string capabilityId,
         PluginUiSchema schema,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId = null,
         CancellationToken cancellationToken = default)
     {
-        var persisted = await TryLoadAsync(pluginId, capabilityId, sessionId, viewId, cancellationToken);
+        var persisted = await TryLoadAsync(pluginId, capabilityId, sessionId, viewKind, viewInstanceId, cancellationToken);
+        var viewScope = PluginUiViewScope.From(viewKind, viewInstanceId);
         if (persisted is not null)
         {
-            _stateManager.MergeState(sessionId, persisted);
+            _stateManager.MergeState(viewScope, sessionId, persisted);
             return;
         }
 
         // No record: apply defaults.
-        var currentState = _stateManager.GetState(sessionId);
+        var currentState = _stateManager.GetState(viewScope, sessionId);
         var defaults = new Dictionary<string, object>(StringComparer.Ordinal);
 
         foreach (var field in schema.Fields)
@@ -121,7 +124,7 @@ public sealed class PluginUiConfigService
 
         if (defaults.Count > 0)
         {
-            _stateManager.MergeState(sessionId, defaults);
+            _stateManager.MergeState(viewScope, sessionId, defaults);
         }
     }
 
@@ -129,13 +132,14 @@ public sealed class PluginUiConfigService
         string pluginId,
         string capabilityId,
         string? sessionId,
-        string? viewId,
+        string? viewKind,
+        string? viewInstanceId,
         IDictionary<string, object> values,
         CancellationToken cancellationToken = default)
     {
         await EnsureLoadedAsync(cancellationToken);
 
-        var key = MakeRecordKey(pluginId, capabilityId, sessionId, viewId);
+        var key = MakeRecordKey(pluginId, capabilityId, sessionId, viewKind);
 
         lock (_gate)
         {
@@ -156,6 +160,15 @@ public sealed class PluginUiConfigService
         await SaveFileAsync(cancellationToken);
     }
 
+    public Task SaveAsync(
+        string pluginId,
+        string capabilityId,
+        string? sessionId,
+        string? viewKind,
+        IDictionary<string, object> values,
+        CancellationToken cancellationToken = default)
+        => SaveAsync(pluginId, capabilityId, sessionId, viewKind, viewInstanceId: null, values, cancellationToken);
+
     private async void OnUiStateChanged(object? sender, PluginUiStateChangedEvent e)
     {
         // Persist only "default" (no-session) config.
@@ -168,9 +181,10 @@ public sealed class PluginUiConfigService
         // - settings:* are plugin settings pages
         // - connect-dialog is where users pick connection defaults
         var isSettings = e.CapabilityId.StartsWith("settings:", StringComparison.Ordinal);
-        var isConnect = string.Equals(e.ViewId, "connect-dialog", StringComparison.Ordinal);
-        var isSidebarConfig = string.Equals(e.ViewId, "sidebar-config", StringComparison.Ordinal);
-        if (!isSettings && !isConnect && !isSidebarConfig)
+        var isConnect = string.Equals(e.ViewKind, "connect-dialog", StringComparison.Ordinal);
+        var isSidebarConfig = string.Equals(e.ViewKind, "sidebar-config", StringComparison.Ordinal);
+        var isBusAdapter = string.Equals(e.ViewKind, "bus-adapter", StringComparison.Ordinal);
+        if (!isSettings && !isConnect && !isSidebarConfig && !isBusAdapter)
         {
             return;
         }
@@ -179,7 +193,7 @@ public sealed class PluginUiConfigService
         {
             await EnsureLoadedAsync();
 
-            var recordKey = MakeRecordKey(e.PluginId, e.CapabilityId, e.SessionId, e.ViewId);
+            var recordKey = MakeRecordKey(e.PluginId, e.CapabilityId, e.SessionId, e.ViewKind);
 
             lock (_gate)
             {
@@ -305,7 +319,10 @@ public sealed class PluginUiConfigService
     }
 
     private static string MakeRecordKey(string pluginId, string capabilityId, string? sessionId, string? viewId)
-        => $"{pluginId}::{capabilityId}::{(sessionId ?? "__default__")}::{(viewId ?? "default")}";
+    {
+        var kind = string.IsNullOrWhiteSpace(viewId) ? "default" : viewId;
+        return $"{pluginId}::{capabilityId}::{(sessionId ?? "__default__")}::{kind}";
+    }
 
     private static JsonElement ToJsonElement(object? value)
     {

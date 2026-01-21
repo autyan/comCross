@@ -8,13 +8,17 @@
         x:Class="ComCross.Shell.Views.ConnectDialog"
         x:DataType="vm:ConnectDialogViewModel"
         Title="{Binding L[dialog.connect.title]}"
-        Width="520" Height="520"
+        Width="520"
+        SizeToContent="Height"
+        MaxHeight="900"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
     <Grid RowDefinitions="*,Auto" Margin="24">
         <!-- Reuse the exact same entry UI as the sidebar -->
-        <views:BusAdapterSelector Grid.Row="0" DataContext="{Binding BusAdapterSelectorViewModel}" />
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <views:BusAdapterSelector DataContext="{Binding BusAdapterSelectorViewModel}" />
+        </ScrollViewer>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
             <Button Content="{Binding L[dialog.connect.cancel]}" Width="100" Click="OnCancelClick" />

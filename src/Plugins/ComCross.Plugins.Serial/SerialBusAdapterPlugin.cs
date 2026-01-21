@@ -11,9 +11,13 @@ using ComCross.PluginSdk;
 
 namespace ComCross.Plugins.Serial;
 
-public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPluginUiStateProvider, IPluginUiStateEventSource
+public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMultiSessionDevicePlugin, IPluginUiStateProvider, IPluginUiStateEventSource
 {
     private readonly CancellationTokenSource _cts = new();
+
+    private readonly object _sessionLock = new();
+    private readonly HashSet<string> _connectedSessions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ISharedMemoryWriter> _writersBySession = new(StringComparer.Ordinal);
 
     private const string SerialParametersSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.parameters.schema.json";
     private const string SerialConnectUiSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.connect.ui.schema.json";
@@ -50,6 +54,7 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
                 JsonSchema = ReadEmbeddedResource(SerialParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(SerialConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
+                SupportsMultiSession = true,
                 SharedMemoryRequest = new SharedMemoryRequest
                 {
                     MinBytes = 64 * 1024,
@@ -70,9 +75,18 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
         var ports = GetPortsSafe();
         var defaultPort = ports.FirstOrDefault();
 
+        var isConnected = _connected;
+        if (!string.IsNullOrWhiteSpace(query.SessionId))
+        {
+            lock (_sessionLock)
+            {
+                isConnected = _connectedSessions.Contains(query.SessionId);
+            }
+        }
+
         var state = new
         {
-            connected = _connected,
+            connected = isConnected,
             ports,
             defaultParameters = new
             {
@@ -174,26 +188,69 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
 
             serial.Open();
             serial.Close();
-            _connected = true;
+
+            lock (_sessionLock)
+            {
+                _connectedSessions.Add(command.SessionId);
+                _connected = _connectedSessions.Count > 0;
+            }
 
             return Task.FromResult(new PluginConnectResult(true, SessionId: command.SessionId));
         }
         catch (Exception ex)
         {
-            _connected = false;
+            lock (_sessionLock)
+            {
+                _connectedSessions.Remove(command.SessionId);
+                _connected = _connectedSessions.Count > 0;
+            }
             return Task.FromResult(new PluginConnectResult(false, ex.Message));
         }
     }
 
     public Task<PluginCommandResult> DisconnectAsync(PluginDisconnectCommand command, CancellationToken cancellationToken)
     {
-        _connected = false;
+        if (!string.IsNullOrWhiteSpace(command.SessionId))
+        {
+            lock (_sessionLock)
+            {
+                _connectedSessions.Remove(command.SessionId);
+                _writersBySession.Remove(command.SessionId);
+                _connected = _connectedSessions.Count > 0;
+            }
+        }
         return Task.FromResult(new PluginCommandResult(true));
     }
 
     public void SetSharedMemoryWriter(ISharedMemoryWriter writer)
     {
         // Not used yet for serial adapter (byte streaming to shared memory will be introduced later).
+    }
+
+    public void SetSharedMemoryWriter(string sessionId, ISharedMemoryWriter writer)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        lock (_sessionLock)
+        {
+            _writersBySession[sessionId] = writer;
+        }
+    }
+
+    public void ClearSharedMemoryWriter(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        lock (_sessionLock)
+        {
+            _writersBySession.Remove(sessionId);
+        }
     }
 
     public void SetBackpressureLevel(BackpressureLevel level)
@@ -212,7 +269,7 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IPlug
                 if (!ports.SequenceEqual(_lastPorts, StringComparer.Ordinal))
                 {
                     _lastPorts = ports;
-                    UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("serial", SessionId: null, ViewId: "connect-dialog", Reason: "ports-changed"));
+                    UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("serial", SessionId: null, ViewKind: "connect-dialog", Reason: "ports-changed"));
                 }
             }
         }
