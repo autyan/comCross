@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -49,7 +50,6 @@ public partial class RightToolDock : BaseUserControl
         if (DataContext is RightToolDockViewModel vm)
         {
             var sendBox = this.FindControl<TextBox>("SendMessageBox");
-            var hexMode = this.FindControl<CheckBox>("HexModeCheckBox");
             var addCr = this.FindControl<CheckBox>("AddCrCheckBox");
             var addLf = this.FindControl<CheckBox>("AddLfCheckBox");
             var clearAfterSend = this.FindControl<CheckBox>("ClearAfterSendCheckBox");
@@ -58,7 +58,7 @@ public partial class RightToolDock : BaseUserControl
             {
                 await vm.SendAsync(
                     sendBox.Text,
-                    hexMode?.IsChecked ?? false,
+                    vm.IsSendHexMode,
                     addCr?.IsChecked ?? false,
                     addLf?.IsChecked ?? false);
                     
@@ -68,6 +68,15 @@ public partial class RightToolDock : BaseUserControl
                     sendBox.Text = string.Empty;
                 }
             }
+        }
+    }
+
+    private void OnToggleSendMode(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.ToggleSendMode();
+            e.Handled = true;
         }
     }
 }

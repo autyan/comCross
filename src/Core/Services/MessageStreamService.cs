@@ -11,6 +11,9 @@ namespace ComCross.Core.Services;
 public sealed class MessageStreamService : IMessageStreamService
 {
     private readonly ConcurrentDictionary<string, SessionStream> _streams = new();
+    private readonly ConcurrentDictionary<string, bool> _paused = new(StringComparer.Ordinal);
+
+    public event Action<string>? ConsumptionResumed;
 
     private static void ThrowIfInvalidSessionId(string sessionId)
     {
@@ -71,6 +74,31 @@ public sealed class MessageStreamService : IMessageStreamService
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionStream());
         return stream.Subscribe(handler);
+    }
+
+    public bool IsConsumptionPaused(string sessionId)
+    {
+        ThrowIfInvalidSessionId(sessionId);
+        return _paused.TryGetValue(sessionId, out var paused) && paused;
+    }
+
+    public void SetConsumptionPaused(string sessionId, bool paused)
+    {
+        ThrowIfInvalidSessionId(sessionId);
+
+        var previous = _paused.TryGetValue(sessionId, out var existing) && existing;
+        _paused[sessionId] = paused;
+
+        if (previous && !paused)
+        {
+            try
+            {
+                ConsumptionResumed?.Invoke(sessionId);
+            }
+            catch
+            {
+            }
+        }
     }
 
     private sealed class SessionStream

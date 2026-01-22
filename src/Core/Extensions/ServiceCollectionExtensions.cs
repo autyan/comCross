@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
         // Plugin Runtime System
         services.AddSingleton<PluginDiscoveryService>();
         services.AddSingleton<PluginRuntimeService>();
+        services.AddSingleton<SessionHostRuntimeService>();
         services.AddSingleton<PluginManagerService>();
         services.AddSingleton<PluginHostProtocolService>();
         services.AddSingleton<ICapabilityDispatcher, CapabilityDispatcher>();
@@ -66,9 +67,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new SharedMemoryConfig());
         services.AddSingleton<ISharedMemoryMapFactory, SharedMemoryMapFactory>();
         services.AddSingleton<SharedMemoryManager>();
-        services.AddSingleton<SharedMemoryReader>();
+        services.AddSingleton<IFrameStore, InMemoryFrameStore>();
+        services.AddSingleton<SharedMemoryIngestService>();
         services.AddSingleton<SharedMemorySessionService>();
-        services.AddSingleton<SharedMemoryFramePumpService>();
+        services.AddSingleton<FrameStoreMessageStreamPumpService>();
+        services.AddSingleton<SharedMemoryBackpressureBridgeService>();
 
         // Plugin UI State (Part of Core Logic)
         services.AddSingleton<ComCross.PluginSdk.UI.PluginUiStateManager>();

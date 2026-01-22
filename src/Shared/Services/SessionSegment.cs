@@ -1,5 +1,7 @@
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
+using System.Buffers;
+using System.Buffers.Binary;
 using ComCross.PluginSdk;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +30,13 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     private const int OFFSET_READ_POS = 136;      // 136-143: ReadPosition (8 bytes)
     private const int OFFSET_FRAME_SEQ = 144;     // 144-151: FrameIdSequence (8 bytes)
     private const int OFFSET_SEGMENT_SIZE = 152;  // 152-155: SegmentSize (4 bytes)
+
+    // Frame payload wire header (stored inside the ring buffer frame data)
+    // [version:u16][flags:u8][reserved:u8][timestampUtcTicks:i64][rawLen:i32]
+    private const ushort WIRE_VERSION = 1;
+    private const int WIRE_HEADER_SIZE = 16;
+
+    public readonly record struct SharedMemoryFrameRecord(DateTime TimestampUtc, byte[] RawData);
     
     public SessionSegment(
         string sessionId,
@@ -64,8 +73,9 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
             return false;
         }
         
-        // 帧格式：[Length:4字节][Data:N字节]
-        int frameSize = 4 + data.Length;
+        // 帧格式：[Length:4字节][WireHeader:16字节][RawData:N字节]
+        int recordLength = WIRE_HEADER_SIZE + data.Length;
+        int frameSize = 4 + recordLength;
         
         // ✅ 边界检查1：检查单帧大小是否超过总容量
         if (frameSize > _dataSize)
@@ -99,11 +109,20 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
 
         // 写入Length（4字节）
         int logicalWritePos = (int)(writePosition % _dataSize);
-        WriteInt32Wrapped(logicalWritePos, data.Length);
-        
-        // 写入Data（处理环绕）
-        int dataWritePos = (int)((writePosition + 4) % _dataSize);
-        WriteDataWrapped(dataWritePos, data);
+        WriteInt32Wrapped(logicalWritePos, recordLength);
+
+        // 写入WireHeader + RawData（处理环绕）
+        int recordWritePos = (int)((writePosition + 4) % _dataSize);
+
+        Span<byte> header = stackalloc byte[WIRE_HEADER_SIZE];
+        BinaryPrimitives.WriteUInt16LittleEndian(header, WIRE_VERSION);
+        header[2] = 0; // flags
+        header[3] = 0; // reserved
+        BinaryPrimitives.WriteInt64LittleEndian(header.Slice(4, 8), DateTime.UtcNow.Ticks);
+        BinaryPrimitives.WriteInt32LittleEndian(header.Slice(12, 4), data.Length);
+
+        WriteBytesWrapped(recordWritePos, header);
+        WriteBytesWrapped((recordWritePos + WIRE_HEADER_SIZE) % _dataSize, data);
         
         // 更新WritePosition
         writePosition += frameSize;
@@ -121,43 +140,81 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     /// </summary>
     public bool TryReadFrame(out byte[] data)
     {
-        data = Array.Empty<byte>();
-        
-        if (_disposed)
+        // Compatibility wrapper: returns only RawData payload.
+        if (!TryReadFrameRecord(out var record))
+        {
+            data = Array.Empty<byte>();
             return false;
-        
+        }
+
+        data = record.RawData;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a wire record and returns decoded metadata + raw payload.
+    /// </summary>
+    public bool TryReadFrameRecord(out SharedMemoryFrameRecord record)
+    {
+        record = default;
+
+        if (_disposed)
+        {
+            return false;
+        }
+
         long writePosition = ReadWritePosition();
         long readPosition = ReadReadPosition();
 
-        // 检查是否有数据可读
         if (readPosition >= writePosition)
+        {
             return false;
-        
-        // 读取Length
+        }
+
         int logicalReadPos = (int)(readPosition % _dataSize);
-        int dataLength = ReadInt32Wrapped(logicalReadPos);
-        
-        // 验证长度合法性
-        if (dataLength <= 0 || dataLength > _dataSize)
+        int recordLength = ReadInt32Wrapped(logicalReadPos);
+        if (recordLength < WIRE_HEADER_SIZE || recordLength > _dataSize)
         {
             _logger?.LogError(
                 "[{SessionId}] 读取到非法长度：{Length}，跳过此帧",
-                _sessionId, dataLength);
+                _sessionId, recordLength);
             return false;
         }
-        
-        // 读取Data
-        int dataReadPos = (int)((readPosition + 4) % _dataSize);
-        data = ReadDataWrapped(dataReadPos, dataLength);
-        
-        // 更新ReadPosition
-        readPosition += 4 + dataLength;
+
+        int recordReadPos = (int)((readPosition + 4) % _dataSize);
+
+        // Read header
+        Span<byte> header = stackalloc byte[WIRE_HEADER_SIZE];
+        ReadBytesWrapped(recordReadPos, header);
+
+        var version = BinaryPrimitives.ReadUInt16LittleEndian(header);
+        if (version != WIRE_VERSION)
+        {
+            _logger?.LogError(
+                "[{SessionId}] Wire version mismatch: {Version}",
+                _sessionId, version);
+            return false;
+        }
+
+        var ticks = BinaryPrimitives.ReadInt64LittleEndian(header.Slice(4, 8));
+        var rawLen = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(12, 4));
+
+        if (rawLen < 0 || rawLen > _dataSize || recordLength != WIRE_HEADER_SIZE + rawLen)
+        {
+            _logger?.LogError(
+                "[{SessionId}] 读取到非法payload长度：{Length}，跳过此帧",
+                _sessionId, rawLen);
+            return false;
+        }
+
+        var rawReadPos = (recordReadPos + WIRE_HEADER_SIZE) % _dataSize;
+        var raw = ReadDataWrapped(rawReadPos, rawLen);
+
+        // advance
+        readPosition += 4 + recordLength;
         WriteReadPosition(readPosition);
-        
-        _logger?.LogTrace(
-            "[{SessionId}] 读取帧，大小{Size}字节，ReadPos={ReadPos}",
-            _sessionId, dataLength, readPosition);
-        
+
+        record = new SharedMemoryFrameRecord(new DateTime(ticks, DateTimeKind.Utc), raw);
         return true;
     }
     
@@ -256,19 +313,69 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     /// <summary>
     /// 写入数据（处理环绕）
     /// </summary>
-    private void WriteDataWrapped(int position, ReadOnlySpan<byte> data)
+    private void WriteBytesWrapped(int position, ReadOnlySpan<byte> data)
     {
         int remaining = data.Length;
         int sourceOffset = 0;
+
+        byte[]? rented = null;
         
+        try
+        {
+            while (remaining > 0)
+            {
+                int physicalPos = _dataOffset + ((position + sourceOffset) % _dataSize);
+                int chunkSize = Math.Min(remaining, _dataSize - (physicalPos - _dataOffset));
+
+                if (rented is null || rented.Length < chunkSize)
+                {
+                    if (rented is not null)
+                    {
+                        ArrayPool<byte>.Shared.Return(rented);
+                    }
+
+                    rented = ArrayPool<byte>.Shared.Rent(chunkSize);
+                }
+
+                data.Slice(sourceOffset, chunkSize).CopyTo(rented.AsSpan(0, chunkSize));
+                _accessor.WriteArray(physicalPos, rented, 0, chunkSize);
+
+                sourceOffset += chunkSize;
+                remaining -= chunkSize;
+            }
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    private void ReadBytesWrapped(int position, Span<byte> destination)
+    {
+        int remaining = destination.Length;
+        int destOffset = 0;
+
         while (remaining > 0)
         {
-            int physicalPos = _dataOffset + ((position + sourceOffset) % _dataSize);
+            int physicalPos = _dataOffset + ((position + destOffset) % _dataSize);
             int chunkSize = Math.Min(remaining, _dataSize - (physicalPos - _dataOffset));
-            
-            _accessor.WriteArray(physicalPos, data.Slice(sourceOffset, chunkSize).ToArray(), 0, chunkSize);
-            
-            sourceOffset += chunkSize;
+
+            // MemoryMappedViewAccessor does not support Span, so read into a temp array.
+            var tmp = ArrayPool<byte>.Shared.Rent(chunkSize);
+            try
+            {
+                _accessor.ReadArray(physicalPos, tmp, 0, chunkSize);
+                tmp.AsSpan(0, chunkSize).CopyTo(destination.Slice(destOffset, chunkSize));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(tmp);
+            }
+
+            destOffset += chunkSize;
             remaining -= chunkSize;
         }
     }

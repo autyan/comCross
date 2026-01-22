@@ -21,35 +21,57 @@ if (!argsMap.TryGetValue("--pipe", out var pipeName) ||
     return 2;
 }
 
+argsMap.TryGetValue("--role", out var roleRaw);
+var role = NormalizeRole(roleRaw,
+#if SESSION_HOST
+    defaultRole: "session"
+#else
+    defaultRole: "ui"
+#endif
+);
+
+#if SESSION_HOST
+if (!string.Equals(role, "session", StringComparison.Ordinal))
+{
+    Console.Error.WriteLine("This executable is Session Host only (role=session).");
+    return 2;
+}
+#else
+if (!string.Equals(role, "ui", StringComparison.Ordinal))
+{
+    Console.Error.WriteLine("This executable is UI Host only (role=ui).");
+    return 2;
+}
+#endif
+
+argsMap.TryGetValue("--session-id", out var fixedSessionId);
+#if SESSION_HOST
+// Note: --session-id is optional.
+// - When provided, the host will only accept that specific session id.
+// - When omitted, the host may accept multiple sessions (only if the plugin supports multi-session).
+#else
+fixedSessionId = null;
+#endif
+
 argsMap.TryGetValue("--event-pipe", out var eventPipeName);
 argsMap.TryGetValue("--host-token", out var hostToken);
 
 _ = StartParentMonitorIfRequested(argsMap);
 
-var state = new HostState(entryPoint, pluginPath);
+var state = new HostState(entryPoint, pluginPath, fixedSessionId);
 state.SetHostToken(hostToken);
 state.TryLoadPlugin();
 
 var eventSink = new HostEventSink(eventPipeName);
-state.SetUiStateEventSink(evt =>
+if (string.Equals(role, "ui", StringComparison.Ordinal))
 {
-    // ADR-010 closure: sessionless is represented by null only.
-    // Session-scoped invalidations must target the active session.
-    if (evt.SessionId is not null)
-    {
-        if (string.IsNullOrWhiteSpace(evt.SessionId))
-        {
-            return;
-        }
-
-        if (!state.IsActiveSession(evt.SessionId))
-        {
-            return;
-        }
-    }
-
-    eventSink.PublishUiStateInvalidated(evt);
-});
+    state.SetUiStateEventSink(eventSink.PublishUiStateInvalidated);
+}
+else
+{
+    // Session Host must not emit UI invalidation events.
+    state.SetUiStateEventSink(_ => { });
+}
 state.SetSessionRegisteredSink(eventSink.PublishSessionRegistered);
 
 eventSink.PublishHostRegistered(hostToken);
@@ -92,6 +114,13 @@ while (true)
         continue;
     }
 
+    if (!IsAllowed(role, request.Type))
+    {
+        var response = new PluginHostResponse(request.Id, false, $"Message '{request.Type}' is not supported by role '{role}'.");
+        await writer.WriteLineAsync(JsonSerializer.Serialize(response, jsonOptions));
+        continue;
+    }
+
     var responseMessage = request.Type switch
     {
         PluginHostMessageTypes.Ping => HandlePing(request, state),
@@ -102,6 +131,7 @@ while (true)
         PluginHostMessageTypes.GetUiState => HandleGetUiState(request, state, jsonOptions),
         PluginHostMessageTypes.ApplySharedMemorySegment => HandleApplySharedMemorySegment(request, state, jsonOptions),
         PluginHostMessageTypes.SetBackpressure => HandleSetBackpressure(request, state, jsonOptions),
+        PluginHostMessageTypes.SendData => HandleSendData(request, state, jsonOptions),
         PluginHostMessageTypes.LanguageChanged => HandleLanguageChanged(request, state, jsonOptions),
         PluginHostMessageTypes.Shutdown => HandleShutdown(request),
         _ => new PluginHostResponse(request.Id, false, $"Unknown request type: {request.Type}")
@@ -118,6 +148,36 @@ while (true)
 eventSink.Dispose();
 
 return 0;
+
+static string NormalizeRole(string? role, string defaultRole)
+    => string.IsNullOrWhiteSpace(role) ? defaultRole : role.Trim().ToLowerInvariant();
+
+static bool IsAllowed(string role, string messageType)
+{
+    // Note: role-gating is an architectural boundary.
+    // UI Host: capabilities + UI state only.
+    // Session Host: session lifecycle + shared memory + backpressure.
+    if (string.Equals(role, "ui", StringComparison.Ordinal))
+    {
+        return messageType is PluginHostMessageTypes.Ping
+            or PluginHostMessageTypes.Notify
+            or PluginHostMessageTypes.GetCapabilities
+            or PluginHostMessageTypes.GetUiState
+            or PluginHostMessageTypes.LanguageChanged
+            or PluginHostMessageTypes.Shutdown;
+    }
+
+    // session
+    return messageType is PluginHostMessageTypes.Ping
+        or PluginHostMessageTypes.Notify
+        or PluginHostMessageTypes.GetCapabilities
+        or PluginHostMessageTypes.ApplySharedMemorySegment
+        or PluginHostMessageTypes.Connect
+        or PluginHostMessageTypes.Disconnect
+        or PluginHostMessageTypes.SetBackpressure
+        or PluginHostMessageTypes.SendData
+        or PluginHostMessageTypes.Shutdown;
+}
 
 static Task? StartParentMonitorIfRequested(Dictionary<string, string> argsMap)
 {
@@ -495,6 +555,61 @@ static PluginHostResponse HandleSetBackpressure(PluginHostRequest request, HostS
     }
 }
 
+static PluginHostResponse HandleSendData(PluginHostRequest request, HostState state, JsonSerializerOptions jsonOptions)
+{
+    if (!state.IsLoaded)
+    {
+        return new PluginHostResponse(request.Id, false, state.LoadError ?? "Plugin load failed.");
+    }
+
+    if (request.Payload is null)
+    {
+        return new PluginHostResponse(request.Id, false, "Missing send-data payload.");
+    }
+
+    PluginHostSendDataPayload? payload;
+    try
+    {
+        payload = request.Payload.Value.Deserialize<PluginHostSendDataPayload>(jsonOptions);
+    }
+    catch (Exception ex)
+    {
+        return new PluginHostResponse(request.Id, false, $"Invalid send-data payload: {ex.Message}");
+    }
+
+    if (payload is null || string.IsNullOrWhiteSpace(payload.SessionId))
+    {
+        return new PluginHostResponse(request.Id, false, "Invalid send-data payload: missing SessionId.");
+    }
+
+    if (!state.IsActiveSession(payload.SessionId))
+    {
+        return new PluginHostResponse(request.Id, false, "Session is not active.");
+    }
+
+    if (state.Instance is not ITransmittableBusAdapterPlugin tx)
+    {
+        return new PluginHostResponse(request.Id, false, "Plugin does not support TX.");
+    }
+
+    try
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var result = tx.SendAsync(
+            new PluginSendCommand(payload.SessionId, payload.Data ?? Array.Empty<byte>()),
+            cts.Token).GetAwaiter().GetResult();
+
+        var json = JsonSerializer.Serialize(result, jsonOptions);
+        var resultPayload = JsonDocument.Parse(json).RootElement.Clone();
+        return new PluginHostResponse(request.Id, result.Ok, result.Error, Payload: resultPayload);
+    }
+    catch (Exception ex)
+    {
+        var restarted = state.TryRestart();
+        return new PluginHostResponse(request.Id, false, ex.Message, restarted);
+    }
+}
+
 static PluginHostResponse HandleGetCapabilities(
     PluginHostRequest request,
     HostState state,
@@ -773,12 +888,14 @@ sealed class HostState
 {
     private readonly string _entryPoint;
     private readonly string _pluginPath;
+    private readonly string? _fixedSessionId;
     private PluginLoadContext? _loadContext;
 
-    public HostState(string entryPoint, string pluginPath)
+    public HostState(string entryPoint, string pluginPath, string? fixedSessionId)
     {
         _entryPoint = entryPoint;
         _pluginPath = pluginPath;
+        _fixedSessionId = string.IsNullOrWhiteSpace(fixedSessionId) ? null : fixedSessionId;
     }
 
     public object? Instance { get; private set; }
@@ -884,6 +1001,11 @@ sealed class HostState
             return false;
         }
 
+        if (_fixedSessionId is not null && !string.Equals(_fixedSessionId, sessionId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         lock (_sessionLock)
         {
             if (SupportsMultiSession)
@@ -905,6 +1027,11 @@ sealed class HostState
     public void EndSession(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        if (_fixedSessionId is not null && !string.Equals(_fixedSessionId, sessionId, StringComparison.Ordinal))
         {
             return;
         }
@@ -968,6 +1095,11 @@ sealed class HostState
     public bool IsActiveSession(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return false;
+        }
+
+        if (_fixedSessionId is not null && !string.Equals(_fixedSessionId, sessionId, StringComparison.Ordinal))
         {
             return false;
         }

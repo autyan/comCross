@@ -31,4 +31,14 @@ public interface IMessageStreamService
     /// Subscribes to new messages
     /// </summary>
     IDisposable Subscribe(string sessionId, Action<LogMessage> handler);
+
+    /// <summary>
+    /// Raised when consumption is resumed for a session.
+    /// Consumers should use this to trigger catch-up processing.
+    /// </summary>
+    event Action<string>? ConsumptionResumed;
+
+    bool IsConsumptionPaused(string sessionId);
+
+    void SetConsumptionPaused(string sessionId, bool paused);
 }

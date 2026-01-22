@@ -46,6 +46,7 @@ if ($Publish) {
         $outPath = Join-Path $OutputDir "ComCross-$rid-$Configuration"
         dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $rid --self-contained false -o $outPath
         dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $rid --self-contained false -o $outPath
+        dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $rid --self-contained false -o $outPath
         Publish-Plugins -OutPath $outPath -Rid $rid -Configuration $Configuration
     }
 } else {

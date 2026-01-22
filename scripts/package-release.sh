@@ -157,10 +157,12 @@ for rid in "${rids[@]}"; do
 
   publish_project src/Shell/ComCross.Shell.csproj "${fd_out}" "${rid}" false
   publish_project src/PluginHost/ComCross.PluginHost.csproj "${fd_out}" "${rid}" false
+  publish_project src/SessionHost/ComCross.SessionHost.csproj "${fd_out}" "${rid}" false
   copy_plugins "${fd_out}" "${rid}"
 
   publish_project src/Shell/ComCross.Shell.csproj "${sc_out}" "${rid}" true
   publish_project src/PluginHost/ComCross.PluginHost.csproj "${sc_out}" "${rid}" true
+  publish_project src/SessionHost/ComCross.SessionHost.csproj "${sc_out}" "${rid}" true
   copy_plugins "${sc_out}" "${rid}"
 
   if [[ "${package_outputs}" == "true" ]]; then

@@ -88,6 +88,7 @@ if [[ "${publish}" == "true" ]]; then
     out_path="${output_dir}/ComCross-${rid}-${config}"
     dotnet publish src/Shell/ComCross.Shell.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
     dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
+    dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c "${config}" -r "${rid}" --self-contained false -o "${out_path}"
     publish_plugins "${out_path}" "${rid}"
   done
 else

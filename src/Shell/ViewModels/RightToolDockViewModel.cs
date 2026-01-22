@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using ComCross.Core.Services;
 using ComCross.Shared.Interfaces;
@@ -15,6 +16,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
     private Session? _activeSession;
     private bool _isConnected;
+    private bool _isSendHexMode;
     private ToolDockTab _selectedToolTab = ToolDockTab.Send;
 
     public RightToolDockViewModel(
@@ -50,6 +52,20 @@ public sealed class RightToolDockViewModel : BaseViewModel
         private set => SetProperty(ref _isConnected, value);
     }
 
+    public bool IsSendHexMode
+    {
+        get => _isSendHexMode;
+        set
+        {
+            if (SetProperty(ref _isSendHexMode, value))
+            {
+                OnPropertyChanged(nameof(SendModeLabel));
+            }
+        }
+    }
+
+    public string SendModeLabel => IsSendHexMode ? "HEX" : "STR";
+
     public ToolDockTab SelectedToolTab
     {
         get => _selectedToolTab;
@@ -72,10 +88,36 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
     public void SetActiveSession(Session? session)
     {
+        if (!ReferenceEquals(_activeSession, session) && _activeSession is not null)
+        {
+            _activeSession.PropertyChanged -= OnActiveSessionPropertyChanged;
+        }
+
         ActiveSession = session;
-        IsConnected = session?.Status == SessionStatus.Connected;
+
+        if (_activeSession is not null)
+        {
+            _activeSession.PropertyChanged += OnActiveSessionPropertyChanged;
+        }
+
+        IsConnected = _activeSession?.Status == SessionStatus.Connected;
         CommandCenter.SetSession(session?.Id, session?.Name);
         CommandCenter.IsActive = IsCommandsTabActive;
+    }
+
+    public void ToggleSendMode() => IsSendHexMode = !IsSendHexMode;
+
+    private void OnActiveSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _activeSession))
+        {
+            return;
+        }
+
+        if (string.Equals(e.PropertyName, nameof(Session.Status), StringComparison.Ordinal))
+        {
+            IsConnected = _activeSession?.Status == SessionStatus.Connected;
+        }
     }
 
     public async Task SendAsync(string message, bool hex, bool addCr, bool addLf)

@@ -69,7 +69,7 @@ public class SharedMemoryTests : IDisposable
         // Assert
         Assert.True(result);
         Assert.Equal(1, frameId);
-        Assert.Equal(100 + 4, 1024 * 1024 - 256 - segment.GetFreeSpace()); // 数据+长度字段
+        Assert.Equal(100 + 4 + 16, 1024 * 1024 - 256 - segment.GetFreeSpace()); // 数据 + 长度字段 + wire header
     }
     
     [Fact]
@@ -104,7 +104,7 @@ public class SharedMemoryTests : IDisposable
         
         // Assert ✅ 边界检查2：空间不足时返回false
         Assert.True(writeCount < 100); // 应该在某个点停止
-        Assert.True(segment.GetFreeSpace() < 104); // 剩余空间不足以写入100字节+4字节长度
+        Assert.True(segment.GetFreeSpace() < 120); // 剩余空间不足以写入100字节 + 4字节长度 + 16字节header
         
         // 再次尝试写入应该失败
         bool result = segment.TryWriteFrame(data, out long frameId);
@@ -255,9 +255,9 @@ public class SharedMemoryTests : IDisposable
     {
         // Arrange
         var segment = _sharedMemory.AllocateSegment("session1", 2048); // 2KB（实际数据区：2048-256=1792字节）
-        byte[] data = new byte[400]; // 每帧404字节（含长度）
+        byte[] data = new byte[400]; // 每帧420字节（含长度+16字节header）
         
-        // Act：写入4帧（1616字节），然后读取2帧（808字节），再写入2帧（808字节）
+        // Act：写入4帧（1680字节），然后读取2帧（840字节），再写入2帧（840字节）
         // 这会触发环绕
         for (int i = 0; i < 4; i++)
         {
@@ -308,7 +308,7 @@ public class SharedMemoryTests : IDisposable
         // Assert
         Assert.Equal(10 * 1024 * 1024, stats.TotalSize);
         Assert.Equal(3 * 1024 * 1024, stats.AllocatedSize);
-        Assert.Equal(1004, stats.UsedSize); // 1000字节数据 + 4字节长度
+        Assert.Equal(1020, stats.UsedSize); // 1000字节数据 + 4字节长度 + 16字节header
         Assert.Equal(2, stats.SessionCount);
     }
     

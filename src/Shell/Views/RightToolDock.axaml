@@ -47,10 +47,23 @@
                         
                         <!-- Send Options in compact layout -->
                         <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                            <CheckBox Grid.Column="0" Grid.Row="0" 
-                                      x:Name="HexModeCheckBox" 
-                                      Content="{Binding L[tool.send.hexmode]}" 
-                                      Margin="0,0,8,4" />
+                            <!-- Core mode toggle (STR/HEX) -->
+                            <Border Grid.Column="0" Grid.Row="0"
+                                    CornerRadius="6"
+                                    BorderBrush="#25303A"
+                                    BorderThickness="1"
+                                    Background="#0F1417"
+                                    Padding="10,6"
+                                    Margin="0,0,8,4"
+                                    Cursor="Hand"
+                                    PointerPressed="OnToggleSendMode">
+                                <TextBlock Text="{Binding SendModeLabel}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="#E6EDF3" />
+                            </Border>
                             <CheckBox Grid.Column="1" Grid.Row="0" 
                                       x:Name="ClearAfterSendCheckBox" 
                                       Content="{Binding L[tool.send.clearAfterSend]}" 

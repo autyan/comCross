@@ -19,8 +19,10 @@ public sealed class DeviceService : IDisposable
     private readonly PluginManagerService _pluginManager;
     private readonly IEventBus _eventBus;
     private readonly IMessageStreamService _messageStream;
+    private readonly IFrameStore _frameStore;
     private readonly NotificationService _notificationService;
     private readonly SharedMemorySessionService _shmSessionService;
+    private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
 
     // Non-persistent default naming counters: adapterKey -> nextIndex
@@ -30,14 +32,18 @@ public sealed class DeviceService : IDisposable
         PluginManagerService pluginManager,
         IEventBus eventBus,
         IMessageStreamService messageStream,
+        IFrameStore frameStore,
         NotificationService notificationService,
-        SharedMemorySessionService shmSessionService)
+        SharedMemorySessionService shmSessionService,
+        SessionHostRuntimeService sessionHostRuntimeService)
     {
         _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
+        _frameStore = frameStore ?? throw new ArgumentNullException(nameof(frameStore));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _shmSessionService = shmSessionService ?? throw new ArgumentNullException(nameof(shmSessionService));
+        _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
         
         // Subscribe to data events for all sessions (to update stats)
         _eventBus.Subscribe<DataReceivedEvent>(e => {
@@ -72,34 +78,82 @@ public sealed class DeviceService : IDisposable
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
         session.Status = SessionStatus.Connecting;
 
-        // 1. Allocate Shared Memory
-        // TODO: Get requested size from capability descriptor
-        var descriptor = await _shmSessionService.AllocateOrReplaceAsync(sessionId, 256 * 1024);
+        var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
+        var supportsMultiSession = capability?.SupportsMultiSession == true;
 
-        // 2. Apply segment to Plugin
-        await runtime.Client!.SendAsync(
-            new PluginHostRequest(
-                Guid.NewGuid().ToString("N"),
-                PluginHostMessageTypes.ApplySharedMemorySegment,
-                SessionId: sessionId,
-                Payload: JsonSerializer.SerializeToElement(new PluginHostApplySharedMemorySegmentPayload(sessionId, descriptor))),
-            TimeSpan.FromSeconds(2));
+        // 1. Allocate Shared Memory (segment allocation is safe before connect; applying it requires an active session)
+        var requestedBytes = capability?.SharedMemoryRequest?.PreferredBytes is > 0
+            ? capability.SharedMemoryRequest.PreferredBytes
+            : capability?.SharedMemoryRequest?.MinBytes is > 0
+                ? capability.SharedMemoryRequest.MinBytes
+                : 256 * 1024;
 
-        // 3. Connect
-        var connectPayload = new PluginHostConnectPayload(capabilityId, parameters, sessionId);
-        var response = await runtime.Client!.SendAsync(
-            new PluginHostRequest(
-                Guid.NewGuid().ToString("N"),
-                PluginHostMessageTypes.Connect,
-                SessionId: sessionId,
-                Payload: JsonSerializer.SerializeToElement(connectPayload)),
-            TimeSpan.FromSeconds(10));
+        var descriptor = await _shmSessionService.AllocateOrReplaceAsync(sessionId, requestedBytes);
 
-        if (response is not { Ok: true })
+        // 2. Start Session Host
+        // Default: 1 session : 1 process.
+        // If capability declares SupportsMultiSession=true, Core may reuse a shared session host per (plugin, capability).
+        var sessionHost = await _sessionHostRuntimeService.EnsureStartedAsync(
+            runtime.Info,
+            sessionId,
+            capabilityId,
+            supportsMultiSession,
+            cancellationToken);
+
+        try
         {
+            // 3. Connect via Session Host
+            var connectPayload = new PluginHostConnectPayload(capabilityId, parameters, sessionId);
+            var response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(
+                    Guid.NewGuid().ToString("N"),
+                    PluginHostMessageTypes.Connect,
+                    SessionId: sessionId,
+                    Payload: JsonSerializer.SerializeToElement(connectPayload)),
+                TimeSpan.FromSeconds(10));
+
+            if (response is not { Ok: true })
+            {
+                session.Status = SessionStatus.Disconnected;
+                throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
+            }
+
+            // 4. Apply segment to Session Host (requires active session in plugin host)
+            var applyResponse = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(
+                    Guid.NewGuid().ToString("N"),
+                    PluginHostMessageTypes.ApplySharedMemorySegment,
+                    SessionId: sessionId,
+                    Payload: JsonSerializer.SerializeToElement(new PluginHostApplySharedMemorySegmentPayload(sessionId, descriptor))),
+                TimeSpan.FromSeconds(2));
+
+            if (applyResponse is not { Ok: true })
+            {
+                session.Status = SessionStatus.Disconnected;
+                throw new InvalidOperationException(applyResponse?.Error ?? "Apply shared memory segment failed");
+            }
+        }
+        catch
+        {
+            // Hard cleanup on connect/apply failure.
+            try
+            {
+                await sessionHost.Client.SendAsync(
+                    new PluginHostRequest(
+                        Guid.NewGuid().ToString("N"),
+                        PluginHostMessageTypes.Disconnect,
+                        SessionId: sessionId,
+                        Payload: JsonSerializer.SerializeToElement(new PluginHostDisconnectPayload(sessionId, "connect-failed"))),
+                    TimeSpan.FromSeconds(2));
+            }
+            catch
+            {
+                // best-effort
+            }
+
+            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: "connect-failed");
             await _shmSessionService.ReleaseSegmentAsync(sessionId);
-            session.Status = SessionStatus.Disconnected;
-            throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
+            throw;
         }
 
         session.Status = SessionStatus.Connected;
@@ -122,20 +176,26 @@ public sealed class DeviceService : IDisposable
     {
         if (_sessions.TryGetValue(sessionId, out var state))
         {
-            var runtime = !string.IsNullOrWhiteSpace(state.Session.PluginId)
-                ? _pluginManager.GetRuntime(state.Session.PluginId)
-                : null;
-
-            if (runtime?.Client != null)
+            var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+            if (sessionHost is not null)
             {
-                var payload = new PluginHostDisconnectPayload(sessionId, reason);
-                await runtime.Client.SendAsync(
-                    new PluginHostRequest(
-                        Guid.NewGuid().ToString("N"),
-                        PluginHostMessageTypes.Disconnect,
-                        SessionId: sessionId,
-                        Payload: JsonSerializer.SerializeToElement(payload)),
-                    TimeSpan.FromSeconds(5));
+                try
+                {
+                    var payload = new PluginHostDisconnectPayload(sessionId, reason);
+                    await sessionHost.Client.SendAsync(
+                        new PluginHostRequest(
+                            Guid.NewGuid().ToString("N"),
+                            PluginHostMessageTypes.Disconnect,
+                            SessionId: sessionId,
+                            Payload: JsonSerializer.SerializeToElement(payload)),
+                        TimeSpan.FromSeconds(5));
+                }
+                catch
+                {
+                    // best-effort
+                }
+
+                await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: reason);
             }
 
             await _shmSessionService.ReleaseSegmentAsync(sessionId);
@@ -146,32 +206,41 @@ public sealed class DeviceService : IDisposable
 
     public async Task<int> SendAsync(string sessionId, byte[] data, MessageFormat format = MessageFormat.Text, CancellationToken cancellationToken = default)
     {
-        if (!_sessions.TryGetValue(sessionId, out var state))
+        if (!_sessions.TryGetValue(sessionId, out _))
         {
             throw new InvalidOperationException($"Session {sessionId} not found");
         }
 
-        // We could send data via plugin command (Standard out-of-band), 
-        // but typically plugins read from their own input (e.g. Serial port reads).
-        // For outgoing data to the plugin, we typically use a command.
-        
-        // v0.4.x: Plugins do not yet expose a standardized TX command.
-        // Still append a TX log entry so the UI stays responsive and consistent.
-        var content = format == MessageFormat.Hex
-            ? $"TX: {BitConverter.ToString(data).Replace("-", " ")}" 
-            : $"TX: {Encoding.UTF8.GetString(data)}";
+        data ??= Array.Empty<byte>();
 
-        _messageStream.Append(sessionId, new LogMessage
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
         {
-            Id = Guid.NewGuid().ToString("N"),
-            Timestamp = DateTime.UtcNow,
-            Content = content,
-            Level = LogLevel.Info,
-            Source = "tx",
-            RawData = data,
-            Format = format
-        });
+            throw new InvalidOperationException($"Session host not running for session {sessionId}");
+        }
 
+        // Send via Session Host (real TX)
+        var payload = JsonSerializer.SerializeToElement(new PluginHostSendDataPayload(sessionId, data));
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(
+                Guid.NewGuid().ToString("N"),
+                PluginHostMessageTypes.SendData,
+                SessionId: sessionId,
+                Payload: payload),
+            TimeSpan.FromSeconds(3));
+
+        if (response is null)
+        {
+            throw new InvalidOperationException("Session host unavailable.");
+        }
+
+        if (!response.Ok)
+        {
+            throw new InvalidOperationException(response.Error ?? "Send failed.");
+        }
+
+        // Mirror TX into the FrameStore so RX/TX share one timeline.
+        _frameStore.Append(sessionId, DateTime.UtcNow, FrameDirection.Tx, data, format, source: "send-tx");
         _eventBus.Publish(new DataSentEvent(sessionId, data, data.Length));
         return data.Length;
     }

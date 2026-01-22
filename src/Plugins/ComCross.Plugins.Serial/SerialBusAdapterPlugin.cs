@@ -11,13 +11,19 @@ using ComCross.PluginSdk;
 
 namespace ComCross.Plugins.Serial;
 
-public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMultiSessionDevicePlugin, IPluginUiStateProvider, IPluginUiStateEventSource
+public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITransmittableBusAdapterPlugin, IPluginUiStateProvider, IPluginUiStateEventSource
 {
     private readonly CancellationTokenSource _cts = new();
 
     private readonly object _sessionLock = new();
-    private readonly HashSet<string> _connectedSessions = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ISharedMemoryWriter> _writersBySession = new(StringComparer.Ordinal);
+    private string? _connectedSessionId;
+    private ISharedMemoryWriter? _writer;
+
+    private SerialPort? _serial;
+    private CancellationTokenSource? _rxCts;
+    private Task? _rxLoop;
+    private readonly SemaphoreSlim _txGate = new(1, 1);
+    private volatile BackpressureLevel _backpressure;
 
     private const string SerialParametersSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.parameters.schema.json";
     private const string SerialConnectUiSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.connect.ui.schema.json";
@@ -54,7 +60,7 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMult
                 JsonSchema = ReadEmbeddedResource(SerialParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(SerialConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
-                SupportsMultiSession = true,
+                SupportsMultiSession = false,
                 SharedMemoryRequest = new SharedMemoryRequest
                 {
                     MinBytes = 64 * 1024,
@@ -80,7 +86,7 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMult
         {
             lock (_sessionLock)
             {
-                isConnected = _connectedSessions.Contains(query.SessionId);
+                isConnected = string.Equals(_connectedSessionId, query.SessionId, StringComparison.Ordinal);
             }
         }
 
@@ -169,41 +175,58 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMult
             return Task.FromResult(new PluginConnectResult(false, "Invalid flowControl (expected: None/XOnXOff/RequestToSend/RequestToSendXOnXOff)."));
         }
 
-        // Optional: allow connect dialog to pass an explicit session name.
-        // (The host may also manage this separately.)
-        var sessionName = TryReadString(command.Parameters, "sessionName");
-
-        // Best-effort connection test only (current host pipeline does not stream bytes from plugin yet).
-        // We just validate that the port can be opened.
         try
         {
-            using var serial = new SerialPort(port)
+            lock (_sessionLock)
+            {
+                if (_connectedSessionId is not null && !string.Equals(_connectedSessionId, command.SessionId, StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new PluginConnectResult(false, $"Already connected to session '{_connectedSessionId}'."));
+                }
+            }
+
+            var serial = new SerialPort(port)
             {
                 BaudRate = baudRate,
                 DataBits = dataBits,
                 Parity = parity,
                 StopBits = stopBits,
-                Handshake = handshake
+                Handshake = handshake,
+                ReadTimeout = -1,
+                WriteTimeout = -1
             };
 
             serial.Open();
-            serial.Close();
 
             lock (_sessionLock)
             {
-                _connectedSessions.Add(command.SessionId);
-                _connected = _connectedSessions.Count > 0;
+                _serial = serial;
+                _connectedSessionId = command.SessionId;
+                _connected = true;
+
+                _rxCts?.Cancel();
+                _rxCts?.Dispose();
+                _rxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                _rxLoop = Task.Run(() => ReadLoopAsync(command.SessionId, serial, _rxCts.Token));
             }
 
             return Task.FromResult(new PluginConnectResult(true, SessionId: command.SessionId));
         }
         catch (Exception ex)
         {
-            lock (_sessionLock)
+            CleanupConnection(command.SessionId);
+
+            // Don't hide errors: add actionable context for common PTY limitation on Linux.
+            // (e.g. socat pty can reject modem-line ioctls with ENOTTY: "Inappropriate ioctl for device")
+            if (ex.Message.Contains("Inappropriate ioctl for device", StringComparison.OrdinalIgnoreCase))
             {
-                _connectedSessions.Remove(command.SessionId);
-                _connected = _connectedSessions.Count > 0;
+                return Task.FromResult(new PluginConnectResult(
+                    false,
+                    $"{ex.Message} (port='{port}', flowControl='{flowControlText}'). " +
+                    "This device may not support modem-control ioctls (common with PTY). " +
+                    "Use flowControl='None' or XOnXOff for PTY-based testing."));
             }
+
             return Task.FromResult(new PluginConnectResult(false, ex.Message));
         }
     }
@@ -212,50 +235,162 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, IMult
     {
         if (!string.IsNullOrWhiteSpace(command.SessionId))
         {
-            lock (_sessionLock)
-            {
-                _connectedSessions.Remove(command.SessionId);
-                _writersBySession.Remove(command.SessionId);
-                _connected = _connectedSessions.Count > 0;
-            }
+            CleanupConnection(command.SessionId);
         }
+
         return Task.FromResult(new PluginCommandResult(true));
+    }
+
+    public async Task<PluginCommandResult> SendAsync(PluginSendCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.SessionId))
+        {
+            return new PluginCommandResult(false, "Missing SessionId.");
+        }
+
+        SerialPort? serial;
+        lock (_sessionLock)
+        {
+            if (!string.Equals(_connectedSessionId, command.SessionId, StringComparison.Ordinal))
+            {
+                return new PluginCommandResult(false, "Session is not connected.");
+            }
+
+            serial = _serial;
+        }
+
+        if (serial is null || !serial.IsOpen)
+        {
+            return new PluginCommandResult(false, "Serial port not open.");
+        }
+
+        var data = command.Data ?? Array.Empty<byte>();
+
+        await _txGate.WaitAsync(cancellationToken);
+        try
+        {
+            await serial.BaseStream.WriteAsync(data, cancellationToken);
+            await serial.BaseStream.FlushAsync(cancellationToken);
+            return new PluginCommandResult(true);
+        }
+        catch (Exception ex)
+        {
+            return new PluginCommandResult(false, ex.Message);
+        }
+        finally
+        {
+            _txGate.Release();
+        }
     }
 
     public void SetSharedMemoryWriter(ISharedMemoryWriter writer)
     {
-        // Not used yet for serial adapter (byte streaming to shared memory will be introduced later).
-    }
-
-    public void SetSharedMemoryWriter(string sessionId, ISharedMemoryWriter writer)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            return;
-        }
-
-        lock (_sessionLock)
-        {
-            _writersBySession[sessionId] = writer;
-        }
-    }
-
-    public void ClearSharedMemoryWriter(string sessionId)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            return;
-        }
-
-        lock (_sessionLock)
-        {
-            _writersBySession.Remove(sessionId);
-        }
+        _writer = writer;
     }
 
     public void SetBackpressureLevel(BackpressureLevel level)
     {
-        // Not used yet.
+        _backpressure = level;
+    }
+
+    private async Task ReadLoopAsync(string sessionId, SerialPort serial, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[4096];
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            int read;
+            try
+            {
+                read = await serial.BaseStream.ReadAsync(buffer, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                // Treat IO errors as end-of-loop; host may restart.
+                break;
+            }
+
+            if (read <= 0)
+            {
+                await Task.Delay(1, cancellationToken);
+                continue;
+            }
+
+            if (_backpressure == BackpressureLevel.High)
+            {
+                // Under high pressure, pause ingestion to avoid memory blow-up.
+                await Task.Delay(5, cancellationToken);
+                continue;
+            }
+
+            var writer = _writer;
+            if (writer is null)
+            {
+                // Shared memory not applied yet; drop to avoid buffering unbounded.
+                continue;
+            }
+
+            // Snapshot bytes into an independent array (ring buffer write happens synchronously).
+            var payload = read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray();
+            if (read == buffer.Length)
+            {
+                payload = payload.ToArray();
+            }
+
+            // Best-effort: if ring buffer full, just drop (backpressure bridge will engage).
+            writer.TryWriteFrame(payload, out _);
+        }
+    }
+
+    private void CleanupConnection(string sessionId)
+    {
+        SerialPort? serialToClose = null;
+        CancellationTokenSource? rxToCancel = null;
+
+        lock (_sessionLock)
+        {
+            if (!string.Equals(_connectedSessionId, sessionId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _connectedSessionId = null;
+            _connected = false;
+
+            rxToCancel = _rxCts;
+            _rxCts = null;
+            _rxLoop = null;
+
+            serialToClose = _serial;
+            _serial = null;
+        }
+
+        try
+        {
+            rxToCancel?.Cancel();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            try { rxToCancel?.Dispose(); } catch { }
+        }
+
+        try
+        {
+            if (serialToClose is not null)
+            {
+                try { serialToClose.Close(); } catch { }
+                try { serialToClose.Dispose(); } catch { }
+            }
+        }
+        catch
+        {
+        }
     }
 
     private async Task PollPortsAsync()

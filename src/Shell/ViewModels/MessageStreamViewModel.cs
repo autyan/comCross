@@ -19,6 +19,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     private Session? _activeSession;
     private string _searchQuery = string.Empty;
+    private bool _isHexDisplayMode;
 
     public MessageStreamViewModel(
         ILocalizationService localization,
@@ -62,6 +63,23 @@ public sealed class MessageStreamViewModel : BaseViewModel
         }
     }
 
+    public bool IsHexDisplayMode
+    {
+        get => _isHexDisplayMode;
+        set
+        {
+            if (SetProperty(ref _isHexDisplayMode, value))
+            {
+                OnPropertyChanged(nameof(DisplayModeLabel));
+                RefreshDisplayMode();
+            }
+        }
+    }
+
+    public string DisplayModeLabel => IsHexDisplayMode ? "HEX" : "STR";
+
+    public void ToggleDisplayMode() => IsHexDisplayMode = !IsHexDisplayMode;
+
     public void SetActiveSession(Session? session)
     {
         if (ReferenceEquals(_activeSession, session))
@@ -91,7 +109,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
                     return;
                 }
 
-                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
+                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
                 TrimMessages();
             });
         });
@@ -116,7 +134,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
         foreach (var message in messages)
         {
-            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
+            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
         }
 
         ApplyFilter();
@@ -135,7 +153,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
             MessageItems.Clear();
             foreach (var message in filtered)
             {
-                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
+                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
             }
 
             return;
@@ -147,7 +165,15 @@ public sealed class MessageStreamViewModel : BaseViewModel
         var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
         foreach (var message in messages)
         {
-            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat));
+            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
+        }
+    }
+
+    private void RefreshDisplayMode()
+    {
+        foreach (var item in MessageItems)
+        {
+            item.UpdateDisplayMode(IsHexDisplayMode);
         }
     }
 

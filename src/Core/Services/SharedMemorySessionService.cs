@@ -15,12 +15,12 @@ namespace ComCross.Core.Services;
 public sealed class SharedMemorySessionService
 {
     private readonly SharedMemoryManager _sharedMemoryManager;
-    private readonly SharedMemoryReader _sharedMemoryReader;
+    private readonly SharedMemoryIngestService _sharedMemoryIngest;
 
-    public SharedMemorySessionService(SharedMemoryManager sharedMemoryManager, SharedMemoryReader sharedMemoryReader)
+    public SharedMemorySessionService(SharedMemoryManager sharedMemoryManager, SharedMemoryIngestService sharedMemoryIngest)
     {
         _sharedMemoryManager = sharedMemoryManager ?? throw new ArgumentNullException(nameof(sharedMemoryManager));
-        _sharedMemoryReader = sharedMemoryReader ?? throw new ArgumentNullException(nameof(sharedMemoryReader));
+        _sharedMemoryIngest = sharedMemoryIngest ?? throw new ArgumentNullException(nameof(sharedMemoryIngest));
     }
 
     public async Task CleanupAsync(string sessionId)
@@ -32,7 +32,7 @@ public sealed class SharedMemorySessionService
 
         try
         {
-            await _sharedMemoryReader.StopReadingAsync(sessionId);
+            _sharedMemoryIngest.Unregister(sessionId);
         }
         catch
         {
@@ -60,7 +60,7 @@ public sealed class SharedMemorySessionService
             return;
         }
 
-        _sharedMemoryReader.StartReading(sessionId, segment);
+        _sharedMemoryIngest.Register(sessionId, segment);
     }
 
     public async Task ReleaseSegmentAsync(string sessionId)
@@ -72,7 +72,7 @@ public sealed class SharedMemorySessionService
 
         try
         {
-            await _sharedMemoryReader.StopReadingAsync(sessionId);
+            _sharedMemoryIngest.Unregister(sessionId);
         }
         catch
         {

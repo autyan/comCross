@@ -9,45 +9,25 @@ namespace ComCross.Core.Services;
 /// <summary>
 /// Core-side helpers for standardized PluginHost IPC commands.
 ///
-/// - Strong-typed stable parts (command envelope, known fields)
-/// - Plugin-defined parts as JSON + schema-lite validation
+/// v0.4 MVP process model:
+/// - UI Host (per plugin) serves UI-state queries and UI invalidation events.
+/// - Session Host (per session) serves connect/disconnect and data-plane related commands.
 /// </summary>
 public sealed class PluginHostProtocolService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly SharedMemorySessionService _sharedMemorySessionService;
-    private readonly SharedMemoryManager _sharedMemoryManager;
+    private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly ILogger<PluginHostProtocolService> _logger;
-
-    private sealed class DelegateDisposable : IDisposable
-    {
-        private readonly Action _dispose;
-        private int _disposed;
-
-        public DelegateDisposable(Action dispose)
-        {
-            _dispose = dispose ?? throw new ArgumentNullException(nameof(dispose));
-        }
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            {
-                return;
-            }
-
-            _dispose();
-        }
-    }
 
     public PluginHostProtocolService(
         SharedMemorySessionService sharedMemorySessionService,
-        SharedMemoryManager sharedMemoryManager,
+        SessionHostRuntimeService sessionHostRuntimeService,
         ILogger<PluginHostProtocolService> logger)
     {
         _sharedMemorySessionService = sharedMemorySessionService ?? throw new ArgumentNullException(nameof(sharedMemorySessionService));
-        _sharedMemoryManager = sharedMemoryManager ?? throw new ArgumentNullException(nameof(sharedMemoryManager));
+        _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -58,55 +38,33 @@ public sealed class PluginHostProtocolService
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        if (runtime.State != PluginLoadState.Loaded)
         {
             return (false, "Plugin not loaded.");
         }
 
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            _logger.LogDebug(
-                "SetBackpressure rejected: invalid sessionId. PluginId={PluginId}",
-                runtime.Info.Manifest.Id);
             return (false, "Invalid sessionId.");
         }
 
-        // Multi-session: backpressure is per-session and requires the session to be open.
-        if (!runtime.IsSessionOpen(sessionId))
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
         {
-            _logger.LogDebug(
-                "SetBackpressure rejected: session not active. PluginId={PluginId}, SessionId={SessionId}",
-                runtime.Info.Manifest.Id,
-                sessionId);
-            return (false, "Session is not active.");
+            return (false, "Session host not running.");
         }
-
-        if (!runtime.IsSessionRegistered(sessionId))
-        {
-            _logger.LogDebug(
-                "SetBackpressure rejected: session not registered. PluginId={PluginId}, SessionId={SessionId}",
-                runtime.Info.Manifest.Id,
-                sessionId);
-            return (false, "Session not registered.");
-        }
-
-        _logger.LogDebug(
-            "SetBackpressure sending. PluginId={PluginId}, SessionId={SessionId}, Level={Level}",
-            runtime.Info.Manifest.Id,
-            sessionId,
-            level);
 
         var payload = JsonSerializer.SerializeToElement(
             new PluginHostSetBackpressurePayload(sessionId, level),
             JsonOptions);
 
-        var response = await runtime.Client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.SetBackpressure, Payload: payload),
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.SetBackpressure, SessionId: sessionId, Payload: payload),
             timeout);
 
         if (response is null)
         {
-            return (false, "Plugin host unavailable.");
+            return (false, "Session host unavailable.");
         }
 
         return response.Ok ? (true, null) : (false, response.Error);
@@ -132,44 +90,14 @@ public sealed class PluginHostProtocolService
         }
 
         // ADR-010 closure: sessionless is represented by null only.
-        // Empty/whitespace session ids are invalid and must not bypass gating.
+        // Empty/whitespace session ids are invalid and must not bypass validation.
         if (sessionId is not null && string.IsNullOrWhiteSpace(sessionId))
         {
-            _logger.LogDebug(
-                "GetUiState rejected: invalid sessionId. PluginId={PluginId}, CapabilityId={CapabilityId}",
-                runtime.Info.Manifest.Id,
-                capabilityId);
             return (false, "Invalid sessionId.", null);
         }
 
-        // ADR-010: if a sessionId is provided, require per-session binding via event-stream.
-        // Sessionless UI (e.g., connect dialog) should pass sessionId: null.
-        if (sessionId is not null)
-        {
-            // Multi-session: session-scoped UI must target an open session.
-            if (!runtime.IsSessionOpen(sessionId))
-            {
-                _logger.LogDebug(
-                    "GetUiState rejected: session not active. PluginId={PluginId}, SessionId={SessionId}, CapabilityId={CapabilityId}",
-                    runtime.Info.Manifest.Id,
-                    sessionId,
-                    capabilityId);
-                return (false, "Session is not active.", null);
-            }
-
-            var verifyTimeout = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
-            var registered = await runtime.WaitForSessionRegisteredAsync(sessionId, verifyTimeout, cancellationToken);
-            if (!registered)
-            {
-                _logger.LogWarning(
-                    "GetUiState rejected: session not registered (handshake timeout). PluginId={PluginId}, SessionId={SessionId}, CapabilityId={CapabilityId}",
-                    runtime.Info.Manifest.Id,
-                    sessionId,
-                    capabilityId);
-                return (false, "Session not registered.", null);
-            }
-        }
-
+        // v0.4 MVP: UI Host does not own session lifecycles.
+        // If sessionId is provided, forward it to the UI Host without session gating.
         var payload = JsonSerializer.SerializeToElement(
             new PluginHostGetUiStatePayload(capabilityId, sessionId, viewKind, viewInstanceId),
             JsonOptions);
@@ -213,7 +141,7 @@ public sealed class PluginHostProtocolService
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        if (runtime.State != PluginLoadState.Loaded)
         {
             return new PluginConnectResult(false, "Plugin not loaded.");
         }
@@ -223,248 +151,92 @@ public sealed class PluginHostProtocolService
             return new PluginConnectResult(false, "Missing capabilityId.");
         }
 
-        var validationError = ValidateParameters(runtime, capabilityId, parameters);
-        if (!string.IsNullOrWhiteSpace(validationError))
+        var validateError = ValidateParameters(runtime, capabilityId, parameters);
+        if (!string.IsNullOrWhiteSpace(validateError))
         {
-            return new PluginConnectResult(false, validationError);
+            return new PluginConnectResult(false, validateError);
         }
 
         var sessionId = $"session-{Guid.NewGuid():N}";
 
-        runtime.BeginSessionRegistration(sessionId);
-
         _logger.LogInformation(
-            "Connecting plugin. PluginId={PluginId}, CapabilityId={CapabilityId}, SessionId={SessionId}",
+            "Connecting plugin (session host). PluginId={PluginId}, CapabilityId={CapabilityId}, SessionId={SessionId}",
             runtime.Info.Manifest.Id,
             capabilityId,
             sessionId);
 
+        var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
+        var supportsMultiSession = capability?.SupportsMultiSession == true;
+
+        SessionHostRuntime sessionHost;
+        try
+        {
+            sessionHost = await _sessionHostRuntimeService.EnsureStartedAsync(
+                runtime.Info,
+                sessionId,
+                capabilityId,
+                supportsMultiSession,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new PluginConnectResult(false, $"Failed to start session host: {ex.Message}");
+        }
+
         var payload = JsonSerializer.SerializeToElement(
             new PluginHostConnectPayload(capabilityId, parameters, sessionId),
             JsonOptions);
-        var response = await runtime.Client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Connect, Payload: payload),
-            timeout);
+
+        PluginHostResponse? response;
+        try
+        {
+            response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Connect, SessionId: sessionId, Payload: payload),
+                timeout);
+        }
+        catch (Exception ex)
+        {
+            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: "connect-exception");
+            return new PluginConnectResult(false, $"Connect failed: {ex.Message}", SessionId: sessionId);
+        }
 
         if (response is null)
         {
-            runtime.EndSession(sessionId);
-            return new PluginConnectResult(false, "Plugin host unavailable.");
+            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: "connect-no-response");
+            return new PluginConnectResult(false, "Session host unavailable.", SessionId: sessionId);
         }
 
+        PluginConnectResult? result = null;
         if (response.Payload is not null)
         {
             try
             {
-                PluginConnectResult? result = response.Payload.Value.Deserialize<PluginConnectResult>(JsonOptions);
-                if (result is not null)
-                {
-                    if (!result.Ok)
-                    {
-                        runtime.EndSession(sessionId);
-                        return result with { SessionId = sessionId };
-                    }
-
-                    if (string.IsNullOrWhiteSpace(result.SessionId))
-                    {
-                        _logger.LogWarning(
-                            "Connect protocol violation: missing SessionId in result. PluginId={PluginId}, SessionId={SessionId}",
-                            runtime.Info.Manifest.Id,
-                            sessionId);
-                        await DisconnectAsync(
-                            runtime,
-                            sessionId: sessionId,
-                            reason: "protocol-violation: connect-result-missing-sessionid",
-                            timeout: timeout,
-                            cancellationToken: cancellationToken);
-
-                        return new PluginConnectResult(false, "Protocol violation: plugin did not return SessionId.", SessionId: sessionId);
-                    }
-
-                    // ADR-010 MVP: verify per-session binding via event-stream.
-                    // Treat as required for correctness when sessionId is provided.
-                    var verifyTimeoutOnPayload = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
-                    var sessionRegisteredOnPayload = await runtime.WaitForSessionRegisteredAsync(sessionId, verifyTimeoutOnPayload, cancellationToken);
-                    if (!sessionRegisteredOnPayload)
-                    {
-                        _logger.LogWarning(
-                            "Connect failed: session registration handshake timed out. PluginId={PluginId}, SessionId={SessionId}",
-                            runtime.Info.Manifest.Id,
-                            sessionId);
-                        await DisconnectAsync(
-                            runtime,
-                            sessionId: sessionId,
-                            reason: "session-registration-timeout",
-                            timeout: timeout,
-                            cancellationToken: cancellationToken);
-
-                        return new PluginConnectResult(false, "Plugin host session registration handshake timed out.", SessionId: sessionId);
-                    }
-
-                    // ADR-010 closure: single-session-per-runtime => plugin must echo SessionId (if provided).
-                    if (!string.IsNullOrWhiteSpace(result.SessionId)
-                        && !string.Equals(result.SessionId, sessionId, StringComparison.Ordinal))
-                    {
-                        _logger.LogWarning(
-                            "Connect protocol violation: SessionId mismatch. PluginId={PluginId}, Expected={Expected}, Actual={Actual}",
-                            runtime.Info.Manifest.Id,
-                            sessionId,
-                            result.SessionId);
-                        await DisconnectAsync(
-                            runtime,
-                            sessionId: sessionId,
-                            reason: "protocol-violation: connect-result-sessionid-mismatch",
-                            timeout: timeout,
-                            cancellationToken: cancellationToken);
-
-                        return new PluginConnectResult(false, "Protocol violation: plugin returned mismatched SessionId.", SessionId: sessionId);
-                    }
-
-                    // ADR-010 closure: if shared memory is declared by the capability, initialize it as part of connect.
-                    var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-                    var sharedMemoryRequest = capability?.SharedMemoryRequest;
-                    if (sharedMemoryRequest is not null)
-                    {
-                        _logger.LogInformation(
-                            "Connect requires shared memory. PluginId={PluginId}, SessionId={SessionId}, MinBytes={MinBytes}, PreferredBytes={PreferredBytes}",
-                            runtime.Info.Manifest.Id,
-                            sessionId,
-                            sharedMemoryRequest.MinBytes,
-                            sharedMemoryRequest.PreferredBytes);
-                        var requestedBytes = sharedMemoryRequest.PreferredBytes > 0
-                            ? sharedMemoryRequest.PreferredBytes
-                            : sharedMemoryRequest.MinBytes;
-
-                        var upgraded = await AllocateAndApplySharedMemorySegmentAsync(
-                            runtime,
-                            sessionId,
-                            requestedBytes,
-                            timeout,
-                            cancellationToken);
-
-                        if (!upgraded.Ok)
-                        {
-                            _logger.LogWarning(
-                                "Shared memory init failed on connect. PluginId={PluginId}, SessionId={SessionId}, Error={Error}",
-                                runtime.Info.Manifest.Id,
-                                sessionId,
-                                upgraded.Error);
-                            await DisconnectAsync(
-                                runtime,
-                                sessionId: sessionId,
-                                reason: $"shared-memory-init-failed: {upgraded.Error}",
-                                timeout: timeout,
-                                cancellationToken: cancellationToken);
-
-                            var error = string.IsNullOrWhiteSpace(upgraded.Error) ? "Unknown error." : upgraded.Error;
-                            return new PluginConnectResult(false, $"Shared memory init failed: {error}", SessionId: sessionId);
-                        }
-
-                        // Enforce MinBytes contract after allocation (host may reject if cannot allocate at least this size).
-                        if (sharedMemoryRequest.MinBytes > 0 && upgraded.GrantedBytes is int granted && granted < sharedMemoryRequest.MinBytes)
-                        {
-                            _logger.LogWarning(
-                                "Shared memory under MinBytes on connect. PluginId={PluginId}, SessionId={SessionId}, GrantedBytes={GrantedBytes}, MinBytes={MinBytes}",
-                                runtime.Info.Manifest.Id,
-                                sessionId,
-                                granted,
-                                sharedMemoryRequest.MinBytes);
-                            await DisconnectAsync(
-                                runtime,
-                                sessionId: sessionId,
-                                reason: $"shared-memory-under-min: granted={granted}, min={sharedMemoryRequest.MinBytes}",
-                                timeout: timeout,
-                                cancellationToken: cancellationToken);
-
-                            return new PluginConnectResult(
-                                false,
-                                $"Shared memory allocation under MinBytes: granted={granted}, min={sharedMemoryRequest.MinBytes}.",
-                                SessionId: sessionId);
-                        }
-
-                        // ADR-010 closure: once shared memory is active for a session, forward backpressure
-                        // signals to PluginHost (session-scoped, gated by exclusive+registered session).
-                        void Handler(string bpSessionId, BackpressureLevel level)
-                        {
-                            if (!string.Equals(bpSessionId, sessionId, StringComparison.Ordinal))
-                            {
-                                return;
-                            }
-
-                            _logger.LogDebug(
-                                "Backpressure detected. PluginId={PluginId}, SessionId={SessionId}, Level={Level}",
-                                runtime.Info.Manifest.Id,
-                                sessionId,
-                                level);
-
-                            var backpressureTimeout = TimeSpan.FromMilliseconds(200);
-
-                            // Fire-and-forget: backpressure is best-effort.
-                            _ = Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    await SetBackpressureAsync(runtime, sessionId, level, backpressureTimeout, CancellationToken.None);
-                                }
-                                catch
-                                {
-                                }
-                            }, CancellationToken.None);
-                        }
-
-                        _sharedMemoryManager.BackpressureDetected += Handler;
-                        runtime.RegisterSessionDisposable(sessionId, new DelegateDisposable(() => _sharedMemoryManager.BackpressureDetected -= Handler));
-                    }
-
-                    return result with { SessionId = sessionId };
-                }
+                result = response.Payload.Value.Deserialize<PluginConnectResult>(JsonOptions);
             }
             catch
             {
-                // Fall back to envelope values.
+                // Ignore and fall back to response.Ok/Error.
             }
         }
 
-        if (!response.Ok)
-        {
-            runtime.EndSession(sessionId);
-            return new PluginConnectResult(false, response.Error);
-        }
+        result ??= new PluginConnectResult(response.Ok, response.Error, SessionId: sessionId);
+        result = result with { SessionId = sessionId };
 
-        // ADR-010 MVP: verify per-session binding via event-stream.
-        // This is best-effort but treated as required for correctness when sessionId is provided.
-        var verifyTimeout = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
-        var registered = await runtime.WaitForSessionRegisteredAsync(sessionId, verifyTimeout, cancellationToken);
-        if (!registered)
+        if (!result.Ok)
         {
-            _logger.LogWarning(
-                "Connect failed: session registration handshake timed out. PluginId={PluginId}, SessionId={SessionId}",
-                runtime.Info.Manifest.Id,
-                sessionId);
-            await DisconnectAsync(
-                runtime,
-                sessionId: sessionId,
-                reason: "session-registration-timeout",
-                timeout: timeout,
-                cancellationToken: cancellationToken);
-
-            return new PluginConnectResult(false, "Plugin host session registration handshake timed out.", SessionId: sessionId);
+            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: "connect-failed");
+            return result;
         }
 
         // ADR-010 closure: if shared memory is declared by the capability, initialize it as part of connect.
-        var connectedCapability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-        var connectedSharedMemoryRequest = connectedCapability?.SharedMemoryRequest;
-        if (connectedSharedMemoryRequest is not null)
+        var sharedMemoryRequest = capability?.SharedMemoryRequest;
+        if (sharedMemoryRequest is not null)
         {
-            _logger.LogInformation(
-                "Connect requires shared memory. PluginId={PluginId}, SessionId={SessionId}, MinBytes={MinBytes}, PreferredBytes={PreferredBytes}",
-                runtime.Info.Manifest.Id,
-                sessionId,
-                connectedSharedMemoryRequest.MinBytes,
-                connectedSharedMemoryRequest.PreferredBytes);
-            var requestedBytes = connectedSharedMemoryRequest.PreferredBytes > 0
-                ? connectedSharedMemoryRequest.PreferredBytes
-                : connectedSharedMemoryRequest.MinBytes;
+            var requestedBytes = sharedMemoryRequest.PreferredBytes is > 0
+                ? sharedMemoryRequest.PreferredBytes
+                : sharedMemoryRequest.MinBytes is > 0
+                    ? sharedMemoryRequest.MinBytes
+                    : 256 * 1024;
 
             var upgraded = await AllocateAndApplySharedMemorySegmentAsync(
                 runtime,
@@ -480,6 +252,7 @@ public sealed class PluginHostProtocolService
                     runtime.Info.Manifest.Id,
                     sessionId,
                     upgraded.Error);
+
                 await DisconnectAsync(
                     runtime,
                     sessionId: sessionId,
@@ -491,29 +264,32 @@ public sealed class PluginHostProtocolService
                 return new PluginConnectResult(false, $"Shared memory init failed: {error}", SessionId: sessionId);
             }
 
-            if (connectedSharedMemoryRequest.MinBytes > 0 && upgraded.GrantedBytes is int granted && granted < connectedSharedMemoryRequest.MinBytes)
+            if (sharedMemoryRequest.MinBytes > 0
+                && upgraded.GrantedBytes is int granted
+                && granted < sharedMemoryRequest.MinBytes)
             {
                 _logger.LogWarning(
                     "Shared memory under MinBytes on connect. PluginId={PluginId}, SessionId={SessionId}, GrantedBytes={GrantedBytes}, MinBytes={MinBytes}",
                     runtime.Info.Manifest.Id,
                     sessionId,
                     granted,
-                    connectedSharedMemoryRequest.MinBytes);
+                    sharedMemoryRequest.MinBytes);
+
                 await DisconnectAsync(
                     runtime,
                     sessionId: sessionId,
-                    reason: $"shared-memory-under-min: granted={granted}, min={connectedSharedMemoryRequest.MinBytes}",
+                    reason: $"shared-memory-under-min: granted={granted}, min={sharedMemoryRequest.MinBytes}",
                     timeout: timeout,
                     cancellationToken: cancellationToken);
 
                 return new PluginConnectResult(
                     false,
-                    $"Shared memory allocation under MinBytes: granted={granted}, min={connectedSharedMemoryRequest.MinBytes}.",
+                    $"Shared memory allocation under MinBytes: granted={granted}, min={sharedMemoryRequest.MinBytes}.",
                     SessionId: sessionId);
             }
         }
 
-        return new PluginConnectResult(true, SessionId: sessionId);
+        return result;
     }
 
     public async Task<PluginCommandResult> DisconnectAsync(
@@ -523,7 +299,7 @@ public sealed class PluginHostProtocolService
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        if (runtime.State != PluginLoadState.Loaded)
         {
             return new PluginCommandResult(false, "Plugin not loaded.");
         }
@@ -539,13 +315,9 @@ public sealed class PluginHostProtocolService
             sessionId,
             reason);
 
-        async Task CleanupAsync()
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
         {
-            if (string.IsNullOrWhiteSpace(sessionId))
-            {
-                return;
-            }
-
             try
             {
                 await _sharedMemorySessionService.CleanupAsync(sessionId);
@@ -554,45 +326,49 @@ public sealed class PluginHostProtocolService
             {
             }
 
-            try
-            {
-                runtime.EndSession(sessionId);
-            }
-            catch
-            {
-            }
+            return new PluginCommandResult(true);
         }
 
-        var payload = JsonSerializer.SerializeToElement(new PluginHostDisconnectPayload(sessionId, reason), JsonOptions);
-        var response = await runtime.Client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Disconnect, Payload: payload),
-            timeout);
-
-        if (response is null)
+        try
         {
-            await CleanupAsync();
-            return new PluginCommandResult(false, "Plugin host unavailable.");
-        }
+            var payload = JsonSerializer.SerializeToElement(new PluginHostDisconnectPayload(sessionId, reason), JsonOptions);
+            var response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Disconnect, SessionId: sessionId, Payload: payload),
+                timeout);
 
-        if (response.Payload is not null)
-        {
-            try
+            if (response is null)
             {
-                PluginCommandResult? result = response.Payload.Value.Deserialize<PluginCommandResult>(JsonOptions);
-                if (result is not null)
+                return new PluginCommandResult(false, "Session host unavailable.");
+            }
+
+            if (response.Payload is not null)
+            {
+                try
                 {
-                    await CleanupAsync();
-                    return result;
+                    PluginCommandResult? result = response.Payload.Value.Deserialize<PluginCommandResult>(JsonOptions);
+                    if (result is not null)
+                    {
+                        return result;
+                    }
+                }
+                catch
+                {
                 }
             }
+
+            return new PluginCommandResult(response.Ok, response.Error);
+        }
+        finally
+        {
+            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: reason);
+            try
+            {
+                await _sharedMemorySessionService.CleanupAsync(sessionId);
+            }
             catch
             {
-                // Fall back to envelope values.
             }
         }
-
-        await CleanupAsync();
-        return new PluginCommandResult(response.Ok, response.Error);
     }
 
     public async Task<SegmentUpgradeResult> AllocateAndApplySharedMemorySegmentAsync(
@@ -602,7 +378,7 @@ public sealed class PluginHostProtocolService
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        if (runtime.State != PluginLoadState.Loaded)
         {
             return new SegmentUpgradeResult(false, "Plugin not loaded.");
         }
@@ -612,22 +388,15 @@ public sealed class PluginHostProtocolService
             return new SegmentUpgradeResult(false, "Missing sessionId.");
         }
 
-        if (!runtime.IsSessionOpen(sessionId))
-        {
-            return new SegmentUpgradeResult(false, "Session is not active.");
-        }
-
         if (requestedBytes <= 0)
         {
             return new SegmentUpgradeResult(false, "requestedBytes must be > 0.");
         }
 
-        // Gate by per-session registration (ADR-010 MVP correctness).
-        var verifyTimeout = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
-        var registered = await runtime.WaitForSessionRegisteredAsync(sessionId, verifyTimeout, cancellationToken);
-        if (!registered)
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
         {
-            return new SegmentUpgradeResult(false, "Session not registered.");
+            return new SegmentUpgradeResult(false, "Session host not running.");
         }
 
         SharedMemorySegmentDescriptor descriptor;
@@ -666,7 +435,7 @@ public sealed class PluginHostProtocolService
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        if (runtime.State != PluginLoadState.Loaded)
         {
             return new SegmentUpgradeResult(false, "Plugin not loaded.");
         }
@@ -676,25 +445,18 @@ public sealed class PluginHostProtocolService
             return new SegmentUpgradeResult(false, "Missing sessionId.");
         }
 
-        if (!runtime.IsSessionOpen(sessionId))
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
         {
-            return new SegmentUpgradeResult(false, "Session is not active.");
-        }
-
-        // Gate by per-session registration (ADR-010 MVP correctness).
-        var verifyTimeout = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
-        var registered = await runtime.WaitForSessionRegisteredAsync(sessionId, verifyTimeout, cancellationToken);
-        if (!registered)
-        {
-            return new SegmentUpgradeResult(false, "Session not registered.");
+            return new SegmentUpgradeResult(false, "Session host not running.");
         }
 
         var payload = JsonSerializer.SerializeToElement(
             new PluginHostApplySharedMemorySegmentPayload(sessionId, descriptor),
             JsonOptions);
 
-        var response = await runtime.Client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.ApplySharedMemorySegment, Payload: payload),
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.ApplySharedMemorySegment, SessionId: sessionId, Payload: payload),
             timeout);
 
         if (response is null)

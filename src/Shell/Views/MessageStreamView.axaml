@@ -32,6 +32,22 @@
                         <TextBlock Text="{Binding L[stream.metrics.lines]}" FontSize="10" Foreground="#87909B" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding MessageItems.Count}" FontSize="12" Foreground="#E6EDF3" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
+
+                    <!-- Core display mode toggle (STR/HEX) -->
+                    <Border CornerRadius="6"
+                            BorderBrush="#25303A"
+                            BorderThickness="1"
+                            Background="#0F1417"
+                            Padding="10,6"
+                            Cursor="Hand"
+                            PointerPressed="OnToggleDisplayMode">
+                        <TextBlock Text="{Binding DisplayModeLabel}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#E6EDF3" />
+                    </Border>
                 </StackPanel>
                 
                 <!-- Database Storage Toggle -->

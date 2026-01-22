@@ -32,6 +32,7 @@
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
     <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />
     <ProjectReference Include="..\PluginHost\ComCross.PluginHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\SessionHost\ComCross.SessionHost.csproj" ReferenceOutputAssembly="false" />
 
     <!-- Built-in plugins: built but not referenced by Shell at runtime -->
     <ProjectReference Include="..\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj" ReferenceOutputAssembly="false" />
@@ -53,6 +54,7 @@
 
   <ItemGroup>
     <PluginHostFiles Include="..\PluginHost\bin\$(Configuration)\$(TargetFramework)\ComCross.PluginHost*" />
+    <SessionHostFiles Include="..\SessionHost\bin\$(Configuration)\$(TargetFramework)\ComCross.SessionHost*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,6 +74,10 @@
 
   <Target Name="CopyPluginHost" AfterTargets="Build">
     <Copy SourceFiles="@(PluginHostFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopySessionHost" AfterTargets="Build">
+    <Copy SourceFiles="@(SessionHostFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="PublishBuiltInPlugins" AfterTargets="Build">

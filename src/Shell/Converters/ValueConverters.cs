@@ -60,8 +60,8 @@ public class DirectionColorConverter : IValueConverter
         {
             return direction switch
             {
-                "TX" => new SolidColorBrush(Color.Parse("#3AA0FF")), // Blue for transmit
-                "RX" => new SolidColorBrush(Color.Parse("#2CB5A9")), // Green for receive
+                "TX" or "tx" => new SolidColorBrush(Color.Parse("#3AA0FF")), // Blue for transmit
+                "RX" or "rx" => new SolidColorBrush(Color.Parse("#2CB5A9")), // Green for receive
                 _ => new SolidColorBrush(Color.Parse("#87909B"))
             };
         }

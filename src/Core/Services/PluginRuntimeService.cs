@@ -453,19 +453,6 @@ public sealed class PluginRuntimeService
                     return false;
                 }
 
-                if (invalidated.SessionId is not null)
-                {
-                    if (!runtime.IsSessionOpen(invalidated.SessionId))
-                    {
-                        return false;
-                    }
-
-                    if (!runtime.IsSessionRegistered(invalidated.SessionId))
-                    {
-                        return false;
-                    }
-                }
-
                 return true;
             }
             catch
@@ -526,7 +513,7 @@ public sealed class PluginRuntimeService
             parentStartUtc = null;
         }
 
-        var args = $"--pipe \"{pipeName}\" --event-pipe \"{eventPipeName}\" --plugin \"{plugin.AssemblyPath}\" --entry \"{plugin.Manifest.EntryPoint}\" --host-token \"{hostToken}\" --parent-pid {parentPid}";
+        var args = $"--pipe \"{pipeName}\" --event-pipe \"{eventPipeName}\" --plugin \"{plugin.AssemblyPath}\" --entry \"{plugin.Manifest.EntryPoint}\" --host-token \"{hostToken}\" --role ui --parent-pid {parentPid}";
         if (!string.IsNullOrWhiteSpace(parentStartUtc))
         {
             args += $" --parent-start-utc \"{parentStartUtc}\"";

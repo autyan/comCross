@@ -67,8 +67,10 @@ public class AppHost : IAppHost
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.InitializeAsync();
 
-            // 3.1 Start shared-memory RX pump (frames -> events + log stream)
-            _ = _serviceProvider.GetRequiredService<SharedMemoryFramePumpService>();
+            // 3.1 Start shared-memory ingest + frame->MessageStream pump + backpressure bridge
+            _ = _serviceProvider.GetRequiredService<SharedMemoryIngestService>();
+            _ = _serviceProvider.GetRequiredService<FrameStoreMessageStreamPumpService>();
+            _ = _serviceProvider.GetRequiredService<SharedMemoryBackpressureBridgeService>();
 
             // 3.2 Start session descriptor persistence (committed state -> workspace-state.json)
             _ = _serviceProvider.GetRequiredService<SessionDescriptorPersistenceService>();

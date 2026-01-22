@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.Input;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -48,5 +49,14 @@ public partial class MessageStreamView : BaseUserControl
         {
             MessageList.ScrollIntoView(vm.MessageItems.Last());
         });
+    }
+
+    private void OnToggleDisplayMode(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ToggleDisplayMode();
+            e.Handled = true;
+        }
     }
 }
