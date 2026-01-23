@@ -5,7 +5,8 @@
 - Core Services: device, message stream, config, event bus, logging.
 - Workspace: sessions, state, and stream binding.
 - Tools: modular UI panels around the workspace.
-- Adapters: platform-specific device access.
+- Platform: platform-specific capabilities and integrations.
+- Plugins: extend tools and provide bus/device capabilities.
 
 ## Core Buses
 ### EventBus

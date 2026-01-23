@@ -1,185 +1,200 @@
-# ComCross MVP 验收文档
+# ComCross MVP Acceptance
 
-## 版本信息
-- 版本: 0.1.0-MVP
-- 日期: 2026-01-14
-- 状态: ✅ 完成
+## Version Info
 
-## 验收标准
+- Version: 0.1.0-MVP
+- Date: 2026-01-14
+- Status: ✅ Completed
 
-### 1. 核心架构 ✅
+## Acceptance Criteria
 
-#### 1.1 项目结构
-- [x] ComCross.Shared - 共享模型和接口
-- [x] ComCross.Core - 核心服务层
-- [x] ComCross.Adapters - 设备适配器
-- [x] ComCross.Tools - 工具插件
-- [x] ComCross.Shell - Avalonia UI主应用
-- [x] ComCross.Tests - 单元测试
+### 1. Core Architecture ✅
 
-#### 1.2 核心服务
-- [x] EventBus - 事件总线实现
-- [x] MessageStreamService - 消息流管理
-- [x] DeviceService - 设备连接管理
-- [x] ConfigService - 配置持久化
+#### 1.1 Solution Structure
 
-### 2. Serial端口功能 ✅
+- [x] ComCross.Shared - Shared models and interfaces
+- [x] ComCross.Core - Core service layer
+- [x] ComCross.Platform - Cross-platform capability layer (platform-specific integrations)
+- [x] ComCross.Tools - Pluggable tool modules
+- [x] ComCross.Shell - Avalonia UI application
+- [x] ComCross.Tests - Unit tests
 
-#### 2.1 设备枚举
-- [x] 列出所有可用串口设备
-- [x] 显示设备基本信息（端口名、描述）
+#### 1.2 Core Services
 
-#### 2.2 连接管理
-- [x] 连接到指定串口
-- [x] 配置串口参数（波特率、数据位、校验位、停止位）
-- [x] 断开连接
-- [x] 连接状态监控
+- [x] EventBus - Event bus implementation
+- [x] MessageStreamService - Message stream management
+- [x] DeviceService - Connection/session management
+- [x] ConfigService - Settings and state persistence
 
-#### 2.3 数据传输
-- [x] 接收串口数据
-- [x] 发送数据到串口
-- [x] 统计RX/TX字节数
+### 2. Serial Functionality ✅
 
-### 3. UI/UX实现 ✅
+#### 2.1 Device Enumeration
 
-#### 3.1 主窗口布局
-- [x] 顶部工具栏（连接、断开、清空、导出）
-- [x] 左侧边栏（设备列表、会话列表）
-- [x] 中央工作区（消息流显示）
-- [x] 右侧工具栏（发送工具、过滤工具）
-- [x] 底部状态栏（RX/TX统计）
+- [x] List available serial devices
+- [x] Display basic device info (port name, description)
 
-#### 3.2 消息流
-- [x] 实时显示接收到的消息
-- [x] 显示时间戳
-- [x] 消息级别颜色区分
-- [x] 搜索功能
-- [x] 清空功能
+#### 2.2 Connection Management
 
-#### 3.3 会话管理
-- [x] 创建新会话
-- [x] 多会话支持
-- [x] 会话切换
-- [x] 会话状态显示
+- [x] Connect to a selected serial port
+- [x] Configure serial parameters (baud rate, data bits, parity, stop bits)
+- [x] Disconnect
+- [x] Monitor connection status
 
-#### 3.4 UI主题
-- [x] 深色主题实现
-- [x] 自定义颜色方案（符合规范）
-- [x] 等宽字体用于日志显示
+#### 2.3 Data Transfer
 
-### 4. 数据持久化 ✅
+- [x] Receive serial data
+- [x] Send serial data
+- [x] Track RX/TX byte statistics
 
-#### 4.1 WorkspaceState
-- [x] 保存会话配置
-- [x] 保存UI状态
-- [x] 自动加载上次状态
+### 3. UI/UX ✅
 
-#### 4.2 Toolset配置
-- [x] 工具集配置结构
-- [x] 布局配置保存
+#### 3.1 Main Window Layout
 
-### 5. 测试覆盖 ✅
+- [x] Top toolbar (Connect, Disconnect, Clear, Export)
+- [x] Left sidebar (Device list, Session list)
+- [x] Center workspace (Message stream)
+- [x] Right tool dock (Send tool, Filter tool)
+- [x] Bottom status bar (RX/TX statistics)
 
-#### 5.1 单元测试
-- [x] EventBus测试
-- [x] MessageStreamService测试
-- [x] 所有测试通过（5/5）
+#### 3.2 Message Stream
 
-#### 5.2 构建验证
-- [x] 项目成功构建
-- [x] 无编译错误
-- [x] 依赖正确解析
+- [x] Real-time streaming display
+- [x] Timestamp display
+- [x] Level-based coloring
+- [x] Search
+- [x] Clear
 
-## MVP功能清单
+#### 3.3 Session Management
 
-### 已实现功能
+- [x] Create sessions
+- [x] Multi-session support
+- [x] Session switching
+- [x] Session status display
 
-1. **串口设备管理**
-   - 设备枚举
-   - 设备连接/断开
-   - 连接参数配置
-   - 连接状态监控
+#### 3.4 Theme
 
-2. **消息流系统**
-   - 实时消息接收
-   - 消息缓冲和分页
-   - 消息搜索（关键字/正则）
-   - 消息过滤
-   - 清空功能
+- [x] Dark theme
+- [x] Custom color scheme (per spec)
+- [x] Monospace font for log lines
 
-3. **会话管理**
-   - 多会话支持
-   - 会话切换
-   - 会话状态持久化
-   - RX/TX统计
+### 4. Persistence ✅
 
-4. **UI界面**
-   - 完整的主窗口布局
-   - 连接对话框
-   - 消息流视图
-   - 工具面板
-   - 状态栏
+#### 4.1 Workspace State
 
-5. **数据持久化**
-   - 工作区状态保存
-   - 自动恢复上次会话
+- [x] Persist session configuration
+- [x] Persist UI state
+- [x] Auto-load last state
 
-### 未实现功能（后续版本）
+#### 4.2 Toolset Configuration
 
-1. **高级工具**
-   - 完整的发送工具（HEX模式、历史记录）
-   - 高级过滤工具
-   - 高亮规则
-   - 数据导出功能
+- [x] Toolset configuration structure
+- [x] Layout persistence
 
-2. **插件系统**
-   - 动态插件加载
-   - 插件管理器
-   - 插件配置
+### 5. Test Coverage ✅
 
-3. **跨平台**
-   - Windows完整支持
-   - macOS支持
+#### 5.1 Unit Tests
 
-## 技术栈
+- [x] EventBus tests
+- [x] MessageStreamService tests
+- [x] All tests passing (5/5)
+
+#### 5.2 Build Verification
+
+- [x] Builds successfully
+- [x] No compilation errors
+- [x] Dependencies resolve correctly
+
+## MVP Feature List
+
+### Implemented
+
+1. **Serial Device Management**
+   - Device enumeration
+   - Connect/disconnect
+   - Connection parameter configuration
+   - Connection status monitoring
+
+2. **Message Stream System**
+   - Real-time message reception
+   - Buffering and paging
+   - Search (keyword/regex)
+   - Filtering
+   - Clear
+
+3. **Session Management**
+   - Multi-session support
+   - Session switching
+   - Session state persistence
+   - RX/TX statistics
+
+4. **UI**
+   - Full main window layout
+   - Connect dialog
+   - Message stream view
+   - Tool panels
+   - Status bar
+
+5. **Persistence**
+   - Workspace state saving
+   - Automatic restoration of last session list/state
+
+### Not Implemented (Future Versions)
+
+1. **Advanced Tools**
+   - Full send tool features (HEX mode, history)
+   - Advanced filtering
+   - Highlight rules
+   - Export improvements
+
+2. **Plugin System**
+   - Dynamic plugin loading
+   - Plugin manager
+   - Plugin configuration
+
+3. **Cross-Platform**
+   - Full Windows support
+   - macOS support
+
+## Tech Stack
 
 - **.NET**: 10.0
-- **UI框架**: Avalonia 11.2.2
-- **架构模式**: MVVM
-- **测试框架**: xUnit
-- **序列化**: System.Text.Json
+- **UI**: Avalonia 11.2.2
+- **Architecture**: MVVM
+- **Testing**: xUnit
+- **Serialization**: System.Text.Json
 
-## 性能指标
+## Performance Targets
 
-- 构建时间: ~2秒
-- 测试执行: <1秒
-- 启动时间: 预计 <2秒
-- 消息吞吐量: 设计支持 >10000条/秒
+- Build time: ~2s
+- Test execution: <1s
+- Startup: expected <2s
+- Message throughput: designed for > 10,000 lines/s
 
-## 已知问题
+## Known Issues
 
-1. System.Text.Json包警告 - 可忽略，是.NET 10的框架包
-2. UI细节待完善 - 某些样式和交互需要精细调整
-3. 错误处理 - 需要更完善的错误提示
+1. System.Text.Json package warning - can be ignored (framework pack warning on .NET 10)
+2. UI details still need polish
+3. Error handling can be improved (more user-friendly feedback)
 
-## 下一步计划
+## Next Steps
 
-1. 完善发送工具功能
-2. 实现数据导出
-3. 添加高亮规则配置
-4. 实现插件加载机制
-5. Windows平台测试和优化
-6. 性能优化和压力测试
+1. Complete the send tool features
+2. Improve export capabilities
+3. Add highlight rule configuration
+4. Continue plugin system improvements
+5. Windows validation and optimization
+6. Performance tuning and stress testing
 
-## 验收结论
+## Acceptance Conclusion
 
-✅ **MVP目标已完成**
+✅ **MVP goals are achieved**
 
-项目已成功实现所有核心功能：
-- 串口设备管理和连接
-- 消息流接收和显示
-- 多会话支持
-- 基本UI界面
-- 状态持久化
+Core capabilities are implemented:
 
-项目可以进入下一阶段开发。
+- Serial device management and connection
+- Message stream reception and display
+- Multi-session support
+- Basic UI
+- State persistence
+
+The project is ready to proceed to the next development phase.

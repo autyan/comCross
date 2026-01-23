@@ -19,6 +19,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\Core\ComCross.Core.csproj" />
-    <ProjectReference Include="..\src\Adapters\ComCross.Adapters.csproj" />
   </ItemGroup>
 </Project>

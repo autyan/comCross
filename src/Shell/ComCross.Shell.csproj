@@ -27,7 +27,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\ComCross.Core.csproj" />
-    <ProjectReference Include="..\Adapters\ComCross.Adapters.csproj" />
     <ProjectReference Include="..\Tools\ComCross.Tools.csproj" />
     <ProjectReference Include="..\Shared\ComCross.Shared.csproj" />
     <ProjectReference Include="..\Assets\ComCross.Assets.csproj" />

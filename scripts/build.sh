@@ -73,6 +73,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Repository guardrails (architectural boundaries)
+if [[ "${COMCROSS_SKIP_GUARDRAILS:-}" != "1" ]]; then
+  bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/repo-tools/check-project-boundaries.sh"
+  bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/repo-tools/check-shell-i18n.sh"
+  bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/repo-tools/check-shell-i18n-keys.sh"
+fi
+
 if [[ -z "${config}" ]]; then
   echo "Config cannot be empty." >&2
   exit 1

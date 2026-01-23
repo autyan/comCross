@@ -4,7 +4,7 @@
   "version": "0.3.2",
   "targetCoreVersion": "0.3",
   "entryPoint": "ComCross.Plugins.Serial.SerialBusAdapterPlugin",
-  "toolGroup": "adapters",
+  "toolGroup": "serial",
   "permissions": ["serial.read", "serial.write", "workspace.read"],
   "settingsPages": [
     {

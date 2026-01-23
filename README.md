@@ -86,7 +86,7 @@ ComCross/
 ├── src/
 │   ├── Shared/          # Shared models and interfaces
 │   ├── Core/            # Core services (EventBus, MessageStream, DeviceService, LocalizationService)
-│   ├── Adapters/        # Platform adapters (Serial)
+│   ├── Platform/        # Platform-specific capabilities
 │   ├── Tools/           # Pluggable tool modules
 │   └── Shell/           # Avalonia UI main application
 ├── tests/               # Unit tests

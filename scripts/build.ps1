@@ -36,6 +36,13 @@ if ([string]::IsNullOrWhiteSpace($Configuration)) {
     exit 1
 }
 
+# Repository guardrails (architectural boundaries)
+if ($env:COMCROSS_SKIP_GUARDRAILS -ne '1') {
+    & (Join-Path $PSScriptRoot '..\repo-tools\check-project-boundaries.ps1')
+    & (Join-Path $PSScriptRoot '..\repo-tools\check-shell-i18n.ps1')
+    & (Join-Path $PSScriptRoot '..\repo-tools\check-shell-i18n-keys.ps1')
+}
+
 if ($Publish) {
     if ($Rids.Count -eq 0) {
         Write-Error "RID list cannot be empty for publish."
