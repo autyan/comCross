@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using ComCross.PluginSdk.UI;
+using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 using ComCross.Shell.Views;
 using ComCross.Shell.Extensions;
@@ -83,7 +85,14 @@ public partial class App : Application
 
                 // Initialize static services
                 var localization = _serviceProvider!.GetRequiredService<Shared.Services.ILocalizationService>();
-                Shell.Services.MessageBoxService.Initialize(localization);
+                var messageBoxDialogFactory = _serviceProvider!.GetRequiredService<IMessageBoxDialogFactory>();
+                Shell.Services.MessageBoxService.Initialize(localization, messageBoxDialogFactory);
+                Shell.Services.LocalizationManager.Initialize(localization);
+
+                var objectFactory = _serviceProvider!.GetRequiredService<IObjectFactory>();
+                var pluginUiStateManager = _serviceProvider!.GetRequiredService<PluginUiStateManager>();
+                var textInputDialogFactory = _serviceProvider!.GetRequiredService<ITextInputDialogFactory>();
+                Shell.Services.ShellUiServices.Initialize(objectFactory, pluginUiStateManager, textInputDialogFactory);
                 Console.Error.WriteLine("[Shell] Services initialized");
 
                 // 5. Build UI

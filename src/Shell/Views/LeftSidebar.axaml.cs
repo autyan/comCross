@@ -6,7 +6,6 @@ using ComCross.Shared.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using ComCross.Shell.Services;
 using ComCross.PluginSdk.UI;
 
@@ -28,8 +27,8 @@ public partial class LeftSidebar : BaseUserControl
 
         if (owner.DataContext is MainWindowViewModel vm)
         {
-            var dialog = App.ServiceProvider.GetRequiredService<ConnectDialog>();
-            var objectFactory = App.ServiceProvider.GetRequiredService<IObjectFactory>();
+            var objectFactory = ShellUiServices.ObjectFactory;
+            var dialog = objectFactory.Create<ConnectDialog>();
             // Create a dedicated selector VM for the dialog so its rendered controls
             // are not shared with the sidebar's visual tree.
             var viewInstanceId = Guid.NewGuid().ToString("N");
@@ -39,7 +38,7 @@ public partial class LeftSidebar : BaseUserControl
             await dialog.ShowDialog(owner);
 
             // Clean up per-instance registrations; shared state is preserved by ViewKind.
-            var stateManager = App.ServiceProvider.GetRequiredService<PluginUiStateManager>();
+            var stateManager = ShellUiServices.PluginUiStateManager;
             stateManager.ClearViewScope(new PluginUiViewScope(BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId));
         }
     }
@@ -82,7 +81,7 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        var dialogFactory = App.ServiceProvider.GetRequiredService<ITextInputDialogFactory>();
+        var dialogFactory = ShellUiServices.TextInputDialogFactory;
         var result = await dialogFactory.ShowAsync(
             owner,
             vm.Localization,

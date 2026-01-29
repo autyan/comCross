@@ -134,6 +134,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            // i18n-ignore (log message)
             _appLogService.LogException(ex, "Send failed");
         }
     }
@@ -162,6 +163,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            // i18n-ignore (log message)
             _appLogService.LogException(ex, "Export failed");
         }
     }

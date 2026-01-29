@@ -41,7 +41,7 @@ public sealed class BusAdapterInfo
     /// <summary>
     /// Display text for ComboBox (Icon + Name)
     /// </summary>
-    public string DisplayText => $"{Icon} {Name}";
+    public string DisplayText => string.Concat(Icon, ' ', Name);
 
     /// <summary>
     /// Optional plugin id backing this adapter (when adapter is provided by a plugin capability).

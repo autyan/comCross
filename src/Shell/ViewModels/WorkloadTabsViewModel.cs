@@ -128,7 +128,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
     /// </summary>
     private async Task CreateWorkloadAsync()
     {
-        var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
+        var dialog = _objectFactory.Create<CreateWorkloadDialog>();
         dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
         var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
             ? desktop.MainWindow 
@@ -212,7 +212,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         if (mainWindow == null)
             return;
 
-        var dialog = App.ServiceProvider.GetRequiredService<RenameWorkloadDialog>();
+        var dialog = _objectFactory.Create<RenameWorkloadDialog>();
         dialog.DataContext = _objectFactory.Create<RenameWorkloadDialogViewModel>(tab.Name);
 
         var result = await dialog.ShowDialog<string?>(mainWindow);
@@ -243,7 +243,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
             return;
 
         // Show dialog to input new name
-        var dialog = App.ServiceProvider.GetRequiredService<CreateWorkloadDialog>();
+        var dialog = _objectFactory.Create<CreateWorkloadDialog>();
         dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
         var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
 

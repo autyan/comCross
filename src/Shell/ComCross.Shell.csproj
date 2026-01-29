@@ -58,16 +58,16 @@
 
   <ItemGroup>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj">
-      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+      <PluginPackageId>serial.flow-lpjaohwd</PluginPackageId>
     </BuiltInPluginProjects>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj">
-      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+      <PluginPackageId>serial.protocol-rdutjbmx</PluginPackageId>
     </BuiltInPluginProjects>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj">
-      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+      <PluginPackageId>serial.stats-ai2545fm</PluginPackageId>
     </BuiltInPluginProjects>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Serial\ComCross.Plugins.Serial.csproj">
-      <PluginPackageId>$([System.Guid]::NewGuid().ToString('N'))</PluginPackageId>
+      <PluginPackageId>serial.adapter-3mpdru6x</PluginPackageId>
     </BuiltInPluginProjects>
   </ItemGroup>
 

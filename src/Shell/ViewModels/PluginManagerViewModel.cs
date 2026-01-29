@@ -150,20 +150,26 @@ public sealed class PluginManagerViewModel : BaseViewModel
         var runtime = _pluginManagerService.GetRuntime(plugin.Id);
         if (runtime is null)
         {
-            await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], "Runtime not found.");
+            await MessageBoxService.ShowErrorAsync(
+                L["settings.plugins.connectTest.title"],
+                L["settings.plugins.connectTest.error.runtimeNotFound"]);
             return;
         }
 
         if (runtime.State != PluginLoadState.Loaded)
         {
-            await MessageBoxService.ShowWarningAsync(L["settings.plugins.connectTest.title"], "Plugin not loaded.");
+            await MessageBoxService.ShowWarningAsync(
+                L["settings.plugins.connectTest.title"],
+                L["settings.plugins.connectTest.error.pluginNotLoaded"]);
             return;
         }
 
         var capability = runtime.Capabilities.FirstOrDefault();
         if (capability is null)
         {
-            await MessageBoxService.ShowWarningAsync(L["settings.plugins.connectTest.title"], "No capabilities.");
+            await MessageBoxService.ShowWarningAsync(
+                L["settings.plugins.connectTest.title"],
+                L["settings.plugins.connectTest.error.noCapabilities"]);
             return;
         }
 
@@ -190,10 +196,10 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
                     if (!upgrade.Ok)
                     {
-                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? "Unknown error." : upgrade.Error;
+                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? L["error.unknown"] : upgrade.Error;
                         await MessageBoxService.ShowWarningAsync(
                             L["settings.plugins.connectTest.title"],
-                            $"Segment upgrade denied: {upgradeError}");
+                            Localization.GetString("settings.plugins.segmentUpgrade.denied", upgradeError));
                     }
                 }
             }
@@ -212,7 +218,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             return;
         }
 
-        var error = string.IsNullOrWhiteSpace(result.Error) ? "Unknown error." : result.Error;
+        var error = string.IsNullOrWhiteSpace(result.Error) ? L["error.unknown"] : result.Error;
         await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], string.Format(L["settings.plugins.connectTest.failed"], error));
     }
 
@@ -221,13 +227,17 @@ public sealed class PluginManagerViewModel : BaseViewModel
         var runtime = _pluginManagerService.GetRuntime(plugin.Id);
         if (runtime is null)
         {
-            await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], "Runtime not found.");
+            await MessageBoxService.ShowErrorAsync(
+                L["settings.plugins.connectTest.title"],
+                L["settings.plugins.connectTest.error.runtimeNotFound"]);
             return;
         }
 
         if (runtime.State != PluginLoadState.Loaded)
         {
-            await MessageBoxService.ShowWarningAsync(L["settings.plugins.connectTest.title"], "Plugin not loaded.");
+            await MessageBoxService.ShowWarningAsync(
+                L["settings.plugins.connectTest.title"],
+                L["settings.plugins.connectTest.error.pluginNotLoaded"]);
             return;
         }
 
@@ -266,10 +276,10 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
                     if (!upgrade.Ok)
                     {
-                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? "Unknown error." : upgrade.Error;
+                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? L["error.unknown"] : upgrade.Error;
                         await MessageBoxService.ShowWarningAsync(
                             L["settings.plugins.connectTest.title"],
-                            $"Segment upgrade denied: {upgradeError}");
+                            Localization.GetString("settings.plugins.segmentUpgrade.denied", upgradeError));
                     }
                 }
             }
@@ -288,7 +298,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             return;
         }
 
-        var error = string.IsNullOrWhiteSpace(result.Error) ? "Unknown error." : result.Error;
+        var error = string.IsNullOrWhiteSpace(result.Error) ? L["error.unknown"] : result.Error;
         await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], string.Format(L["settings.plugins.connectTest.failed"], error));
     }
 
@@ -429,14 +439,14 @@ public sealed class PluginManagerViewModel : BaseViewModel
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 // If runtime isn't available, we cannot validate; be conservative and reject.
-                error = "Plugin runtime not loaded.";
+                error = L["settings.plugins.connectTest.error.pluginRuntimeNotLoaded"];
                 return false;
             }
 
             var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
             if (capability is null)
             {
-                error = "Capability not found.";
+                error = L["settings.plugins.connectTest.error.capabilityNotFound"];
                 return false;
             }
 
@@ -448,7 +458,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
             if (!JsonSchemaLiteValidator.TryParseSchema(capability.JsonSchema, out var schema, out var parseError))
             {
-                error = $"Invalid schema: {parseError}";
+                error = Localization.GetString("settings.plugins.connectTest.error.invalidSchema", parseError ?? string.Empty);
                 return false;
             }
 
@@ -472,13 +482,17 @@ public sealed class PluginManagerViewModel : BaseViewModel
         var runtime = _pluginManagerService.GetRuntime(pluginId);
         if (runtime is null)
         {
-            await MessageBoxService.ShowErrorAsync(L["dialog.connect.plugin.title"], "Runtime not found.");
+            await MessageBoxService.ShowErrorAsync(
+                L["dialog.connect.plugin.title"],
+                L["settings.plugins.connectTest.error.runtimeNotFound"]);
             return;
         }
 
         if (runtime.State != PluginLoadState.Loaded)
         {
-            await MessageBoxService.ShowWarningAsync(L["dialog.connect.plugin.title"], "Plugin not loaded.");
+            await MessageBoxService.ShowWarningAsync(
+                L["dialog.connect.plugin.title"],
+                L["settings.plugins.connectTest.error.pluginNotLoaded"]);
             return;
         }
 
@@ -525,7 +539,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             return;
         }
 
-        var error = string.IsNullOrWhiteSpace(result.Error) ? "Unknown error." : result.Error;
+        var error = string.IsNullOrWhiteSpace(result.Error) ? L["error.unknown"] : result.Error;
         await MessageBoxService.ShowErrorAsync(
             L["dialog.connect.plugin.title"],
             string.Format(L["dialog.connect.plugin.failed"], error));

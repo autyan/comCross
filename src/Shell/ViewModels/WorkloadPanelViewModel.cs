@@ -173,7 +173,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel
             ComCross.Shell.Views.CreateWorkloadResult? result = null;
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.CreateWorkloadDialog>();
+                var dialog = _objectFactory.Create<ComCross.Shell.Views.CreateWorkloadDialog>();
                 dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
                 result = await dialog.ShowDialog<ComCross.Shell.Views.CreateWorkloadResult?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
@@ -216,7 +216,7 @@ public sealed class WorkloadPanelViewModel : BaseViewModel
             string? newName = null;
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var dialog = ComCross.Shell.App.ServiceProvider.GetRequiredService<ComCross.Shell.Views.RenameWorkloadDialog>();
+                var dialog = _objectFactory.Create<ComCross.Shell.Views.RenameWorkloadDialog>();
                 dialog.DataContext = _objectFactory.Create<RenameWorkloadDialogViewModel>(currentName);
                 newName = await dialog.ShowDialog<string?>(
                     Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop

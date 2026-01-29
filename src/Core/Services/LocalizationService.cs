@@ -291,6 +291,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
     {
         return new Dictionary<string, string>
         {
+            // Common
+            ["error.unknown"] = "Unknown error.",
+
             // Main Window
             ["app.title"] = "ComCross - Serial Toolbox",
             ["menu.connect"] = "Connect",
@@ -345,6 +348,8 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["workload.default.name"] = "{0}'s Workspace",
             ["workload.panel.title"] = "Workloads",
             ["workload.panel.loading"] = "Loading...",
+            ["workload.displayName.withCount"] = "{0} ({1})",
+            ["workload.session.displayName"] = "Session {0}",
             
             // Workload Dialogs
             ["dialog.createWorkload.title"] = "Create Workload",
@@ -534,8 +539,19 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.plugins.connectTest.dialog.connect"] = "Connect",
             ["settings.plugins.connectTest.dialog.cancel"] = "Cancel",
             ["settings.plugins.connectTest.dialog.invalidJson"] = "Invalid JSON parameters: {0}",
+            ["settings.plugins.connectTest.error.runtimeNotFound"] = "Runtime not found.",
+            ["settings.plugins.connectTest.error.pluginNotLoaded"] = "Plugin not loaded.",
+            ["settings.plugins.connectTest.error.noCapabilities"] = "No capabilities.",
+            ["settings.plugins.connectTest.error.pluginRuntimeNotLoaded"] = "Plugin runtime not loaded.",
+            ["settings.plugins.connectTest.error.capabilityNotFound"] = "Capability not found.",
+            ["settings.plugins.connectTest.error.invalidSchema"] = "Invalid schema: {0}",
+            ["settings.plugins.segmentUpgrade.denied"] = "Segment upgrade denied: {0}",
             ["settings.plugins.connectTest.success"] = "Connect request sent: {0}/{1}",
             ["settings.plugins.connectTest.failed"] = "Connect failed: {0}",
+
+            // Bus adapter / connect flow
+            ["busAdapter.adapter.nameFormat"] = "{0} / {1}",
+            ["dialog.connect.plugin.singleSessionHint"] = "The plugin host currently allows only one active session. Disconnect the existing session to connect another. (Multi-session support is pending.)",
             ["settings.notifications.storage"] = "Storage limit alerts",
             ["settings.notifications.connection"] = "Connection alerts",
             ["settings.notifications.export"] = "Export alerts",

@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Views;
 
@@ -49,8 +48,8 @@ public partial class PluginManagerView : BaseUserControl
             return;
         }
 
-        var dialog = App.ServiceProvider.GetRequiredService<TestConnectDialog>();
-        var objectFactory = App.ServiceProvider.GetRequiredService<IObjectFactory>();
+            var objectFactory = ShellUiServices.ObjectFactory;
+            var dialog = objectFactory.Create<TestConnectDialog>();
         dialog.DataContext = objectFactory.Create<TestConnectDialogViewModel>(options);
 
         if (TopLevel.GetTopLevel(this) is not Window owner)

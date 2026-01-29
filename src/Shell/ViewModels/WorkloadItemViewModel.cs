@@ -60,9 +60,11 @@ public sealed class WorkloadItemViewModel : LocalizedItemViewModelBase<WorkloadI
         Sessions.Clear();
         foreach (var sessionId in context.Workload.SessionIds)
         {
-            var displayName = sessionId.Length >= 8
-                ? $"Session {sessionId.Substring(0, 8)}"
-                : $"Session {sessionId}";
+            var displayId = sessionId.Length >= 8
+                ? sessionId.Substring(0, 8)
+                : sessionId;
+
+            var displayName = Localization.GetString("workload.session.displayName", displayId);
 
             Sessions.Add(new WorkloadSessionItemContext(
                 sessionId,
@@ -127,7 +129,7 @@ public sealed class WorkloadItemViewModel : LocalizedItemViewModelBase<WorkloadI
     /// <summary>
     /// 显示的计数文本（如 "默认任务 (3)"）
     /// </summary>
-    public string DisplayName => $"{Name} ({SessionCount})";
+    public string DisplayName => Localization.GetString("workload.displayName.withCount", Name, SessionCount);
 
     public string RenameHeader => L["workload.rename"];
 

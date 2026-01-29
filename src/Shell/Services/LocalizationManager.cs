@@ -1,5 +1,5 @@
+using System;
 using ComCross.Shared.Services;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Services;
 
@@ -8,7 +8,16 @@ namespace ComCross.Shell.Services;
 /// </summary>
 public static class LocalizationManager
 {
-    private static ILocalizationService Localization => App.ServiceProvider.GetRequiredService<ILocalizationService>();
+    private static ILocalizationService? _localization;
+
+    public static void Initialize(ILocalizationService localization)
+    {
+        _localization = localization;
+    }
+
+    public static ILocalizationStrings Strings => (_localization ?? throw new InvalidOperationException("LocalizationManager not initialized")).Strings;
+
+    private static ILocalizationService Localization => _localization ?? throw new InvalidOperationException("LocalizationManager not initialized");
 
     // Main Window
     public static string AppTitle => Localization.GetString("app.title");

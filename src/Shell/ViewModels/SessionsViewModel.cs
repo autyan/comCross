@@ -52,6 +52,7 @@ public sealed class SessionsViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            // i18n-ignore (log message)
             _appLogService.LogException(ex, "Delete session failed");
             return activeSession;
         }

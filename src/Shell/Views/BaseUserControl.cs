@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using ComCross.Shared.Services;
-using Microsoft.Extensions.DependencyInjection;
+using ComCross.Shell.Services;
 
 namespace ComCross.Shell.Views;
 
@@ -16,7 +16,6 @@ public abstract class BaseUserControl : UserControl
 
     protected BaseUserControl()
     {
-        var localization = App.ServiceProvider.GetRequiredService<ILocalizationService>();
-        L = localization.Strings;
+        L = LocalizationManager.Strings;
     }
 }

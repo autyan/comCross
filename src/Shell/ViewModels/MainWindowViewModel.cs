@@ -275,6 +275,7 @@ public class MainWindowViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            // i18n-ignore (log message)
             _appLogService?.LogException(ex, "UI initialization error");
         }
     }
@@ -330,6 +331,7 @@ public class MainWindowViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
+            // i18n-ignore (log message)
             _appLogService.LogException(ex, "Failed to save workspace state");
         }
     }

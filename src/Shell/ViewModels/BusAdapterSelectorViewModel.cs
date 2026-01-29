@@ -148,7 +148,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 var adapter = new BusAdapterInfo
                 {
                     Id = $"{PluginAdapterPrefix}{option.PluginId}:{option.CapabilityId}",
-                    Name = $"{pluginName} / {capName}",
+                    Name = Localization.GetString("busAdapter.adapter.nameFormat", pluginName, capName),
                     Icon = "🧩",
                     Description = capDesc,
                     IsEnabled = true,
@@ -484,11 +484,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         catch (Exception ex)
         {
             // If the underlying plugin host still enforces single-session, surface a clearer hint.
+            // i18n-ignore (non-UI: matching a backend error message)
             if (ex.Message.Contains("Another session is already active", StringComparison.OrdinalIgnoreCase))
             {
                 await MessageBoxService.ShowErrorAsync(
                     Localization.GetString("dialog.connect.title"),
-                    "The plugin host currently allows only one active session. Disconnect the existing session to connect another. (Multi-session support is pending.)");
+                    Localization.GetString("dialog.connect.plugin.singleSessionHint"));
                 return;
             }
 

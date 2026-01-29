@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using ComCross.Shared.Services;
 using ComCross.Shell.ViewModels;
 using ComCross.Shell.Views;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace ComCross.Shell.Services;
 
@@ -16,10 +15,12 @@ namespace ComCross.Shell.Services;
 public static class MessageBoxService
 {
     private static ILocalizationService? _localization;
+    private static IMessageBoxDialogFactory? _dialogFactory;
     
-    public static void Initialize(ILocalizationService localization)
+    public static void Initialize(ILocalizationService localization, IMessageBoxDialogFactory dialogFactory)
     {
         _localization = localization;
+        _dialogFactory = dialogFactory;
     }
     
     private static Window? GetMainWindow()
@@ -106,7 +107,7 @@ public static class MessageBoxService
     /// <returns>Index of clicked button, or -1 if dialog was closed</returns>
     public static async Task<int> ShowCustomAsync(string title, string message, MessageBoxIcon icon, params string[] buttons)
     {
-        var dialogFactory = App.ServiceProvider.GetRequiredService<IMessageBoxDialogFactory>();
+        var dialogFactory = _dialogFactory ?? throw new InvalidOperationException("MessageBoxService not initialized");
         var owner = GetMainWindow();
         
         if (owner != null)
@@ -118,7 +119,7 @@ public static class MessageBoxService
 
     private static async Task ShowMessageAsync(string title, string message, MessageBoxIcon icon, string[] buttons)
     {
-        var dialogFactory = App.ServiceProvider.GetRequiredService<IMessageBoxDialogFactory>();
+        var dialogFactory = _dialogFactory ?? throw new InvalidOperationException("MessageBoxService not initialized");
         var owner = GetMainWindow();
         
         if (owner != null)
