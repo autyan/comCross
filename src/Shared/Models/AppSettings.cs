@@ -113,4 +113,32 @@ public sealed class CommandSettings
 public sealed class PluginSettings
 {
     public Dictionary<string, bool> Enabled { get; set; } = new();
+
+    /// <summary>
+    /// Optional plugin package trust enforcement.
+    /// Default is disabled for development/backward compatibility.
+    /// </summary>
+    public PluginSignatureVerificationSettings SignatureVerification { get; set; } = new();
+}
+
+public sealed class PluginSignatureVerificationSettings
+{
+    /// <summary>
+    /// When enabled, Core will evaluate whether a plugin package is trusted before starting its host.
+    /// Default: disabled.
+    /// </summary>
+    public bool Enabled { get; set; } = false;
+
+    /// <summary>
+    /// Temporary allow-list for official/built-in plugins while signature verification is being rolled out.
+    /// NOTE: This is not a cryptographic guarantee.
+    /// </summary>
+    public List<string> AllowUnsignedPluginIds { get; set; } = new()
+    {
+        "serial.adapter",
+        "serial.flow",
+        "serial.protocol",
+        "serial.stats",
+        "network.adapter"
+    };
 }

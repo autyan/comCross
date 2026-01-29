@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "mode": { "type": "string" },
+    "listenHost": { "type": "string" },
+    "listenPort": { "type": "integer" },
+    "backlog": { "type": "integer" },
+
+    "listenerSessionId": { "type": "string" },
+    "pendingId": { "type": "string" },
+
+    "sessionName": { "type": "string" }
+  }
+}

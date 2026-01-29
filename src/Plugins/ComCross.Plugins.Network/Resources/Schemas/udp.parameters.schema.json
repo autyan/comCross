@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "remoteHost": { "type": "string" },
+    "remotePort": { "type": "integer" },
+    "localPort": { "type": "integer" },
+    "sessionName": { "type": "string" }
+  },
+  "required": ["remoteHost", "remotePort"]
+}

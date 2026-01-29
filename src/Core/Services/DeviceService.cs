@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -78,8 +79,14 @@ public sealed class DeviceService : IDisposable
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
         session.Status = SessionStatus.Connecting;
 
+        // Listener topology hints (used by UI + orchestration).
+        ApplyListenerTopologyHints(session, pluginId, capabilityId, parameters);
+
         var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-        var supportsMultiSession = capability?.SupportsMultiSession == true;
+        var sessionHostModel = ResolveSessionHostModel(capability);
+        var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
+
+        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters);
 
         // 1. Allocate Shared Memory (segment allocation is safe before connect; applying it requires an active session)
         var requestedBytes = capability?.SharedMemoryRequest?.PreferredBytes is > 0
@@ -92,12 +99,13 @@ public sealed class DeviceService : IDisposable
 
         // 2. Start Session Host
         // Default: 1 session : 1 process.
-        // If capability declares SupportsMultiSession=true, Core may reuse a shared session host per (plugin, capability).
+        // Capability may declare a shared session-host model (SharedPerCapability / SharedPerScope).
         var sessionHost = await _sessionHostRuntimeService.EnsureStartedAsync(
             runtime.Info,
             sessionId,
             capabilityId,
             supportsMultiSession,
+            multiSessionGroupId,
             cancellationToken);
 
         try
@@ -265,8 +273,28 @@ public sealed class DeviceService : IDisposable
             CapabilityId = descriptor.CapabilityId,
             ParametersJson = descriptor.ParametersJson,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
+            Kind = descriptor.Kind,
+            ParentSessionId = descriptor.ParentSessionId,
             Status = SessionStatus.Disconnected
         };
+
+        // Back-compat: older workspace-state.json may not persist Kind/ParentSessionId.
+        // Re-infer listener topology from ParametersJson when available.
+        if (!string.IsNullOrWhiteSpace(session.PluginId)
+            && !string.IsNullOrWhiteSpace(session.CapabilityId)
+            && !string.IsNullOrWhiteSpace(descriptor.ParametersJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(descriptor.ParametersJson);
+                var parameters = doc.RootElement.Clone();
+                ApplyListenerTopologyHints(session, session.PluginId!, session.CapabilityId!, parameters);
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
 
         var state = _sessions.GetOrAdd(descriptor.Id, _ => new SessionState(session));
         // If it already existed, keep instance but update fields.
@@ -278,6 +306,8 @@ public sealed class DeviceService : IDisposable
             state.Session.CapabilityId = session.CapabilityId;
             state.Session.ParametersJson = session.ParametersJson;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.Kind = session.Kind;
+            state.Session.ParentSessionId = session.ParentSessionId;
             if (state.Session.Status != SessionStatus.Connected)
             {
                 state.Session.Status = SessionStatus.Disconnected;
@@ -361,6 +391,84 @@ public sealed class DeviceService : IDisposable
         }
 
         return property.ValueKind == JsonValueKind.String ? property.GetString() : property.ToString();
+    }
+
+    private static SessionHostModel ResolveSessionHostModel(PluginCapabilityDescriptor? capability)
+    {
+        if (capability is null)
+        {
+            return SessionHostModel.DedicatedPerSession;
+        }
+
+        if (capability.SessionHostModel != SessionHostModel.Unspecified)
+        {
+            return capability.SessionHostModel;
+        }
+
+        // Backward compatibility: SupportsMultiSession implied shared-per-capability.
+        return capability.SupportsMultiSession
+            ? SessionHostModel.SharedPerCapability
+            : SessionHostModel.DedicatedPerSession;
+    }
+
+    private static string? ComputeMultiSessionGroupId(
+        string sessionId,
+        SessionHostModel model,
+        PluginCapabilityDescriptor? capability,
+        JsonElement parameters)
+    {
+        if (model is SessionHostModel.DedicatedPerSession)
+        {
+            return null;
+        }
+
+        if (model is SessionHostModel.SharedPerCapability)
+        {
+            return null;
+        }
+
+        if (model is SessionHostModel.SharedPerScope)
+        {
+            var keyParam = capability?.SessionHostGroupKeyParameter;
+            if (!string.IsNullOrWhiteSpace(keyParam))
+            {
+                var key = TryGetString(parameters, keyParam);
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    return key;
+                }
+            }
+
+            // Listener session itself may not provide a scope key; fall back to its own sessionId.
+            return sessionId;
+        }
+
+        return null;
+    }
+
+    private static void ApplyListenerTopologyHints(Session session, string pluginId, string capabilityId, JsonElement parameters)
+    {
+        if (!string.Equals(pluginId, "network.adapter", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (capabilityId is not ("tcp.server" or "udp.listen"))
+        {
+            return;
+        }
+
+        var mode = TryGetString(parameters, "mode");
+        if (string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase))
+        {
+            session.Kind = SessionKind.Connection;
+            session.ParentSessionId = TryGetString(parameters, "listenerSessionId");
+        }
+        else
+        {
+            session.Kind = SessionKind.Listener;
+            session.ParentSessionId = null;
+        }
     }
 
     private static int? TryGetInt(JsonElement element, string propertyName)

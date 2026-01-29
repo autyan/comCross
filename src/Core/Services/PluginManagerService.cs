@@ -16,6 +16,7 @@ public sealed class PluginManagerService
     private readonly PluginRuntimeService _runtimeService;
     private readonly PluginDiscoveryService _discoveryService;
     private readonly PluginUiStateManager _uiStateManager;
+    private readonly SettingsService _settingsService;
     private readonly IExtensibleLocalizationService? _extensibleLocalization;
     private readonly ILogger<PluginManagerService> _logger;
     private readonly ConcurrentDictionary<string, PluginRuntime> _activeRuntimes = new();
@@ -24,12 +25,14 @@ public sealed class PluginManagerService
         PluginRuntimeService runtimeService,
         PluginDiscoveryService discoveryService,
         PluginUiStateManager uiStateManager,
+        SettingsService settingsService,
         ILocalizationService localization,
         ILogger<PluginManagerService> logger)
     {
         _runtimeService = runtimeService;
         _discoveryService = discoveryService;
         _uiStateManager = uiStateManager;
+        _settingsService = settingsService;
         _extensibleLocalization = localization as IExtensibleLocalizationService;
         _logger = logger;
     }
@@ -56,7 +59,7 @@ public sealed class PluginManagerService
 #endif
         
         // 注意：这里默认加载所有插件
-        var runtimes = _runtimeService.LoadPlugins(plugins, new Dictionary<string, bool>());
+        var runtimes = _runtimeService.LoadPlugins(plugins, _settingsService.Current.Plugins.Enabled);
         _logger.LogInformation("Loaded {LoadedCount}/{TotalCount} plugin runtime(s)",
             runtimes.Count(r => r.State == PluginLoadState.Loaded),
             runtimes.Count);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using ComCross.PluginSdk;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Shared.Helpers;
 using ComCross.PluginHost.Logging;
 using ComCross.PluginHost.Events;
 using ComCross.PluginHost.Runtime;
@@ -30,6 +31,12 @@ internal static class Program
             ArchiveAboveBytes: 30L * 1024 * 1024,
             RetentionDays: 15));
 
+        // Linux hardening: prevent this host process (and its children) from gaining new privileges via exec.
+        if (!LinuxNoNewPrivs.TryEnable(out var nnpError))
+        {
+            logService.Warn($"no_new_privs could not be enabled: {nnpError}");
+        }
+
         logService.Info($"PluginHost starting: role={options.Role}, pluginId={options.PluginId}, pluginPath={options.PluginPath}, entry={options.EntryPoint}");
 
         _ = PluginHostBootstrap.StartParentMonitorIfRequested(args);
@@ -39,14 +46,9 @@ internal static class Program
         state.TryLoadPlugin();
 
         using var eventSink = new HostEventSink(options.EventPipeName);
-        if (string.Equals(options.Role, "ui", StringComparison.Ordinal))
-        {
-            state.SetUiStateEventSink(eventSink.PublishUiStateInvalidated);
-        }
-        else
-        {
-            state.SetUiStateEventSink(_ => { });
-        }
+        // Allow both UI host and session host to publish UI-state invalidation.
+        // This is required for listener-style session plugins that discover peers in the session host.
+        state.SetUiStateEventSink(eventSink.PublishUiStateInvalidated);
 
         state.SetSessionRegisteredSink(eventSink.PublishSessionRegistered);
         eventSink.PublishHostRegistered(options.HostToken);

@@ -67,6 +67,9 @@ public class AppHost : IAppHost
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.InitializeAsync();
 
+            // Start listener auto-accept orchestration (subscribes to host events).
+            _ = _serviceProvider.GetRequiredService<ListenerAutoAcceptService>();
+
             // 3.1 Start shared-memory ingest + frame->MessageStream pump + backpressure bridge
             _ = _serviceProvider.GetRequiredService<SharedMemoryIngestService>();
             _ = _serviceProvider.GetRequiredService<FrameStoreMessageStreamPumpService>();

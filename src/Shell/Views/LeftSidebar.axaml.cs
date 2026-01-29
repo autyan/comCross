@@ -45,7 +45,19 @@ public partial class LeftSidebar : BaseUserControl
     
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.DataContext is not Session session)
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var session = button.DataContext switch
+        {
+            Session s => s,
+            SessionListItemViewModel itemVm => itemVm.Session,
+            _ => null
+        };
+
+        if (session is null)
         {
             return;
         }
@@ -64,6 +76,7 @@ public partial class LeftSidebar : BaseUserControl
         deleteItem.Click += async (s, args) =>
         {
             var newActive = await vm.SessionsVm.DeleteSessionAsync(vm.Sessions, vm.ActiveSession, session.Id);
+            vm.LeftSidebar.RefreshSessionItems();
             vm.ActiveSession = newActive;
         };
         
@@ -72,6 +85,25 @@ public partial class LeftSidebar : BaseUserControl
         flyout.Items.Add(deleteItem);
         
         flyout.ShowAt(button);
+    }
+
+    private void OnToggleListenerCollapseClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var itemVm = button.DataContext as SessionListItemViewModel;
+        if (itemVm is null || !itemVm.IsListener)
+        {
+            return;
+        }
+
+        if (DataContext is LeftSidebarViewModel sidebarVm)
+        {
+            sidebarVm.ToggleListenerCollapsed(itemVm.Session.Id);
+        }
     }
     
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)

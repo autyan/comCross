@@ -1,0 +1,65 @@
+{
+  "id": "network.adapter",
+  "name": "Network Adapter",
+  "version": "0.3.2",
+  "targetCoreVersion": "0.3",
+  "entryPoint": "ComCross.Plugins.Network.NetworkBusAdapterPlugin",
+  "toolGroup": "network",
+  "permissions": ["network.connect", "network.send", "workspace.read"],
+  "i18n": {
+    "en-US": {
+      "network.adapter.name": "Network Adapter",
+      "network.adapter.capability.tcp.name": "TCP (Client)",
+      "network.adapter.capability.tcp.description": "TCP client connection to a remote host",
+      "network.adapter.capability.udp.name": "UDP (Socket)",
+      "network.adapter.capability.udp.description": "UDP socket bound locally and connected to a remote endpoint",
+
+      "network.adapter.capability.tcpServer.name": "TCP (Server)",
+      "network.adapter.capability.tcpServer.description": "TCP server listener; each accepted client becomes a session",
+      "network.adapter.capability.udpListen.name": "UDP (Listen)",
+      "network.adapter.capability.udpListen.description": "UDP listener; each peer becomes a session",
+
+      "network.adapter.connect.tcp.title": "Connect (TCP)",
+      "network.adapter.connect.udp.title": "Connect (UDP)",
+      "network.adapter.connect.tcpServer.title": "Listen (TCP Server)",
+      "network.adapter.connect.udpListen.title": "Listen (UDP)",
+      "network.adapter.connect.host": "Host",
+      "network.adapter.connect.port": "Port",
+      "network.adapter.connect.timeoutMs": "Timeout (ms)",
+      "network.adapter.connect.remoteHost": "Remote Host",
+      "network.adapter.connect.remotePort": "Remote Port",
+      "network.adapter.connect.localPort": "Local Port (optional)",
+      "network.adapter.connect.listenHost": "Listen Host",
+      "network.adapter.connect.listenPort": "Listen Port",
+      "network.adapter.connect.backlog": "Backlog",
+      "network.adapter.connect.sessionName": "Session Name"
+    },
+    "zh-CN": {
+      "network.adapter.name": "网络适配器",
+      "network.adapter.capability.tcp.name": "TCP（客户端）",
+      "network.adapter.capability.tcp.description": "TCP 客户端连接到远端主机",
+      "network.adapter.capability.udp.name": "UDP（套接字）",
+      "network.adapter.capability.udp.description": "本地绑定并连接到远端端点的 UDP 套接字",
+
+      "network.adapter.capability.tcpServer.name": "TCP（服务端）",
+      "network.adapter.capability.tcpServer.description": "TCP 服务端监听；每个接入客户端都是一个会话",
+      "network.adapter.capability.udpListen.name": "UDP（监听）",
+      "network.adapter.capability.udpListen.description": "UDP 监听；每个对端都是一个会话",
+
+      "network.adapter.connect.tcp.title": "连接（TCP）",
+      "network.adapter.connect.udp.title": "连接（UDP）",
+      "network.adapter.connect.tcpServer.title": "监听（TCP 服务端）",
+      "network.adapter.connect.udpListen.title": "监听（UDP）",
+      "network.adapter.connect.host": "主机",
+      "network.adapter.connect.port": "端口",
+      "network.adapter.connect.timeoutMs": "超时（毫秒）",
+      "network.adapter.connect.remoteHost": "远端主机",
+      "network.adapter.connect.remotePort": "远端端口",
+      "network.adapter.connect.localPort": "本地端口（可选）",
+      "network.adapter.connect.listenHost": "监听地址",
+      "network.adapter.connect.listenPort": "监听端口",
+      "network.adapter.connect.backlog": "队列长度",
+      "network.adapter.connect.sessionName": "会话名称"
+    }
+  }
+}

@@ -75,7 +75,9 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
                 PluginId = s.PluginId,
                 CapabilityId = s.CapabilityId,
                 ParametersJson = s.ParametersJson,
-                EnableDatabaseStorage = s.EnableDatabaseStorage
+                EnableDatabaseStorage = s.EnableDatabaseStorage,
+                Kind = s.Kind,
+                ParentSessionId = s.ParentSessionId
             })
             .OrderBy(s => s.Name, StringComparer.Ordinal)
             .ToList();

@@ -42,6 +42,9 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<DeviceService>();
         
+        // Plugin trust / signature verification (disabled by default; see AppSettings.Plugins.SignatureVerification)
+        services.AddSingleton<PluginSignatureVerificationService>();
+        
         services.AddSingleton<WorkspaceDatabaseService>();
         services.AddSingleton<WorkspaceMigrationService>();
         services.AddSingleton<WorkloadService>();
@@ -62,6 +65,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PluginManagerService>();
         services.AddSingleton<PluginHostProtocolService>();
         services.AddSingleton<ICapabilityDispatcher, CapabilityDispatcher>();
+
+        // Listener-style session orchestration (e.g. network server auto-accept)
+        services.AddSingleton<ListenerAutoAcceptService>();
 
         // Shared Memory (IPC)
         services.AddSingleton(new SharedMemoryConfig());

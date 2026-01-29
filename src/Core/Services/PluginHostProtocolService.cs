@@ -6,13 +6,14 @@ using Microsoft.Extensions.Logging;
 
 namespace ComCross.Core.Services;
 
-/// <summary>
-/// Core-side helpers for standardized PluginHost IPC commands.
-///
-/// v0.4 MVP process model:
-/// - UI Host (per plugin) serves UI-state queries and UI invalidation events.
-/// - Session Host (per session) serves connect/disconnect and data-plane related commands.
-/// </summary>
+    /// <summary>
+    /// Core-side helpers for standardized PluginHost IPC commands.
+    ///
+    /// v0.4+ process model:
+    /// - UI Host (per plugin) serves sessionless UI state queries.
+    /// - Session Host (per session or per listener group) serves connect/disconnect and can also serve
+    ///   session-scoped UI state queries (e.g. listener pending peers).
+    /// </summary>
 public sealed class PluginHostProtocolService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -96,15 +97,31 @@ public sealed class PluginHostProtocolService
             return (false, "Invalid sessionId.", null);
         }
 
-        // v0.4 MVP: UI Host does not own session lifecycles.
-        // If sessionId is provided, forward it to the UI Host without session gating.
+        // If sessionId is provided, query the corresponding session host.
+        // Session-scoped UI state is maintained by the session host for listener-style plugins.
         var payload = JsonSerializer.SerializeToElement(
             new PluginHostGetUiStatePayload(capabilityId, sessionId, viewKind, viewInstanceId),
             JsonOptions);
 
-        var response = await runtime.Client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.GetUiState, Payload: payload),
-            timeout);
+        PluginHostResponse? response;
+        if (sessionId is null)
+        {
+            response = await runtime.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.GetUiState, Payload: payload),
+                timeout);
+        }
+        else
+        {
+            var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+            if (sessionHost is null)
+            {
+                return (false, "Session host not running.", null);
+            }
+
+            response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.GetUiState, SessionId: sessionId, Payload: payload),
+                timeout);
+        }
 
         if (response is null)
         {
@@ -166,7 +183,9 @@ public sealed class PluginHostProtocolService
             sessionId);
 
         var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-        var supportsMultiSession = capability?.SupportsMultiSession == true;
+        var sessionHostModel = ResolveSessionHostModel(capability);
+        var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
+        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters);
 
         SessionHostRuntime sessionHost;
         try
@@ -176,6 +195,7 @@ public sealed class PluginHostProtocolService
                 sessionId,
                 capabilityId,
                 supportsMultiSession,
+                multiSessionGroupId,
                 cancellationToken);
         }
         catch (Exception ex)
@@ -503,6 +523,60 @@ public sealed class PluginHostProtocolService
             {
                 return $"Parameters validation failed: {validateError}";
             }
+        }
+
+        return null;
+    }
+
+    private static SessionHostModel ResolveSessionHostModel(PluginCapabilityDescriptor? capability)
+    {
+        if (capability is null)
+        {
+            return SessionHostModel.DedicatedPerSession;
+        }
+
+        if (capability.SessionHostModel != SessionHostModel.Unspecified)
+        {
+            return capability.SessionHostModel;
+        }
+
+        return capability.SupportsMultiSession
+            ? SessionHostModel.SharedPerCapability
+            : SessionHostModel.DedicatedPerSession;
+    }
+
+    private static string? ComputeMultiSessionGroupId(
+        string sessionId,
+        SessionHostModel model,
+        PluginCapabilityDescriptor? capability,
+        JsonElement parameters)
+    {
+        if (model is SessionHostModel.DedicatedPerSession)
+        {
+            return null;
+        }
+
+        if (model is SessionHostModel.SharedPerCapability)
+        {
+            return null;
+        }
+
+        if (model is SessionHostModel.SharedPerScope)
+        {
+            var keyParam = capability?.SessionHostGroupKeyParameter;
+            if (!string.IsNullOrWhiteSpace(keyParam)
+                && parameters.ValueKind == JsonValueKind.Object
+                && parameters.TryGetProperty(keyParam, out var keyProp)
+                && keyProp.ValueKind == JsonValueKind.String)
+            {
+                var key = keyProp.GetString();
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    return key;
+                }
+            }
+
+            return sessionId;
         }
 
         return null;

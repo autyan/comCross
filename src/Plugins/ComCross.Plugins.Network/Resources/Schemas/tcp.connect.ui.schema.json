@@ -1,0 +1,48 @@
+{
+  "uiSchemaVersion": 1,
+  "titleKey": "network.adapter.connect.tcp.title",
+  "fields": [
+    {
+      "key": "host",
+      "control": "text",
+      "labelKey": "network.adapter.connect.host",
+      "defaultStatePath": "defaultParameters.tcp.host",
+      "required": true
+    },
+    {
+      "key": "port",
+      "control": "number",
+      "labelKey": "network.adapter.connect.port",
+      "defaultStatePath": "defaultParameters.tcp.port",
+      "defaultValue": 502,
+      "min": 1,
+      "max": 65535,
+      "required": true
+    },
+    {
+      "key": "connectTimeoutMs",
+      "control": "number",
+      "labelKey": "network.adapter.connect.timeoutMs",
+      "defaultStatePath": "defaultParameters.tcp.connectTimeoutMs",
+      "defaultValue": 3000,
+      "min": 1,
+      "max": 600000
+    },
+    {
+      "key": "sessionName",
+      "control": "text",
+      "labelKey": "network.adapter.connect.sessionName"
+    }
+  ],
+  "layout": {
+    "kind": "stack",
+    "orientation": "vertical",
+    "spacing": 12,
+    "children": [
+      { "kind": "field", "key": "host" },
+      { "kind": "field", "key": "port" },
+      { "kind": "field", "key": "connectTimeoutMs" },
+      { "kind": "field", "key": "sessionName" }
+    ]
+  }
+}

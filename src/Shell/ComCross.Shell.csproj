@@ -36,6 +36,7 @@
     <!-- Built-in plugins: built but not referenced by Shell at runtime -->
     <ProjectReference Include="..\Plugins\ComCross.Plugins.Flow\ComCross.Plugins.Flow.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Plugins\ComCross.Plugins.Network\ComCross.Plugins.Network.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Plugins\ComCross.Plugins.Serial\ComCross.Plugins.Serial.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
@@ -62,6 +63,9 @@
     </BuiltInPluginProjects>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Protocol\ComCross.Plugins.Protocol.csproj">
       <PluginPackageId>serial.protocol-rdutjbmx</PluginPackageId>
+    </BuiltInPluginProjects>
+    <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Network\ComCross.Plugins.Network.csproj">
+      <PluginPackageId>network.adapter-ha2dtl5z</PluginPackageId>
     </BuiltInPluginProjects>
     <BuiltInPluginProjects Include="..\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj">
       <PluginPackageId>serial.stats-ai2545fm</PluginPackageId>

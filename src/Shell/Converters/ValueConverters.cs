@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using ComCross.Shared.Models;
@@ -72,4 +73,49 @@ public class DirectionColorConverter : IValueConverter
     {
         throw new NotImplementedException();
     }
+}
+
+public sealed class IndentMarginConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var level = value switch
+        {
+            int i => i,
+            long l => (int)l,
+            string s when int.TryParse(s, out var parsed) => parsed,
+            _ => 0
+        };
+
+        if (level < 0)
+        {
+            level = 0;
+        }
+
+        // Keep vertical spacing consistent with existing template (was Margin="0,2").
+        var left = level * 16;
+        return new Thickness(left, 2, 0, 2);
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+public sealed class ListenerBackgroundConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var isListener = value switch
+        {
+            bool b => b,
+            _ => false
+        };
+
+        return isListener
+            ? new SolidColorBrush(Color.Parse("#1B242A"))
+            : Brushes.Transparent;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotImplementedException();
 }

@@ -10,6 +10,10 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     private Session? _session;
     private bool _isInitialized;
 
+    private int _indentLevel;
+    private string? _overrideName;
+    private bool _isCollapsed;
+
     public SessionListItemViewModel(ILocalizationService localization)
         : base(localization)
     {
@@ -32,8 +36,74 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
 
     public Session Session => _session ?? throw new InvalidOperationException("SessionListItemViewModel not initialized.");
 
+    public int IndentLevel
+    {
+        get => _indentLevel;
+        set
+        {
+            if (SetProperty(ref _indentLevel, value))
+            {
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
+    }
+
+    public string? OverrideName
+    {
+        get => _overrideName;
+        set
+        {
+            if (SetProperty(ref _overrideName, value))
+            {
+                OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(Endpoint));
+            }
+        }
+    }
+
     public string Name => Session.Name;
-    public string Endpoint => Session.Endpoint;
+
+    public string DisplayName => OverrideName ?? Name;
+
+    public bool IsListener => Session.Kind == SessionKind.Listener;
+    public bool IsConnection => !IsListener;
+    public bool ShowChevron => IsListener;
+
+    public bool IsCollapsed
+    {
+        get => _isCollapsed;
+        set
+        {
+            if (SetProperty(ref _isCollapsed, value))
+            {
+                OnPropertyChanged(nameof(ChevronGlyph));
+            }
+        }
+    }
+
+    public string ChevronGlyph => IsCollapsed ? "▶" : "▼";
+    public bool ShowStats => !IsListener;
+    public bool HasParent => IndentLevel > 0;
+    public string Endpoint
+    {
+        get
+        {
+            var endpoint = Session.Endpoint;
+            if (!string.IsNullOrWhiteSpace(endpoint))
+            {
+                return endpoint;
+            }
+
+            // For simplified listener connections, we override the display name to "Conn #n".
+            // Preserve the original session name (often remote endpoint) as the subtitle.
+            if (OverrideName is not null && !string.IsNullOrWhiteSpace(Session.Name))
+            {
+                return Session.Name;
+            }
+
+            return string.Empty;
+        }
+    }
     public long RxBytes => Session.RxBytes;
     public long TxBytes => Session.TxBytes;
     public SessionStatus Status => Session.Status;
@@ -47,6 +117,14 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
         {
             case nameof(Session.Name):
                 OnPropertyChanged(nameof(Name));
+                OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(Endpoint));
+                break;
+            case nameof(Session.Kind):
+                OnPropertyChanged(nameof(IsListener));
+                OnPropertyChanged(nameof(IsConnection));
+                OnPropertyChanged(nameof(ShowChevron));
+                OnPropertyChanged(nameof(ShowStats));
                 break;
             case nameof(Session.ParametersJson):
             case nameof(Session.Endpoint):

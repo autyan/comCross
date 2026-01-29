@@ -22,9 +22,15 @@ public sealed class PluginRuntimeService
 
     private readonly SharedMemorySessionService _sharedMemorySessionService;
 
-    public PluginRuntimeService(SharedMemorySessionService sharedMemorySessionService, ILogger<PluginRuntimeService> logger)
+    private readonly PluginSignatureVerificationService _signatureVerification;
+
+    public PluginRuntimeService(
+        SharedMemorySessionService sharedMemorySessionService,
+        PluginSignatureVerificationService signatureVerification,
+        ILogger<PluginRuntimeService> logger)
     {
         _sharedMemorySessionService = sharedMemorySessionService ?? throw new ArgumentNullException(nameof(sharedMemorySessionService));
+        _signatureVerification = signatureVerification ?? throw new ArgumentNullException(nameof(signatureVerification));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -42,6 +48,14 @@ public sealed class PluginRuntimeService
             if (!enabled)
             {
                 runtimes.Add(PluginRuntime.Disabled(plugin));
+                continue;
+            }
+
+            if (!_signatureVerification.IsTrusted(plugin, out var trustError))
+            {
+                var runtime = new PluginRuntime(plugin);
+                runtime.SetFailed(trustError);
+                runtimes.Add(runtime);
                 continue;
             }
 

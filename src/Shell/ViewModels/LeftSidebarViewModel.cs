@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json;
 using Avalonia.Threading;
 using ComCross.PluginSdk.UI;
 using ComCross.Shared.Events;
@@ -22,6 +24,13 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly IDisposable _sessionClosedSubscription;
 
     private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
+
+    // Simplified listener-mode UI: allocate stable connection indices for child sessions.
+    private readonly Dictionary<string, int> _connectionIndexBySessionId = new(StringComparer.Ordinal);
+    private int _nextConnectionIndex;
+
+    // UI-only state: collapsed listener nodes.
+    private readonly HashSet<string> _collapsedListenerSessionIds = new(StringComparer.Ordinal);
 
     private Session? _activeSession;
     private bool _isConnected;
@@ -145,6 +154,31 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public event EventHandler<Session?>? ActiveSessionChanged;
 
+    public void RefreshSessionItems()
+    {
+        // Sessions can be mutated by other VMs (e.g., delete). Ensure the derived UI list stays in sync.
+        Dispatcher.UIThread.Post(RebuildSessionItems);
+    }
+
+    public void ToggleListenerCollapsed(string listenerSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(listenerSessionId))
+        {
+            return;
+        }
+
+        if (_collapsedListenerSessionIds.Contains(listenerSessionId))
+        {
+            _collapsedListenerSessionIds.Remove(listenerSessionId);
+        }
+        else
+        {
+            _collapsedListenerSessionIds.Add(listenerSessionId);
+        }
+
+        Dispatcher.UIThread.Post(RebuildSessionItems);
+    }
+
     public void SetPreferredActiveSessionId(string? sessionId)
     {
         _preferredActiveSessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId;
@@ -186,30 +220,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                 ApplySessionUpdate(existing, e.Session);
             }
 
-            // Keep SessionItems' Session reference consistent with Sessions.
-            var itemIndex = -1;
-            for (var i = 0; i < SessionItems.Count; i++)
-            {
-                if (SessionItems[i].Session.Id == existing.Id)
-                {
-                    itemIndex = i;
-                    break;
-                }
-            }
-
-            if (itemIndex < 0)
-            {
-                SessionItems.Add(existing);
-            }
-            else if (!ReferenceEquals(SessionItems[itemIndex].Session, existing))
-            {
-                var wasSelected = ReferenceEquals(SelectedSessionItem, SessionItems[itemIndex]);
-                var replacement = SessionItems.ReplaceAt(itemIndex, existing);
-                if (wasSelected)
-                {
-                    SelectedSessionItem = replacement;
-                }
-            }
+            EnsureConnectionIndex(existing);
+            RebuildSessionItems();
 
             // Prefer restoring last active session (if provided); otherwise activate the newly created one.
             if (!string.IsNullOrWhiteSpace(_preferredActiveSessionId))
@@ -239,8 +251,155 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         target.CapabilityId = source.CapabilityId;
         target.ParametersJson = source.ParametersJson;
         target.EnableDatabaseStorage = source.EnableDatabaseStorage;
+        target.Kind = source.Kind;
+        target.ParentSessionId = source.ParentSessionId;
         target.Status = source.Status;
         target.StartTime = source.StartTime;
+    }
+
+    private void EnsureConnectionIndex(Session session)
+    {
+        EnsureConnectionIndex(session, session.ParentSessionId);
+    }
+
+    private void EnsureConnectionIndex(Session session, string? effectiveParentSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(effectiveParentSessionId))
+        {
+            return;
+        }
+
+        if (_connectionIndexBySessionId.ContainsKey(session.Id))
+        {
+            return;
+        }
+
+        _nextConnectionIndex++;
+        _connectionIndexBySessionId[session.Id] = _nextConnectionIndex;
+    }
+
+    private static string? InferEffectiveParentSessionId(Session session)
+    {
+        if (!string.IsNullOrWhiteSpace(session.ParentSessionId))
+        {
+            return session.ParentSessionId;
+        }
+
+        // Back-compat / robustness: infer listener-child topology from persisted parameters.
+        if (!string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal)
+            || session.CapabilityId is not ("tcp.server" or "udp.listen")
+            || string.IsNullOrWhiteSpace(session.ParametersJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(session.ParametersJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (!root.TryGetProperty("mode", out var modeEl))
+            {
+                return null;
+            }
+
+            var mode = modeEl.ValueKind == JsonValueKind.String ? modeEl.GetString() : modeEl.ToString();
+            if (!string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (!root.TryGetProperty("listenerSessionId", out var parentEl))
+            {
+                return null;
+            }
+
+            var parent = parentEl.ValueKind == JsonValueKind.String ? parentEl.GetString() : parentEl.ToString();
+            return string.IsNullOrWhiteSpace(parent) ? null : parent;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void RebuildSessionItems()
+    {
+        // Preserve the current active session while we rebuild viewmodels.
+        var activeSession = _activeSession;
+
+        // Keep connection index map bounded to current sessions.
+        var aliveIds = Sessions.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var key in _connectionIndexBySessionId.Keys.Where(k => !aliveIds.Contains(k)).ToList())
+        {
+            _connectionIndexBySessionId.Remove(key);
+        }
+
+        var effectiveParentBySessionId = Sessions.ToDictionary(
+            s => s.Id,
+            InferEffectiveParentSessionId,
+            StringComparer.Ordinal);
+
+        _syncingSelection = true;
+        try
+        {
+            SelectedSessionItem = null;
+            SessionItems.Clear();
+
+            // Display order: top-level sessions first; children (connections) immediately after their listener.
+            foreach (var top in Sessions.Where(s => string.IsNullOrWhiteSpace(effectiveParentBySessionId.GetValueOrDefault(s.Id))))
+            {
+                var topItem = SessionItems.Add(top);
+                topItem.IndentLevel = 0;
+                topItem.OverrideName = (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "tcp.server")
+                    ? "TCP Listener"
+                    : (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "udp.listen")
+                        ? "UDP Listener"
+                        : null;
+
+                topItem.IsCollapsed = topItem.IsListener && _collapsedListenerSessionIds.Contains(top.Id);
+
+                if (topItem.IsListener && topItem.IsCollapsed)
+                {
+                    continue;
+                }
+
+                foreach (var child in Sessions
+                             .Where(s => string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal))
+                             .OrderBy(s => _connectionIndexBySessionId.TryGetValue(s.Id, out var idx) ? idx : int.MaxValue))
+                {
+                    EnsureConnectionIndex(child, top.Id);
+                    var idx = _connectionIndexBySessionId.TryGetValue(child.Id, out var assigned) ? assigned : 0;
+
+                    var childItem = SessionItems.Add(child);
+                    childItem.IndentLevel = 1;
+                    childItem.OverrideName = idx > 0 ? $"Conn #{idx}" : "Conn";
+                }
+            }
+
+            // Orphans: sessions with missing parents still show as top-level.
+            foreach (var orphan in Sessions.Where(s =>
+                         !string.IsNullOrWhiteSpace(effectiveParentBySessionId.GetValueOrDefault(s.Id))
+                         && Sessions.All(p => !string.Equals(p.Id, effectiveParentBySessionId.GetValueOrDefault(s.Id), StringComparison.Ordinal))))
+            {
+                var orphanItem = SessionItems.Add(orphan);
+                orphanItem.IndentLevel = 0;
+                orphanItem.OverrideName = null;
+            }
+
+            if (activeSession is not null)
+            {
+                SelectedSessionItem = SessionItems.FirstOrDefault(i => string.Equals(i.Session.Id, activeSession.Id, StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            _syncingSelection = false;
+        }
     }
 
     private void OnSessionClosed(SessionClosedEvent e)

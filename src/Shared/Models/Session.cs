@@ -18,6 +18,8 @@ public sealed class Session : INotifyPropertyChanged
     private long _rxBytes;
     private long _txBytes;
     private bool _enableDatabaseStorage;
+    private SessionKind _kind = SessionKind.Connection;
+    private string? _parentSessionId;
 
     public required string Id { get; init; }
     
@@ -74,6 +76,27 @@ public sealed class Session : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Session topology kind.
+    /// Listener sessions are control-plane entries (e.g., TCP server listener).
+    /// Connection sessions are data-plane entries (e.g., an accepted TCP client).
+    /// </summary>
+    public SessionKind Kind
+    {
+        get => _kind;
+        set => SetField(ref _kind, value);
+    }
+
+    /// <summary>
+    /// Optional parent session id for hierarchical UI grouping (e.g., a connection session
+    /// belonging to a listener session).
+    /// </summary>
+    public string? ParentSessionId
+    {
+        get => _parentSessionId;
+        set => SetField(ref _parentSessionId, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+
+    /// <summary>
     /// A best-effort, UI-friendly endpoint label derived from <see cref="ParametersJson"/>.
     /// This is for display only; sessions do not own bus-specific fields.
     /// </summary>
@@ -94,14 +117,33 @@ public sealed class Session : INotifyPropertyChanged
                     return string.Empty;
                 }
 
-                // Convention-based common keys across bus adapters.
-                if (TryGetString(doc.RootElement, "port", out var port))
+                // Common patterns
+                if (TryGetString(doc.RootElement, "host", out var host) && TryGetString(doc.RootElement, "port", out var port)
+                    && !string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(port))
                 {
-                    return port;
+                    return $"{host}:{port}";
                 }
-                if (TryGetString(doc.RootElement, "host", out var host))
+
+                if (TryGetString(doc.RootElement, "listenHost", out var listenHost) && TryGetString(doc.RootElement, "listenPort", out var listenPort)
+                    && !string.IsNullOrWhiteSpace(listenHost) && !string.IsNullOrWhiteSpace(listenPort))
                 {
-                    return host;
+                    return $"{listenHost}:{listenPort}";
+                }
+
+                if (TryGetString(doc.RootElement, "remoteHost", out var remoteHost) && TryGetString(doc.RootElement, "remotePort", out var remotePort)
+                    && !string.IsNullOrWhiteSpace(remoteHost) && !string.IsNullOrWhiteSpace(remotePort))
+                {
+                    return $"{remoteHost}:{remotePort}";
+                }
+
+                // Convention-based common keys across bus adapters.
+                if (TryGetString(doc.RootElement, "port", out var singlePort))
+                {
+                    return singlePort;
+                }
+                if (TryGetString(doc.RootElement, "host", out var singleHost))
+                {
+                    return singleHost;
                 }
                 if (TryGetString(doc.RootElement, "address", out var address))
                 {
@@ -191,18 +233,28 @@ public sealed class Session : INotifyPropertyChanged
 
     private static bool TryGetString(System.Text.Json.JsonElement obj, string key, out string value)
     {
-        if (obj.TryGetProperty(key, out var prop) && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        value = string.Empty;
+
+        if (!obj.TryGetProperty(key, out var prop))
         {
-            var s = prop.GetString();
-            if (!string.IsNullOrWhiteSpace(s))
-            {
-                value = s;
-                return true;
-            }
+            return false;
         }
 
-        value = string.Empty;
-        return false;
+        switch (prop.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.String:
+                value = prop.GetString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(value);
+            case System.Text.Json.JsonValueKind.Number:
+                value = prop.GetRawText();
+                return !string.IsNullOrWhiteSpace(value);
+            case System.Text.Json.JsonValueKind.True:
+            case System.Text.Json.JsonValueKind.False:
+                value = prop.GetBoolean() ? "true" : "false";
+                return true;
+            default:
+                return false;
+        }
     }
 }
 
@@ -212,4 +264,10 @@ public enum SessionStatus
     Connecting,
     Connected,
     Error
+}
+
+public enum SessionKind
+{
+    Connection,
+    Listener
 }

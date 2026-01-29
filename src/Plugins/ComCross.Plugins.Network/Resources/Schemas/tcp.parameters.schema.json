@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "host": { "type": "string" },
+    "port": { "type": "integer" },
+    "connectTimeoutMs": { "type": "integer" },
+    "sessionName": { "type": "string" }
+  },
+  "required": ["host", "port"]
+}

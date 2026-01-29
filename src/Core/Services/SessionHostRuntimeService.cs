@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using ComCross.Platform;
 using ComCross.Shared.Models;
+using ComCross.Shared.Services;
 using Microsoft.Extensions.Logging;
 
 namespace ComCross.Core.Services;
@@ -22,6 +23,8 @@ public sealed class SessionHostRuntimeService
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<string, HostGroup> _groupsByKey = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _sessionToGroupKey = new(StringComparer.Ordinal);
+
+    public event Action<SessionHostRuntime, PluginHostEvent>? HostEventReceived;
 
     public SessionHostRuntimeService(ILogger<SessionHostRuntimeService> logger)
     {
@@ -56,13 +59,14 @@ public sealed class SessionHostRuntimeService
     }
 
     public async Task<SessionHostRuntime> EnsureStartedAsync(PluginInfo plugin, string sessionId, CancellationToken cancellationToken = default)
-        => await EnsureStartedAsync(plugin, sessionId, capabilityId: null, supportsMultiSession: false, cancellationToken);
+        => await EnsureStartedAsync(plugin, sessionId, capabilityId: null, supportsMultiSession: false, multiSessionGroupId: null, cancellationToken);
 
     public async Task<SessionHostRuntime> EnsureStartedAsync(
         PluginInfo plugin,
         string sessionId,
         string? capabilityId,
         bool supportsMultiSession,
+        string? multiSessionGroupId,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
@@ -71,7 +75,7 @@ public sealed class SessionHostRuntimeService
         }
 
         var key = supportsMultiSession
-            ? CreateMultiSessionKey(plugin.Manifest.Id, capabilityId)
+            ? CreateMultiSessionKey(plugin.Manifest.Id, capabilityId, multiSessionGroupId)
             : CreateSingleSessionKey(sessionId);
 
         if (_groupsByKey.TryGetValue(key, out var existingGroup) && existingGroup.Runtime.IsAlive)
@@ -92,12 +96,17 @@ public sealed class SessionHostRuntimeService
             throw new InvalidOperationException("Plugin host executable not found.");
         }
 
-        var pipeName = CreatePipeName(plugin.Manifest.Id, supportsMultiSession ? capabilityId : sessionId);
+        var pipeDiscriminator = supportsMultiSession
+            ? (string.IsNullOrWhiteSpace(multiSessionGroupId) ? capabilityId : multiSessionGroupId)
+            : sessionId;
+
+        var pipeName = CreatePipeName(plugin.Manifest.Id, pipeDiscriminator);
+        var eventPipeName = pipeName + "-events";
         var hostToken = Guid.NewGuid().ToString("N");
 
         var fixedSessionId = supportsMultiSession ? null : sessionId;
 
-        var startInfo = CreateStartInfo(hostPath, pipeName, plugin, hostToken, fixedSessionId);
+        var startInfo = CreateStartInfo(hostPath, pipeName, eventPipeName, plugin, hostToken, fixedSessionId);
         if (startInfo is null)
         {
             throw new InvalidOperationException("Unable to create session host process.");
@@ -117,6 +126,8 @@ public sealed class SessionHostRuntimeService
         }
 
         var client = new PluginHostClient(pipeName);
+        var eventClient = new PluginHostEventClient(eventPipeName);
+        eventClient.Start();
 
         // Basic readiness: ping.
         var response = await client.SendAsync(
@@ -126,11 +137,24 @@ public sealed class SessionHostRuntimeService
         if (response is not { Ok: true })
         {
             client.Dispose();
+            try { eventClient.Dispose(); } catch { }
             TryTerminate(process);
             throw new InvalidOperationException(response?.Error ?? "Session host failed to respond.");
         }
 
-        var runtime = new SessionHostRuntime(plugin, sessionId, process, client);
+        var runtime = new SessionHostRuntime(plugin, sessionId, process, client, eventClient);
+
+        // Bind event callback now that runtime exists.
+        eventClient.EventReceived += evt =>
+        {
+            try
+            {
+                HostEventReceived?.Invoke(runtime, evt);
+            }
+            catch
+            {
+            }
+        };
 
         var group = new HostGroup(key, runtime, supportsMultiSession);
         group.AddSession(sessionId);
@@ -245,10 +269,11 @@ public sealed class SessionHostRuntimeService
 
     private static string CreateSingleSessionKey(string sessionId) => $"session:{sessionId}";
 
-    private static string CreateMultiSessionKey(string pluginId, string? capabilityId)
+    private static string CreateMultiSessionKey(string pluginId, string? capabilityId, string? groupId)
     {
         var cap = string.IsNullOrWhiteSpace(capabilityId) ? "cap" : capabilityId;
-        return $"multi:{pluginId}:{cap}";
+        var grp = string.IsNullOrWhiteSpace(groupId) ? "group" : groupId;
+        return $"multi:{pluginId}:{cap}:{grp}";
     }
 
     private static string CreatePipeName(string pluginId, string? discriminator)
@@ -277,7 +302,7 @@ public sealed class SessionHostRuntimeService
         return $"ccsh-{safePlugin}-{hashHex}-{nonce}";
     }
 
-    private static ProcessStartInfo? CreateStartInfo(string hostPath, string pipeName, PluginInfo plugin, string hostToken, string? fixedSessionId)
+    private static ProcessStartInfo? CreateStartInfo(string hostPath, string pipeName, string eventPipeName, PluginInfo plugin, string hostToken, string? fixedSessionId)
     {
         if (string.IsNullOrWhiteSpace(hostPath))
         {
@@ -298,6 +323,7 @@ public sealed class SessionHostRuntimeService
 
         var args =
             $"--pipe \"{pipeName}\"" +
+            $" --event-pipe \"{eventPipeName}\"" +
             $" --plugin \"{plugin.AssemblyPath}\"" +
             $" --entry \"{plugin.Manifest.EntryPoint}\"" +
             $" --host-token \"{hostToken}\"" +
@@ -401,18 +427,20 @@ public sealed class SessionHostRuntime : IDisposable
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
 
-    public SessionHostRuntime(PluginInfo plugin, string? sessionId, Process process, PluginHostClient client)
+    public SessionHostRuntime(PluginInfo plugin, string? sessionId, Process process, PluginHostClient client, PluginHostEventClient eventClient)
     {
         Plugin = plugin;
         SessionId = sessionId;
         Process = process;
         Client = client;
+        EventClient = eventClient;
     }
 
     public PluginInfo Plugin { get; }
     public string? SessionId { get; }
     public Process Process { get; }
     public PluginHostClient Client { get; }
+    public PluginHostEventClient EventClient { get; }
 
     public bool IsAlive => !Process.HasExited;
 
@@ -466,6 +494,14 @@ public sealed class SessionHostRuntime : IDisposable
         try
         {
             Client.Dispose();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            EventClient.Dispose();
         }
         catch
         {

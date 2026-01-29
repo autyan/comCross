@@ -1,6 +1,39 @@
 namespace ComCross.PluginSdk;
 
 /// <summary>
+/// Session host process model for a capability.
+///
+/// NOTE: This is a capability-level declaration (not plugin-level) because a single plugin may expose
+/// both dedicated (per-session) and shared (multi-session) capabilities.
+/// </summary>
+public enum SessionHostModel
+{
+    /// <summary>
+    /// Unspecified (backward compatibility).
+    /// If <see cref="PluginCapabilityDescriptor.SupportsMultiSession"/> is true -> <see cref="SharedPerCapability"/>,
+    /// otherwise -> <see cref="DedicatedPerSession"/>.
+    /// </summary>
+    Unspecified = 0,
+
+    /// <summary>
+    /// Default: one session host process per session.
+    /// </summary>
+    DedicatedPerSession = 1,
+
+    /// <summary>
+    /// Multiple sessions share one session host process per (plugin, capability).
+    /// </summary>
+    SharedPerCapability = 2,
+
+    /// <summary>
+    /// Multiple sessions share one session host process per logical scope key.
+    /// Typically used by listener-style capabilities where child sessions must share listener state.
+    /// The scope key is read from parameters via <see cref="PluginCapabilityDescriptor.SessionHostGroupKeyParameter"/>.
+    /// </summary>
+    SharedPerScope = 3
+}
+
+/// <summary>
 /// A schema-driven capability descriptor.
 /// The main process uses these descriptors to render UI and to send standardized commands.
 /// </summary>
@@ -46,6 +79,20 @@ public sealed record PluginCapabilityDescriptor
     /// Shared memory request suggestion for sessions created by this capability.
     /// </summary>
     public SharedMemoryRequest? SharedMemoryRequest { get; init; }
+
+    /// <summary>
+    /// Session host process model for this capability.
+    /// When <see cref="SessionHostModel.Unspecified"/>, the host falls back to <see cref="SupportsMultiSession"/>.
+    /// </summary>
+    public SessionHostModel SessionHostModel { get; init; } = SessionHostModel.Unspecified;
+
+    /// <summary>
+    /// For <see cref="ComCross.PluginSdk.SessionHostModel.SharedPerScope"/>: the parameter name whose value is used
+    /// as the session-host grouping key (e.g. "listenerSessionId").
+    ///
+    /// If not provided or missing at runtime, the host should fall back to current sessionId.
+    /// </summary>
+    public string? SessionHostGroupKeyParameter { get; init; }
 
     /// <summary>
     /// Whether this capability supports multiple concurrent sessions within a single plugin host process.

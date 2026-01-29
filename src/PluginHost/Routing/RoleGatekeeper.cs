@@ -26,6 +26,7 @@ internal sealed class RoleGatekeeper
         return messageType is PluginHostMessageTypes.Ping
             or PluginHostMessageTypes.Notify
             or PluginHostMessageTypes.GetCapabilities
+            or PluginHostMessageTypes.GetUiState
             or PluginHostMessageTypes.ApplySharedMemorySegment
             or PluginHostMessageTypes.Connect
             or PluginHostMessageTypes.Disconnect

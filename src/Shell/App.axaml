@@ -7,6 +7,8 @@
         <converters:StatusColorConverter x:Key="StatusColorConverter"/>
         <converters:LevelColorConverter x:Key="LevelColorConverter"/>
         <converters:DirectionColorConverter x:Key="DirectionColorConverter"/>
+        <converters:IndentMarginConverter x:Key="IndentMarginConverter"/>
+        <converters:ListenerBackgroundConverter x:Key="ListenerBackgroundConverter"/>
         <converters:IsZeroConverter x:Key="IsZeroConverter"/>
     </Application.Resources>
     <Application.Styles>
