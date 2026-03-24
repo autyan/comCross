@@ -10,7 +10,7 @@ namespace ComCross.Core.Services;
 /// </summary>
 public sealed class SessionDescriptorPersistenceService : IDisposable
 {
-    private readonly ConfigService _configService;
+    private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly DeviceService _deviceService;
     private readonly ILogger<SessionDescriptorPersistenceService> _logger;
 
@@ -20,12 +20,12 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
     private CancellationTokenSource? _debounceCts;
 
     public SessionDescriptorPersistenceService(
-        ConfigService configService,
+        WorkspaceStateStore workspaceStateStore,
         DeviceService deviceService,
         IEventBus eventBus,
         ILogger<SessionDescriptorPersistenceService> logger)
     {
-        _configService = configService;
+        _workspaceStateStore = workspaceStateStore;
         _deviceService = deviceService;
         _logger = logger;
 
@@ -62,12 +62,9 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
 
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
-        var state = await _configService.LoadWorkspaceStateAsync(cancellationToken) ?? new WorkspaceState();
-        state.EnsureDefaultWorkload();
-
         var sessions = _deviceService.GetAllSessions();
-        state.SessionDescriptors = sessions
-            .Select(s => new SessionDescriptor
+        var descriptors = sessions
+            .Select(static s => new SessionDescriptor
             {
                 Id = s.Id,
                 Name = s.Name,
@@ -82,12 +79,10 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
             .OrderBy(s => s.Name, StringComparer.Ordinal)
             .ToList();
 
-        if (string.IsNullOrWhiteSpace(state.Version))
+        await _workspaceStateStore.UpdateAsync(state =>
         {
-            state.Version = "0.4.0";
-        }
-
-        await _configService.SaveWorkspaceStateAsync(state, cancellationToken);
+            state.SessionDescriptors = descriptors;
+        }, cancellationToken);
     }
 
     public void Dispose()

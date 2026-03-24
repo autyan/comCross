@@ -12,8 +12,9 @@ public sealed class PluginSecurityValidator
     /// 验证插件元数据和实现
     /// </summary>
     /// <param name="plugin">待验证的插件实例</param>
+    /// <param name="manifest">可选的 manifest，用于校验分类与元数据一致性</param>
     /// <returns>验证结果</returns>
-    public PluginValidationResult Validate(IDevicePlugin plugin)
+    public PluginValidationResult Validate(IPlugin plugin, PluginManifest? manifest = null)
     {
         ArgumentNullException.ThrowIfNull(plugin);
         ArgumentNullException.ThrowIfNull(plugin.Metadata);
@@ -26,6 +27,7 @@ public sealed class PluginSecurityValidator
         
         // 验证基本元数据
         ValidateMetadata(plugin.Metadata, result);
+        ValidateManifestConsistency(plugin.Metadata, manifest, result);
         
         // 根据插件类型执行特定验证
         switch (plugin.Metadata.Type)
@@ -38,7 +40,7 @@ public sealed class PluginSecurityValidator
             case PluginType.Statistics:
             case PluginType.UIExtension:
             case PluginType.Extension:
-                // 其他类型插件：仅基本验证
+                ValidateExtensionContract(plugin, result);
                 break;
                 
             default:
@@ -78,8 +80,14 @@ public sealed class PluginSecurityValidator
     /// 验证总线适配器插件（严格验证）
     /// BusAdapter 插件必须正确实现共享内存接口
     /// </summary>
-    private void ValidateBusAdapter(IDevicePlugin plugin, PluginValidationResult result)
+    private void ValidateBusAdapter(IPlugin plugin, PluginValidationResult result)
     {
+        if (plugin is not IDevicePlugin devicePlugin)
+        {
+            result.AddError("BusAdapter", "BusAdapter 插件必须实现 IDevicePlugin 契约");
+            return;
+        }
+
         // If the plugin supports schema-driven capability description, validate it.
         if (plugin is IPluginCapabilityProvider provider)
         {
@@ -133,18 +141,47 @@ public sealed class PluginSecurityValidator
         {
             // 创建测试用的写入器（空实现）
             var testWriter = new TestSharedMemoryWriter();
-            plugin.SetSharedMemoryWriter(testWriter);
+            devicePlugin.SetSharedMemoryWriter(testWriter);
             
             // 验证插件能接受反压信号
-            plugin.SetBackpressureLevel(BackpressureLevel.None);
-            plugin.SetBackpressureLevel(BackpressureLevel.Medium);
-            plugin.SetBackpressureLevel(BackpressureLevel.High);
+            devicePlugin.SetBackpressureLevel(BackpressureLevel.None);
+            devicePlugin.SetBackpressureLevel(BackpressureLevel.Medium);
+            devicePlugin.SetBackpressureLevel(BackpressureLevel.High);
             
             result.AddInfo("BusAdapter", "BusAdapter 插件接口验证通过");
         }
         catch (Exception ex)
         {
             result.AddError("BusAdapter", $"BusAdapter 插件接口测试失败: {ex.Message}");
+        }
+    }
+
+    private static void ValidateExtensionContract(IPlugin plugin, PluginValidationResult result)
+    {
+        if (plugin is IDevicePlugin)
+        {
+            result.AddWarning("Contract", "非 BusAdapter 插件不应继续实现 IDevicePlugin 契约");
+        }
+    }
+
+    private static void ValidateManifestConsistency(PluginMetadata metadata, PluginManifest? manifest, PluginValidationResult result)
+    {
+        if (manifest is null)
+        {
+            return;
+        }
+
+        if (!manifest.PluginType.HasValue)
+        {
+            result.AddWarning("Manifest", "Manifest 未声明 pluginType");
+            return;
+        }
+
+        if (manifest.PluginType.Value != metadata.Type)
+        {
+            result.AddError(
+                "Manifest",
+                $"Manifest.pluginType ({manifest.PluginType}) 与插件元数据类型 ({metadata.Type}) 不一致");
         }
     }
     

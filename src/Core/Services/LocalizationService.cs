@@ -548,6 +548,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.plugins.segmentUpgrade.denied"] = "Segment upgrade denied: {0}",
             ["settings.plugins.connectTest.success"] = "Connect request sent: {0}/{1}",
             ["settings.plugins.connectTest.failed"] = "Connect failed: {0}",
+            ["settings.plugins.toggle.title"] = "Plugin Toggle",
+            ["settings.plugins.toggle.error.activeSessions"] = "Disable is blocked because the plugin still has active sessions.",
+            ["settings.plugins.toggle.error.reloadFailed"] = "Plugin runtime reload failed.",
 
             // Bus adapter / connect flow
             ["busAdapter.adapter.nameFormat"] = "{0} / {1}",

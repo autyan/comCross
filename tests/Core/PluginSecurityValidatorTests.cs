@@ -32,6 +32,26 @@ public class PluginSecurityValidatorTests
         Assert.Equal(PluginType.BusAdapter, result.PluginType);
         Assert.Contains(result.Infos, m => m.Message.Contains("BusAdapter 插件接口验证通过"));
     }
+
+    [Fact]
+    public void Validate_BusAdapterWithoutDeviceContract_FailsValidation()
+    {
+        var plugin = new TestBusAdapterMetadataOnlyPlugin
+        {
+            Metadata = new PluginMetadata
+            {
+                Id = "invalid-bus-adapter",
+                Name = "Invalid Bus Adapter",
+                Version = "1.0.0",
+                Type = PluginType.BusAdapter
+            }
+        };
+
+        var result = _validator.Validate(plugin);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Category == "BusAdapter" && e.Message.Contains("IDevicePlugin"));
+    }
     
     [Fact]
     public void Validate_BusAdapterWithInvalidMetadata_FailsValidation()
@@ -171,6 +191,61 @@ public class PluginSecurityValidatorTests
         Assert.True(result.IsValid);
         Assert.Equal(PluginType.Extension, result.PluginType);
     }
+
+    [Fact]
+    public void Validate_WithManifestTypeMismatch_FailsValidation()
+    {
+        var plugin = new TestExtensionPlugin
+        {
+            Metadata = new PluginMetadata
+            {
+                Id = "test-extension",
+                Name = "Test Extension",
+                Version = "3.0.0",
+                Type = PluginType.Extension
+            }
+        };
+        var manifest = new PluginManifest
+        {
+            Id = "test-extension",
+            Name = "Test Extension",
+            Version = "3.0.0",
+            EntryPoint = "Test.Extension",
+            PluginType = PluginType.FlowProcessor
+        };
+
+        var result = _validator.Validate(plugin, manifest);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Category == "Manifest" && e.Message.Contains("不一致"));
+    }
+
+    [Fact]
+    public void Validate_WithMissingManifestType_AddsWarning()
+    {
+        var plugin = new TestExtensionPlugin
+        {
+            Metadata = new PluginMetadata
+            {
+                Id = "test-extension",
+                Name = "Test Extension",
+                Version = "3.0.0",
+                Type = PluginType.Extension
+            }
+        };
+        var manifest = new PluginManifest
+        {
+            Id = "test-extension",
+            Name = "Test Extension",
+            Version = "3.0.0",
+            EntryPoint = "Test.Extension"
+        };
+
+        var result = _validator.Validate(plugin, manifest);
+
+        Assert.True(result.IsValid);
+        Assert.Contains(result.Warnings, w => w.Category == "Manifest" && w.Message.Contains("pluginType"));
+    }
     
     [Fact]
     public void ValidationResult_GetSummary_ReturnsCorrectMessage()
@@ -244,43 +319,29 @@ public class PluginSecurityValidatorTests
             // 模拟实现
         }
     }
-    
-    private class TestFlowProcessorPlugin : IDevicePlugin
+
+    private class TestBusAdapterMetadataOnlyPlugin : IPlugin
     {
         public required PluginMetadata Metadata { get; init; }
-        
-        public void SetSharedMemoryWriter(ISharedMemoryWriter writer)
-        {
-            // FlowProcessor 可能不需要共享内存，但接口要求实现
-        }
-        
-        public void SetBackpressureLevel(BackpressureLevel level)
-        {
-            // FlowProcessor 可能不需要反压，但接口要求实现
-        }
+    }
+
+    private class TestFlowProcessorPlugin : IExtensionPlugin
+    {
+        public required PluginMetadata Metadata { get; init; }
     }
     
-    private class TestStatisticsPlugin : IDevicePlugin
+    private class TestStatisticsPlugin : IExtensionPlugin
     {
         public required PluginMetadata Metadata { get; init; }
-        
-        public void SetSharedMemoryWriter(ISharedMemoryWriter writer) { }
-        public void SetBackpressureLevel(BackpressureLevel level) { }
     }
     
-    private class TestUIExtensionPlugin : IDevicePlugin
+    private class TestUIExtensionPlugin : IExtensionPlugin
     {
         public required PluginMetadata Metadata { get; init; }
-        
-        public void SetSharedMemoryWriter(ISharedMemoryWriter writer) { }
-        public void SetBackpressureLevel(BackpressureLevel level) { }
     }
     
-    private class TestExtensionPlugin : IDevicePlugin
+    private class TestExtensionPlugin : IExtensionPlugin
     {
         public required PluginMetadata Metadata { get; init; }
-        
-        public void SetSharedMemoryWriter(ISharedMemoryWriter writer) { }
-        public void SetBackpressureLevel(BackpressureLevel level) { }
     }
 }

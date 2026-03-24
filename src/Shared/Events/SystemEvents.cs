@@ -90,3 +90,15 @@ public sealed record ToolActivatedEvent(
 public sealed record ToolDeactivatedEvent(
     string ToolId
 ) : SystemEvent;
+
+/// <summary>
+/// Plugin-reported UI state invalidation that has been routed into the core event bus.
+/// </summary>
+public sealed record PluginUiStateInvalidatedCoreEvent(
+    string PluginId,
+    string CapabilityId,
+    string? SessionId = null,
+    string? ViewKind = null,
+    string? ViewInstanceId = null,
+    string? Reason = null
+) : SystemEvent;

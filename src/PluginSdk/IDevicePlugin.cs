@@ -1,16 +1,11 @@
 namespace ComCross.PluginSdk;
 
 /// <summary>
-/// 设备插件接口（插件SDK版本）
-/// 第三方插件必须实现此接口
+/// 总线/设备插件接口。
+/// 仅 BusAdapter 平面的插件应实现此接口。
 /// </summary>
-public interface IDevicePlugin
+public interface IDevicePlugin : IPlugin
 {
-    /// <summary>
-    /// 插件元数据
-    /// </summary>
-    PluginMetadata Metadata { get; }
-    
     /// <summary>
     /// 设置共享内存写入器（由主进程注入）
     /// </summary>

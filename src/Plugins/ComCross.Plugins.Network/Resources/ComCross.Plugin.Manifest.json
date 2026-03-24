@@ -4,6 +4,7 @@
   "version": "0.3.2",
   "targetCoreVersion": "0.3",
   "entryPoint": "ComCross.Plugins.Network.NetworkBusAdapterPlugin",
+  "pluginType": "BusAdapter",
   "toolGroup": "network",
   "permissions": ["network.connect", "network.send", "workspace.read"],
   "i18n": {

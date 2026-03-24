@@ -18,6 +18,8 @@ public static class PluginHostMessageTypes
 
     // Optional UX signals
     public const string LanguageChanged = "language-changed";
+    public const string ExtensionSyncContext = "extension-sync-context";
+    public const string ExtensionFramesBatch = "extension-frames-batch";
 
     public const string Shutdown = "shutdown";
 }

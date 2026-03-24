@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using ComCross.PluginSdk;
 
 namespace ComCross.Core.Services;
 
@@ -9,6 +11,9 @@ public sealed class PluginManifest
     public string Version { get; set; } = "0.0.0";
     public string TargetCoreVersion { get; set; } = "0.2";
     public string EntryPoint { get; set; } = string.Empty;
+    [JsonPropertyName("pluginType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PluginType? PluginType { get; set; }
     public string ToolGroup { get; set; } = string.Empty;
     public List<string> Permissions { get; set; } = new();
 

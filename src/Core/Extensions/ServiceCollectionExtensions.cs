@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<WorkspaceDatabaseService>();
         services.AddSingleton<WorkspaceMigrationService>();
+        services.AddSingleton<WorkspaceStateStore>();
         services.AddSingleton<WorkloadService>();
         services.AddSingleton<WorkspaceService>();
         services.AddSingleton<ExportService>();
@@ -61,9 +62,13 @@ public static class ServiceCollectionExtensions
         // Plugin Runtime System
         services.AddSingleton<PluginDiscoveryService>();
         services.AddSingleton<PluginRuntimeService>();
+        services.AddSingleton<ExtensionRuntimeService>();
         services.AddSingleton<SessionHostRuntimeService>();
         services.AddSingleton<PluginManagerService>();
         services.AddSingleton<PluginHostProtocolService>();
+        services.AddSingleton<IPluginUiStateFetcher, PluginUiStateFetcher>();
+        services.AddSingleton<IExtensionActionExecutor, ExtensionActionExecutor>();
+        services.AddSingleton<PluginHostEventRouterService>();
         services.AddSingleton<ICapabilityDispatcher, CapabilityDispatcher>();
 
         // Listener-style session orchestration (e.g. network server auto-accept)
@@ -78,6 +83,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SharedMemorySessionService>();
         services.AddSingleton<FrameStoreMessageStreamPumpService>();
         services.AddSingleton<SharedMemoryBackpressureBridgeService>();
+        services.AddSingleton<ExtensionBridgeService>();
 
         // Plugin UI State (Part of Core Logic)
         services.AddSingleton<ComCross.PluginSdk.UI.PluginUiStateManager>();

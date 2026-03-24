@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\PluginSdk\ComCross.PluginSdk.csproj" />
     <ProjectReference Include="..\..\Shared\ComCross.Shared.csproj" />
   </ItemGroup>
 </Project>

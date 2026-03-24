@@ -852,6 +852,19 @@ public sealed class PluginRuntime
     }
 
     public void SetLoaded(
+        IReadOnlyList<PluginCapabilityDescriptor> capabilities,
+        string? capabilitiesError)
+    {
+        State = PluginLoadState.Loaded;
+        Error = null;
+        Capabilities = capabilities;
+        CapabilitiesError = capabilitiesError;
+        HostToken = null;
+        IsHostRegistered = false;
+        HostProcessId = null;
+    }
+
+    public void SetLoaded(
         Process process,
         PluginHostClient client,
         PluginHostEventClient eventClient,

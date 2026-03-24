@@ -317,6 +317,22 @@ public sealed class DeviceService : IDisposable
         _eventBus.Publish(new SessionCreatedEvent(state.Session));
     }
 
+    public bool RemoveSession(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return false;
+        }
+
+        if (!_sessions.TryRemove(sessionId, out _))
+        {
+            return false;
+        }
+
+        _frameStore.Clear(sessionId);
+        return true;
+    }
+
     public void Dispose()
     {
         foreach (var sessionId in _sessions.Keys)
@@ -496,4 +512,3 @@ public sealed class DeviceService : IDisposable
         return null;
     }
 }
-

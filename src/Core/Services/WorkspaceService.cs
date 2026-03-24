@@ -16,9 +16,8 @@ public sealed class WorkspaceService
     private readonly IMessageStreamService _messageStream;
     private readonly LogStorageService _logStorageService;
     private readonly NotificationService _notificationService;
-    private readonly ConfigService _configService;
+    private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
-    private readonly WorkspaceMigrationService _migrationService;
 
     private bool _sessionsRestored;
 
@@ -27,17 +26,15 @@ public sealed class WorkspaceService
         IMessageStreamService messageStream,
         LogStorageService logStorageService,
         NotificationService notificationService,
-        ConfigService configService,
-        WorkloadService workloadService,
-        WorkspaceMigrationService migrationService)
+        WorkspaceStateStore workspaceStateStore,
+        WorkloadService workloadService)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-        _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
-        _migrationService = migrationService ?? throw new ArgumentNullException(nameof(migrationService));
     }
 
     /// <summary>
@@ -62,6 +59,7 @@ public sealed class WorkspaceService
         {
             var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
             var session = await _deviceService.ConnectAsync(pluginId, capabilityId, sessionId, name, parameters, cancellationToken);
+            await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
             _logStorageService.StartSession(session);
             return session;
         }
@@ -168,8 +166,7 @@ public sealed class WorkspaceService
     /// </summary>
     public async Task SaveCurrentStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll = true, CancellationToken cancellationToken = default)
     {
-        var state = await BuildWorkspaceStateAsync(sessions, activeSession, autoScroll);
-        await SaveStateAsync(state, cancellationToken);
+        await BuildWorkspaceStateAsync(sessions, activeSession, autoScroll, cancellationToken);
     }
     
     /// <summary>
@@ -178,26 +175,7 @@ public sealed class WorkspaceService
     /// </summary>
     public async Task<WorkspaceState> LoadStateAsync(CancellationToken cancellationToken = default)
     {
-        var state = await _configService.LoadWorkspaceStateAsync(cancellationToken);
-        
-        if (state == null)
-        {
-            // First run: create default workspace with default workload
-            state = new WorkspaceState();
-            state.EnsureDefaultWorkload();
-            await SaveStateAsync(state, cancellationToken);
-            return state;
-        }
-        
-        // Check if migration is needed
-        if (_migrationService.NeedsMigration(state))
-        {
-            state = _migrationService.Migrate(state);
-            await SaveStateAsync(state, cancellationToken);
-        }
-        
-        // Ensure default workload exists
-        state.EnsureDefaultWorkload();
+        var state = await _workspaceStateStore.LoadAsync(cancellationToken);
 
         // Restore persisted sessions as disconnected (no auto-reconnect).
         if (!_sessionsRestored)
@@ -267,7 +245,7 @@ public sealed class WorkspaceService
     /// </summary>
     public async Task SaveStateAsync(WorkspaceState state, CancellationToken cancellationToken = default)
     {
-        await _configService.SaveWorkspaceStateAsync(state, cancellationToken);
+        await _workspaceStateStore.SaveAsync(state, cancellationToken);
     }
 
     /// <summary>
@@ -280,20 +258,26 @@ public sealed class WorkspaceService
         {
             await DisconnectAsync(sessionId, cancellationToken);
         }
-        
+
+        _deviceService.RemoveSession(sessionId);
         ClearMessages(sessionId);
+        await _workloadService.RemoveSessionFromAllWorkloadsAsync(sessionId);
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            state.SessionDescriptors.RemoveAll(descriptor => string.Equals(descriptor.Id, sessionId, StringComparison.Ordinal));
+            if (state.UiState?.ActiveSessionId == sessionId)
+            {
+                state.UiState.ActiveSessionId = null;
+            }
+        }, cancellationToken);
     }
 
     /// <summary>
     /// Build workspace state from current sessions and workloads.
     /// In v0.4+, includes Workload information with session associations.
     /// </summary>
-    private async Task<WorkspaceState> BuildWorkspaceStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll)
+    private Task BuildWorkspaceStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll, CancellationToken cancellationToken)
     {
-        // Get current workloads from WorkloadService
-        var workloads = await _workloadService.GetAllWorkloadsAsync();
-
-        // Persist session definitions (committed state only; no draft).
         var descriptors = sessions.Select(s => new SessionDescriptor
         {
             Id = s.Id,
@@ -302,28 +286,17 @@ public sealed class WorkspaceService
             PluginId = s.PluginId,
             CapabilityId = s.CapabilityId,
             ParametersJson = s.ParametersJson,
-            EnableDatabaseStorage = s.EnableDatabaseStorage
+            EnableDatabaseStorage = s.EnableDatabaseStorage,
+            Kind = s.Kind,
+            ParentSessionId = s.ParentSessionId
         }).ToList();
 
-        return new WorkspaceState
+        return _workspaceStateStore.UpdateAsync(state =>
         {
-            Version = "0.4.0",
-            WorkspaceId = "default",
-            Workloads = workloads,
-            SessionDescriptors = descriptors,
-            UiState = new UiState
-            {
-                ActiveSessionId = activeSession?.Id,
-                AutoScroll = autoScroll
-            }
-        };
-    }
-    
-    /// <summary>
-    /// Find which workload contains the given session ID.
-    /// </summary>
-    private string? FindWorkloadForSession(List<Workload> workloads, string sessionId)
-    {
-        return workloads.FirstOrDefault(w => w.SessionIds.Contains(sessionId))?.Id;
+            state.SessionDescriptors = descriptors;
+            state.UiState ??= new UiState();
+            state.UiState.ActiveSessionId = activeSession?.Id;
+            state.UiState.AutoScroll = autoScroll;
+        }, cancellationToken);
     }
 }

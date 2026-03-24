@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.Logging;
 
@@ -18,8 +20,6 @@ public sealed class ListenerAutoAcceptService
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
-    private readonly PluginRuntimeService _pluginRuntimeService;
-    private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly PluginManagerService _pluginManagerService;
     private readonly PluginHostProtocolService _protocol;
     private readonly WorkspaceService _workspaceService;
@@ -36,24 +36,20 @@ public sealed class ListenerAutoAcceptService
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _listenerGates = new(StringComparer.Ordinal);
 
     public ListenerAutoAcceptService(
-        PluginRuntimeService pluginRuntimeService,
-        SessionHostRuntimeService sessionHostRuntimeService,
+        IEventBus eventBus,
         PluginManagerService pluginManagerService,
         PluginHostProtocolService protocol,
         WorkspaceService workspaceService,
         IWorkspaceCoordinator workspaceCoordinator,
         ILogger<ListenerAutoAcceptService> logger)
     {
-        _pluginRuntimeService = pluginRuntimeService ?? throw new ArgumentNullException(nameof(pluginRuntimeService));
-        _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
         _pluginManagerService = pluginManagerService ?? throw new ArgumentNullException(nameof(pluginManagerService));
         _protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _workspaceCoordinator = workspaceCoordinator ?? throw new ArgumentNullException(nameof(workspaceCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _pluginRuntimeService.PluginEventReceived += (runtime, evt) => _ = HandleInvalidationAsync(evt);
-        _sessionHostRuntimeService.HostEventReceived += (host, evt) => _ = HandleInvalidationAsync(evt);
+        eventBus.Subscribe<PluginUiStateInvalidatedCoreEvent>(evt => _ = HandleInvalidationAsync(evt));
 
         // Robustness: in case UI-state invalidations are missed, poll active listener sessions.
         _ = Task.Run(PollListenersAsync);
@@ -139,26 +135,11 @@ public sealed class ListenerAutoAcceptService
         }
     }
 
-    private async Task HandleInvalidationAsync(PluginHostEvent evt)
+    private async Task HandleInvalidationAsync(PluginUiStateInvalidatedCoreEvent invalidated)
     {
         try
         {
-            if (!string.Equals(evt.Type, PluginHostEventTypes.UiStateInvalidated, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (evt.Payload is null)
-            {
-                return;
-            }
-
-            PluginHostUiStateInvalidatedEvent? invalidated;
-            try
-            {
-                invalidated = evt.Payload.Value.Deserialize<PluginHostUiStateInvalidatedEvent>(JsonOptions);
-            }
-            catch
+            if (!string.Equals(invalidated.PluginId, "network.adapter", StringComparison.Ordinal))
             {
                 return;
             }

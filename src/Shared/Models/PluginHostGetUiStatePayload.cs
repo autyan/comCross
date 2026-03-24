@@ -10,4 +10,5 @@ public sealed record PluginHostGetUiStatePayload(
     string CapabilityId,
     string? SessionId = null,
     string? ViewKind = null,
-    string? ViewInstanceId = null);
+    string? ViewInstanceId = null,
+    string? PluginId = null);

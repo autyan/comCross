@@ -4,6 +4,7 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Services;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace ComCross.Core.Services;
 
@@ -16,18 +17,18 @@ public sealed class WorkloadService
 {
     private readonly ILogger<WorkloadService> _logger;
     private readonly IEventBus _eventBus;
-    private readonly ConfigService _configService;
+    private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly ILocalizationService? _localizationService;
     
     public WorkloadService(
         ILogger<WorkloadService> logger,
         IEventBus eventBus,
-        ConfigService configService,
+        WorkspaceStateStore workspaceStateStore,
         ILocalizationService? localizationService = null)
     {
         _logger = logger;
         _eventBus = eventBus;
-        _configService = configService;
+        _workspaceStateStore = workspaceStateStore;
         _localizationService = localizationService;
     }
     
@@ -36,13 +37,7 @@ public sealed class WorkloadService
     /// </summary>
     private async Task<WorkspaceState> LoadStateAsync()
     {
-        var state = await _configService.LoadWorkspaceStateAsync();
-        if (state == null)
-        {
-            state = new WorkspaceState();
-            state.EnsureDefaultWorkload();
-        }
-        return state;
+        return await _workspaceStateStore.LoadAsync();
     }
     
     /// <summary>
@@ -50,7 +45,7 @@ public sealed class WorkloadService
     /// </summary>
     private async Task SaveStateAsync(WorkspaceState state)
     {
-        await _configService.SaveWorkspaceStateAsync(state);
+        await _workspaceStateStore.SaveAsync(state);
     }
     
     /// <summary>
@@ -65,19 +60,20 @@ public sealed class WorkloadService
         {
             throw new ArgumentException("Workload name cannot be empty.", nameof(name));
         }
-        
-        var workload = Workload.Create(name, isDefault: false);
-        workload.Description = description;
-        
-        var state = await LoadStateAsync();
-        state.Workloads.Add(workload);
-        await SaveStateAsync(state);
+
+        var workload = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var created = Workload.Create(name, isDefault: false);
+            created.Description = description;
+            state.Workloads.Add(created);
+            return created;
+        });
         
         _logger.LogInformation("Created workload: {WorkloadName} ({WorkloadId})", name, workload.Id);
         
         _eventBus.Publish(new WorkloadCreatedEvent(workload.Id, workload.Name));
         
-        return workload;
+        return CloneWorkload(workload);
     }
     
     /// <summary>
@@ -87,26 +83,31 @@ public sealed class WorkloadService
     /// <returns>True if deleted successfully, false if workload is default or not found</returns>
     public async Task<(bool Success, string? ErrorMessage)> DeleteWorkloadAsync(string workloadId)
     {
-        var state = await LoadStateAsync();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-        
-        if (workload == null)
+        var result = await _workspaceStateStore.UpdateAsync(state =>
         {
-            return (false, "Workload not found.");
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Success: false, ErrorMessage: "Workload not found.", WorkloadName: (string?)null);
+            }
+
+            if (workload.IsDefault)
+            {
+                return (Success: false, ErrorMessage: "Cannot delete the default workload. You can rename it instead.", WorkloadName: (string?)null);
+            }
+
+            state.Workloads.Remove(workload);
+            return (Success: true, ErrorMessage: (string?)null, WorkloadName: workload.Name);
+        });
+
+        if (!result.Success)
+        {
+            return (false, result.ErrorMessage);
         }
         
-        // Prevent deletion of default workload
-        if (workload.IsDefault)
-        {
-            return (false, "Cannot delete the default workload. You can rename it instead.");
-        }
+        _logger.LogInformation("Deleted workload: {WorkloadName} ({WorkloadId})", result.WorkloadName, workloadId);
         
-        state.Workloads.Remove(workload);
-        await SaveStateAsync(state);
-        
-        _logger.LogInformation("Deleted workload: {WorkloadName} ({WorkloadId})", workload.Name, workloadId);
-        
-        _eventBus.Publish(new WorkloadDeletedEvent(workloadId, workload.Name));
+        _eventBus.Publish(new WorkloadDeletedEvent(workloadId, result.WorkloadName!));
         
         return (true, null);
     }
@@ -123,23 +124,29 @@ public sealed class WorkloadService
         {
             throw new ArgumentException("Workload name cannot be empty.", nameof(newName));
         }
-        
-        var state = await LoadStateAsync();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-        
-        if (workload == null)
+
+        var result = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Success: false, OldName: (string?)null);
+            }
+
+            var oldName = workload.Name;
+            workload.Rename(newName);
+            return (Success: true, OldName: oldName);
+        });
+
+        if (!result.Success)
         {
             return false;
         }
         
-        var oldName = workload.Name;
-        workload.Rename(newName);
-        await SaveStateAsync(state);
-        
         _logger.LogInformation("Renamed workload: '{OldName}' → '{NewName}' ({WorkloadId})", 
-            oldName, newName, workloadId);
+            result.OldName, newName, workloadId);
         
-        _eventBus.Publish(new WorkloadRenamedEvent(workloadId, oldName, newName));
+        _eventBus.Publish(new WorkloadRenamedEvent(workloadId, result.OldName!, newName));
         
         return true;
     }
@@ -152,20 +159,26 @@ public sealed class WorkloadService
     /// <returns>True if updated successfully, false if not found</returns>
     public async Task<bool> UpdateDescriptionAsync(string workloadId, string? description)
     {
-        var state = await LoadStateAsync();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-        
-        if (workload == null)
+        var result = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Success: false, WorkloadName: (string?)null);
+            }
+
+            workload.Description = description;
+            workload.UpdatedAt = DateTime.UtcNow;
+            return (Success: true, WorkloadName: workload.Name);
+        });
+
+        if (!result.Success)
         {
             return false;
         }
         
-        workload.Description = description;
-        workload.UpdatedAt = DateTime.UtcNow;
-        await SaveStateAsync(state);
-        
         _logger.LogInformation("Updated description for workload: {WorkloadName} ({WorkloadId})", 
-            workload.Name, workloadId);
+            result.WorkloadName, workloadId);
         
         return true;
     }
@@ -209,19 +222,25 @@ public sealed class WorkloadService
     /// <returns>True if added successfully, false if workload not found</returns>
     public async Task<bool> AddSessionToWorkloadAsync(string workloadId, string sessionId)
     {
-        var state = await LoadStateAsync();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-        
-        if (workload == null)
+        var result = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Success: false, WorkloadName: (string?)null);
+            }
+
+            workload.AddSession(sessionId);
+            return (Success: true, WorkloadName: workload.Name);
+        });
+
+        if (!result.Success)
         {
             return false;
         }
         
-        workload.AddSession(sessionId);
-        await SaveStateAsync(state);
-        
         _logger.LogInformation("Added session {SessionId} to workload {WorkloadName} ({WorkloadId})", 
-            sessionId, workload.Name, workloadId);
+            sessionId, result.WorkloadName, workloadId);
         
         return true;
     }
@@ -234,25 +253,26 @@ public sealed class WorkloadService
     /// <returns>True if removed successfully, false if workload not found or session not in workload</returns>
     public async Task<bool> RemoveSessionFromWorkloadAsync(string workloadId, string sessionId)
     {
-        var state = await LoadStateAsync();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-        
-        if (workload == null)
+        var result = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Removed: false, WorkloadName: (string?)null);
+            }
+
+            return (Removed: workload.RemoveSession(sessionId), WorkloadName: workload.Name);
+        });
+
+        if (!result.Removed)
         {
             return false;
         }
-        
-        if (workload.RemoveSession(sessionId))
-        {
-            await SaveStateAsync(state);
-            
-            _logger.LogInformation("Removed session {SessionId} from workload {WorkloadName} ({WorkloadId})", 
-                sessionId, workload.Name, workloadId);
-            
-            return true;
-        }
-        
-        return false;
+
+        _logger.LogInformation("Removed session {SessionId} from workload {WorkloadName} ({WorkloadId})", 
+            sessionId, result.WorkloadName, workloadId);
+
+        return true;
     }
     
     /// <summary>
@@ -268,33 +288,37 @@ public sealed class WorkloadService
             throw new ArgumentException("Workload name cannot be empty.", nameof(newName));
         }
 
-        var state = await LoadStateAsync();
-        var sourceWorkload = state.Workloads.FirstOrDefault(w => w.Id == sourceWorkloadId);
+        var newWorkload = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var sourceWorkload = state.Workloads.FirstOrDefault(w => w.Id == sourceWorkloadId);
+            if (sourceWorkload == null)
+            {
+                return null;
+            }
 
-        if (sourceWorkload == null)
+            var copy = Workload.Create(newName, isDefault: false);
+            copy.Description = sourceWorkload.Description;
+
+            foreach (var sessionId in sourceWorkload.SessionIds)
+            {
+                copy.AddSession(sessionId);
+            }
+
+            state.Workloads.Add(copy);
+            return copy;
+        });
+
+        if (newWorkload == null)
         {
             return null;
         }
 
-        // Create new workload (never default)
-        var newWorkload = Workload.Create(newName, isDefault: false);
-        newWorkload.Description = sourceWorkload.Description;
-        
-        // Copy session IDs (shallow copy - sessions themselves are shared)
-        foreach (var sessionId in sourceWorkload.SessionIds)
-        {
-            newWorkload.AddSession(sessionId);
-        }
-
-        state.Workloads.Add(newWorkload);
-        await SaveStateAsync(state);
-
         _logger.LogInformation("Copied workload: '{SourceName}' → '{NewName}' ({NewId})", 
-            sourceWorkload.Name, newName, newWorkload.Id);
+            sourceWorkloadId, newName, newWorkload.Id);
 
         _eventBus.Publish(new WorkloadCreatedEvent(newWorkload.Id, newWorkload.Name));
 
-        return newWorkload;
+        return CloneWorkload(newWorkload);
     }
 
     /// <summary>
@@ -354,21 +378,25 @@ public sealed class WorkloadService
     /// <returns>True if set successfully, false if workload not found</returns>
     public bool SetActiveWorkload(string workloadId)
     {
-        var state = LoadStateAsync().GetAwaiter().GetResult();
-        var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
-
-        if (workload == null)
+        var result = _workspaceStateStore.UpdateAsync(state =>
         {
-            return false;
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
+            if (workload == null)
+            {
+                return (Success: false, WorkloadName: (string?)null);
+            }
+
+            state.ActiveWorkloadId = workloadId;
+            return (Success: true, WorkloadName: workload.Name);
+        }).GetAwaiter().GetResult();
+
+        if (result.Success)
+        {
+            _logger.LogInformation("Set active workload: {WorkloadName} ({WorkloadId})", 
+                result.WorkloadName, workloadId);
         }
 
-        state.ActiveWorkloadId = workloadId;
-        SaveStateAsync(state).GetAwaiter().GetResult();
-
-        _logger.LogInformation("Set active workload: {WorkloadName} ({WorkloadId})", 
-            workload.Name, workloadId);
-
-        return true;
+        return result.Success;
     }
 
     /// <summary>
@@ -388,24 +416,68 @@ public sealed class WorkloadService
     /// </summary>
     public async Task EnsureDefaultWorkloadAsync()
     {
-        var state = await LoadStateAsync();
-        
-        if (state.GetDefaultWorkload() == null)
+        await LoadStateAsync();
+    }
+
+    public async Task<bool> AddSessionToActiveWorkloadIfMissingAsync(string sessionId)
+    {
+        var result = await _workspaceStateStore.UpdateAsync(state =>
         {
-            _logger.LogInformation("No default workload found, creating one...");
-            
-            var username = Environment.UserName ?? "User";
-            var workloadName = _localizationService != null
-                ? _localizationService.GetString("workload.default.name", username)
-                : $"{username}的工作区"; // Fallback if localization not available
-            
-            var defaultWorkload = Workload.Create(workloadName, isDefault: true);
-            state.Workloads.Insert(0, defaultWorkload);
-            await SaveStateAsync(state);
-            
-            _logger.LogInformation("Created default workload: {WorkloadId}", defaultWorkload.Id);
-            
-            _eventBus.Publish(new WorkloadCreatedEvent(defaultWorkload.Id, defaultWorkload.Name));
+            if (state.Workloads.Any(w => w.SessionIds.Contains(sessionId)))
+            {
+                return (Added: false, WorkloadId: (string?)null, WorkloadName: (string?)null);
+            }
+
+            var workload = state.Workloads.FirstOrDefault(w => w.Id == state.ActiveWorkloadId)
+                ?? state.GetDefaultWorkload()
+                ?? state.Workloads.FirstOrDefault();
+
+            if (workload == null)
+            {
+                return (Added: false, WorkloadId: (string?)null, WorkloadName: (string?)null);
+            }
+
+            workload.AddSession(sessionId);
+            return (Added: true, WorkloadId: workload.Id, WorkloadName: workload.Name);
+        });
+
+        if (result.Added)
+        {
+            _logger.LogInformation("Added session {SessionId} to active workload {WorkloadName} ({WorkloadId})",
+                sessionId, result.WorkloadName, result.WorkloadId);
         }
+
+        return result.Added;
+    }
+
+    public async Task<int> RemoveSessionFromAllWorkloadsAsync(string sessionId)
+    {
+        var result = await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var removed = 0;
+            foreach (var workload in state.Workloads)
+            {
+                if (workload.RemoveSession(sessionId))
+                {
+                    removed++;
+                }
+            }
+
+            return removed;
+        });
+
+        if (result > 0)
+        {
+            _logger.LogInformation("Removed session {SessionId} from {Count} workload(s)", sessionId, result);
+        }
+
+        return result;
+    }
+
+    private static Workload CloneWorkload(Workload workload)
+    {
+        var json = JsonSerializer.SerializeToUtf8Bytes(workload);
+        return JsonSerializer.Deserialize<Workload>(json)
+            ?? throw new InvalidOperationException("Failed to clone workload.");
     }
 }

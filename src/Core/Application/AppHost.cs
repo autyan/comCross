@@ -74,6 +74,7 @@ public class AppHost : IAppHost
             _ = _serviceProvider.GetRequiredService<SharedMemoryIngestService>();
             _ = _serviceProvider.GetRequiredService<FrameStoreMessageStreamPumpService>();
             _ = _serviceProvider.GetRequiredService<SharedMemoryBackpressureBridgeService>();
+            _ = _serviceProvider.GetRequiredService<ExtensionBridgeService>();
 
             // 3.2 Start session descriptor persistence (committed state -> workspace-state.json)
             _ = _serviceProvider.GetRequiredService<SessionDescriptorPersistenceService>();
@@ -148,30 +149,7 @@ public class AppHost : IAppHost
         try
         {
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
-            var runtimes = pluginManager.GetAllRuntimes();
-            
-            foreach (var runtime in runtimes)
-            {
-                if (runtime.State == PluginLoadState.Loaded && runtime.Client != null)
-                {
-                    try
-                    {
-                        var request = new PluginHostRequest(
-                            Guid.NewGuid().ToString("N"),
-                            PluginHostMessageTypes.LanguageChanged,
-                            SessionId: null,
-                            Payload: JsonSerializer.SerializeToElement(new { cultureCode })
-                        );
-                        
-                        // We don't await response for language change to avoid blocking UI
-                        _ = runtime.Client.SendAsync(request, TimeSpan.FromSeconds(2));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to notify plugin {PluginId} about language change", runtime.Info.Manifest.Id);
-                    }
-                }
-            }
+            await pluginManager.NotifyPluginsAsync(PluginNotification.LanguageChanged(cultureCode));
         }
         catch (Exception ex)
         {

@@ -8,4 +8,5 @@ public sealed record PluginHostUiStateInvalidatedEvent(
     string? SessionId = null,
     string? ViewKind = null,
     string? ViewInstanceId = null,
-    string? Reason = null);
+    string? Reason = null,
+    string? PluginId = null);

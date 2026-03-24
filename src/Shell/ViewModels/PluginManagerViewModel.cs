@@ -138,8 +138,23 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task ToggleAsync(PluginItemViewModel plugin)
     {
-        _settingsService.Current.Plugins.Enabled[plugin.Id] = plugin.IsEnabled;
-        await _settingsService.SaveAsync();
+        var result = await _pluginManagerService.SetPluginEnabledAsync(plugin.Id, plugin.IsEnabled);
+        if (!result.Success)
+        {
+            await LoadAsync();
+
+            var message = result.FailureReason switch
+            {
+                PluginToggleFailureReason.ActiveSessions => L["settings.plugins.toggle.error.activeSessions"],
+                _ => L["settings.plugins.toggle.error.reloadFailed"]
+            };
+
+            await MessageBoxService.ShowWarningAsync(
+                L["settings.plugins.toggle.title"],
+                message);
+            return;
+        }
+
         await LoadAsync();
     }
 
@@ -641,7 +656,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task NotifyPluginsAsync(PluginNotification notification, Action<PluginRuntime, Exception, bool>? onError = null)
     {
-        await _runtimeService.NotifyAsync(_pluginManagerService.GetAllRuntimes().ToList(), notification, onError);
+        await _pluginManagerService.NotifyPluginsAsync(notification, onError);
         RefreshRuntimeStates();
     }
 

@@ -58,6 +58,32 @@ public sealed class SessionHostRuntimeService
         return group.Runtime;
     }
 
+    public bool HasActiveSessionsForPlugin(string pluginId)
+    {
+        if (string.IsNullOrWhiteSpace(pluginId))
+        {
+            return false;
+        }
+
+        foreach (var group in _groupsByKey.Values)
+        {
+            if (!string.Equals(group.Runtime.Plugin.Manifest.Id, pluginId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lock (_gate)
+            {
+                if (group.SessionCount > 0)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public async Task<SessionHostRuntime> EnsureStartedAsync(PluginInfo plugin, string sessionId, CancellationToken cancellationToken = default)
         => await EnsureStartedAsync(plugin, sessionId, capabilityId: null, supportsMultiSession: false, multiSessionGroupId: null, cancellationToken);
 
