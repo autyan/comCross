@@ -174,6 +174,12 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(invalidated.ResourceKind)
+                && !string.Equals(invalidated.ResourceKind, "pending", StringComparison.Ordinal))
+            {
+                return;
+            }
+
             var gate = _listenerGates.GetOrAdd(listenerSessionId, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync();
             try
@@ -203,8 +209,10 @@ public sealed class ListenerAutoAcceptService
             runtime,
             capabilityId,
             sessionId: listenerSessionId,
-            viewKind: null,
+            viewKind: "listener",
             viewInstanceId: null,
+            resourceKind: "pending",
+            resourceId: "all",
             timeout: TimeSpan.FromSeconds(1));
 
         if (!ok || snapshot is null)
@@ -253,9 +261,6 @@ public sealed class ListenerAutoAcceptService
 
             object parameters = new
             {
-                mode = "bind",
-                listenerSessionId,
-                pendingId = p.PendingId,
                 endpoint = p.DisplayName
             };
 
@@ -263,9 +268,8 @@ public sealed class ListenerAutoAcceptService
             {
                 parameters = capabilityId switch
                 {
-                    // Extra fields are for UI/display only; bind uses listenerSessionId/pendingId.
-                    "tcp.server" => new { mode = "bind", listenerSessionId, pendingId = p.PendingId, host, port, endpoint = p.DisplayName },
-                    "udp.listen" => new { mode = "bind", listenerSessionId, pendingId = p.PendingId, remoteHost = host, remotePort = port, endpoint = p.DisplayName },
+                    "tcp.server" => new { host, port, endpoint = p.DisplayName },
+                    "udp.listen" => new { remoteHost = host, remotePort = port, endpoint = p.DisplayName },
                     _ => parameters
                 };
             }
@@ -278,7 +282,14 @@ public sealed class ListenerAutoAcceptService
 
             try
             {
-                await _workspaceCoordinator.ConnectAsync("network.adapter", capabilityId, parametersJson, sessionName);
+                await _workspaceCoordinator.ConnectAsync(
+                    "network.adapter",
+                    capabilityId,
+                    parametersJson,
+                    sessionName,
+                    scopeSessionId: listenerSessionId,
+                    resourceKind: "pending",
+                    resourceId: p.PendingId);
             }
             catch (Exception ex)
             {
@@ -326,8 +337,9 @@ public sealed class ListenerAutoAcceptService
     {
         pending = new List<PendingConnection>();
 
-        // Preferred: pendingConnections
-        if (!state.TryGetProperty("pendingConnections", out var arr) && !state.TryGetProperty("pending", out arr))
+        if (!state.TryGetProperty("items", out var arr)
+            && !state.TryGetProperty("pendingConnections", out arr)
+            && !state.TryGetProperty("pending", out arr))
         {
             return false;
         }

@@ -660,6 +660,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                          sessionId: _activeSessionId,
                          viewKind: _viewKind,
                          viewInstanceId: _viewInstanceId,
+                         resourceKind: null,
+                         resourceId: null,
                          timeout: TimeSpan.FromSeconds(2));
 
                      if (uiState is null && !string.IsNullOrWhiteSpace(_activeSessionId))
@@ -670,6 +672,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                              sessionId: null,
                              viewKind: _viewKind,
                              viewInstanceId: _viewInstanceId,
+                             resourceKind: null,
+                             resourceId: null,
                              timeout: TimeSpan.FromSeconds(2));
                      }
 

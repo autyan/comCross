@@ -50,7 +50,15 @@ public sealed class WorkspaceService
     /// <summary>
     /// Connect to a device via plugin
     /// </summary>
-    public async Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null, CancellationToken cancellationToken = default)
+    public async Task<Session> ConnectAsync(
+        string pluginId,
+        string capabilityId,
+        string parametersJson,
+        string? sessionName = null,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null,
+        CancellationToken cancellationToken = default)
     {
         var sessionId = $"session-{Guid.NewGuid()}";
         var name = string.IsNullOrWhiteSpace(sessionName) ? null : sessionName;
@@ -58,7 +66,16 @@ public sealed class WorkspaceService
         try
         {
             var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
-            var session = await _deviceService.ConnectAsync(pluginId, capabilityId, sessionId, name, parameters, cancellationToken);
+            var session = await _deviceService.ConnectAsync(
+                pluginId,
+                capabilityId,
+                sessionId,
+                name,
+                parameters,
+                scopeSessionId,
+                resourceKind,
+                resourceId,
+                cancellationToken);
             await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
             _logStorageService.StartSession(session);
             return session;

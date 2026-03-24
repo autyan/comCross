@@ -42,9 +42,6 @@ public sealed class ExtensionRuntimeService
         IReadOnlyList<PluginInfo> plugins,
         IReadOnlyDictionary<string, bool> enabledMap)
     {
-        DisposeHostState();
-        _activeRuntimes.Clear();
-
         var runtimes = new List<PluginRuntime>();
         var loadable = new List<(PluginInfo Plugin, PluginRuntime Runtime)>();
 
@@ -71,11 +68,31 @@ public sealed class ExtensionRuntimeService
 
         if (loadable.Count == 0)
         {
+            await ShutdownAsync(TimeSpan.FromSeconds(2));
             return runtimes;
         }
 
-        var started = await StartHostAsync(loadable.Select(x => x.Plugin).ToList());
-        if (!started)
+        Dictionary<string, ExtensionHostPluginSyncResult>? syncResults = null;
+
+        if (_hostProcess is null || _hostProcess.HasExited || _hostClient is null)
+        {
+            var started = await StartHostAsync(loadable.Select(x => x.Plugin).ToList());
+            if (started)
+            {
+                syncResults = loadable.ToDictionary(
+                    x => x.Plugin.Manifest.Id,
+                    x => new ExtensionHostPluginSyncResult(x.Plugin.Manifest.Id, true),
+                    StringComparer.Ordinal);
+            }
+        }
+        else
+        {
+            syncResults = await SyncHostPluginsAsync(loadable.Select(x => x.Plugin).ToList(), CancellationToken.None);
+        }
+
+        _activeRuntimes.Clear();
+
+        if (syncResults is null)
         {
             var error = "Extension host failed to start.";
             foreach (var (_, runtime) in loadable)
@@ -88,8 +105,15 @@ public sealed class ExtensionRuntimeService
 
         foreach (var (plugin, runtime) in loadable)
         {
-            runtime.SetLoaded(Array.Empty<PluginCapabilityDescriptor>(), null);
-            _activeRuntimes[plugin.Manifest.Id] = runtime;
+            if (syncResults.TryGetValue(plugin.Manifest.Id, out var result) && result.Ok)
+            {
+                runtime.SetLoaded(Array.Empty<PluginCapabilityDescriptor>(), null);
+                _activeRuntimes[plugin.Manifest.Id] = runtime;
+            }
+            else
+            {
+                runtime.SetFailed(result?.Error ?? "Extension plugin failed to load.");
+            }
         }
 
         return runtimes;
@@ -173,6 +197,8 @@ public sealed class ExtensionRuntimeService
         string? sessionId,
         string? viewKind,
         string? viewInstanceId,
+        string? resourceKind,
+        string? resourceId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -192,7 +218,14 @@ public sealed class ExtensionRuntimeService
         }
 
         var payload = JsonSerializer.SerializeToElement(
-            new PluginHostGetUiStatePayload(capabilityId, sessionId, viewKind, viewInstanceId, pluginId),
+            new PluginHostGetUiStatePayload(
+                capabilityId,
+                sessionId,
+                viewKind,
+                viewInstanceId,
+                pluginId,
+                resourceKind,
+                resourceId),
             JsonOptions);
 
         var (response, error, _) = await SendRequestAsync(
@@ -304,6 +337,72 @@ public sealed class ExtensionRuntimeService
         }
 
         return started;
+    }
+
+    private async Task<Dictionary<string, ExtensionHostPluginSyncResult>?> SyncHostPluginsAsync(
+        IReadOnlyList<PluginInfo> plugins,
+        CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.SerializeToElement(
+            plugins.Select(plugin => new ExtensionHostPluginLoadInfo(
+                plugin.Manifest.Id,
+                plugin.AssemblyPath,
+                plugin.Manifest.EntryPoint)).ToList(),
+            JsonOptions);
+
+        var (response, _, restarted) = await SendRequestAsync(
+            () => new PluginHostRequest(
+                Guid.NewGuid().ToString("N"),
+                PluginHostMessageTypes.ExtensionSyncPlugins,
+                Payload: payload),
+            retryAfterRestart: true,
+            RequestTimeout,
+            cancellationToken);
+
+        if (response is not { Ok: true } || response.Payload is null)
+        {
+            if (response is { Ok: true })
+            {
+                lock (_hostSync)
+                {
+                    _hostedPlugins = plugins.ToList();
+                }
+
+                return plugins.ToDictionary(
+                    plugin => plugin.Manifest.Id,
+                    plugin => new ExtensionHostPluginSyncResult(plugin.Manifest.Id, true),
+                    StringComparer.Ordinal);
+            }
+
+            return null;
+        }
+
+        try
+        {
+            var list = response.Payload.Value.Deserialize<List<ExtensionHostPluginSyncResult>>(JsonOptions)
+                       ?? new List<ExtensionHostPluginSyncResult>();
+
+            var results = list.ToDictionary(result => result.PluginId, StringComparer.Ordinal);
+            foreach (var plugin in plugins)
+            {
+                if (!results.ContainsKey(plugin.Manifest.Id))
+                {
+                    results[plugin.Manifest.Id] = new ExtensionHostPluginSyncResult(plugin.Manifest.Id, true);
+                }
+            }
+
+            lock (_hostSync)
+            {
+                _hostedPlugins = plugins.ToList();
+            }
+
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse extension host sync response.");
+            return null;
+        }
     }
 
     private async Task<bool> StartHostAsync(IReadOnlyList<PluginInfo> plugins)
@@ -732,9 +831,4 @@ public sealed class ExtensionRuntimeService
         {
         }
     }
-
-    private sealed record ExtensionHostPluginLoadInfo(
-        string PluginId,
-        string PluginPath,
-        string EntryPoint);
 }

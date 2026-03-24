@@ -104,7 +104,7 @@ public class PluginUiRenderer
             // Sync UI -> state (capture user edits)
             control.ValueChanged += (_, v) =>
             {
-                _stateManager.UpdateStateFromControl(pluginId, capabilityId, viewScope, sessionId, field.Key, v, control);
+                _stateManager.UpdateStateFromControl(pluginId, capabilityId, viewScope, sessionId, null, null, field.Key, v, control);
             };
 
             // Options binding

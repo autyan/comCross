@@ -15,7 +15,7 @@ namespace ComCross.Core.Services;
 /// <summary>
 /// Manages device connections and sessions
 /// </summary>
-public sealed class DeviceService : IDisposable
+public sealed class DeviceService : IDisposable, IAsyncDisposable
 {
     private readonly PluginManagerService _pluginManager;
     private readonly IEventBus _eventBus;
@@ -25,6 +25,8 @@ public sealed class DeviceService : IDisposable
     private readonly SharedMemorySessionService _shmSessionService;
     private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
+    private Task? _disposeTask;
+    private int _disposeStarted;
 
     // Non-persistent default naming counters: adapterKey -> nextIndex
     private readonly ConcurrentDictionary<string, int> _defaultSessionNameCounters = new(StringComparer.Ordinal);
@@ -66,6 +68,9 @@ public sealed class DeviceService : IDisposable
         string sessionId,
         string? name,
         JsonElement parameters,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null,
         CancellationToken cancellationToken = default)
     {
         var runtime = _pluginManager.GetRuntime(pluginId) 
@@ -80,13 +85,13 @@ public sealed class DeviceService : IDisposable
         session.Status = SessionStatus.Connecting;
 
         // Listener topology hints (used by UI + orchestration).
-        ApplyListenerTopologyHints(session, pluginId, capabilityId, parameters);
+        ApplyListenerTopologyHints(session, pluginId, capabilityId, parameters, scopeSessionId, resourceKind, resourceId);
 
         var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
         var sessionHostModel = ResolveSessionHostModel(capability);
         var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
 
-        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters);
+        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters, scopeSessionId);
 
         // 1. Allocate Shared Memory (segment allocation is safe before connect; applying it requires an active session)
         var requestedBytes = capability?.SharedMemoryRequest?.PreferredBytes is > 0
@@ -111,7 +116,13 @@ public sealed class DeviceService : IDisposable
         try
         {
             // 3. Connect via Session Host
-            var connectPayload = new PluginHostConnectPayload(capabilityId, parameters, sessionId);
+            var connectPayload = new PluginHostConnectPayload(
+                capabilityId,
+                parameters,
+                sessionId,
+                scopeSessionId,
+                resourceKind,
+                resourceId);
             var response = await sessionHost.Client.SendAsync(
                 new PluginHostRequest(
                     Guid.NewGuid().ToString("N"),
@@ -335,11 +346,50 @@ public sealed class DeviceService : IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
+        {
+            return;
+        }
+
         foreach (var sessionId in _sessions.Keys)
         {
-            DisconnectAsync(sessionId).GetAwaiter().GetResult();
+            _frameStore.Clear(sessionId);
         }
+
         _sessions.Clear();
+        GC.SuppressFinalize(this);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposeStarted, 1) == 0)
+        {
+            _disposeTask = DisposeAsyncCore();
+        }
+
+        return _disposeTask is null ? ValueTask.CompletedTask : new ValueTask(_disposeTask);
+    }
+
+    private async Task DisposeAsyncCore()
+    {
+        var sessionIds = _sessions.Keys.ToArray();
+
+        foreach (var sessionId in sessionIds)
+        {
+            try
+            {
+                await DisconnectAsync(sessionId, "dispose");
+            }
+            catch
+            {
+                // best-effort during shutdown
+            }
+
+            _frameStore.Clear(sessionId);
+        }
+
+        _sessions.Clear();
+        GC.SuppressFinalize(this);
     }
 
     private sealed record SessionState(Session Session);
@@ -431,7 +481,8 @@ public sealed class DeviceService : IDisposable
         string sessionId,
         SessionHostModel model,
         PluginCapabilityDescriptor? capability,
-        JsonElement parameters)
+        JsonElement parameters,
+        string? scopeSessionId = null)
     {
         if (model is SessionHostModel.DedicatedPerSession)
         {
@@ -455,6 +506,11 @@ public sealed class DeviceService : IDisposable
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(scopeSessionId))
+            {
+                return scopeSessionId;
+            }
+
             // Listener session itself may not provide a scope key; fall back to its own sessionId.
             return sessionId;
         }
@@ -462,7 +518,14 @@ public sealed class DeviceService : IDisposable
         return null;
     }
 
-    private static void ApplyListenerTopologyHints(Session session, string pluginId, string capabilityId, JsonElement parameters)
+    private static void ApplyListenerTopologyHints(
+        Session session,
+        string pluginId,
+        string capabilityId,
+        JsonElement parameters,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         if (!string.Equals(pluginId, "network.adapter", StringComparison.Ordinal))
         {
@@ -475,10 +538,15 @@ public sealed class DeviceService : IDisposable
         }
 
         var mode = TryGetString(parameters, "mode");
-        if (string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(scopeSessionId)
+                && string.Equals(resourceKind, "pending", StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(resourceId)))
         {
             session.Kind = SessionKind.Connection;
-            session.ParentSessionId = TryGetString(parameters, "listenerSessionId");
+            session.ParentSessionId = !string.IsNullOrWhiteSpace(scopeSessionId)
+                ? scopeSessionId
+                : TryGetString(parameters, "listenerSessionId");
         }
         else
         {

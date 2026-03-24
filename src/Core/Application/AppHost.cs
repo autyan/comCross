@@ -18,7 +18,9 @@ public class AppHost : IAppHost
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AppHost> _logger;
+    private readonly SemaphoreSlim _shutdownGate = new(1, 1);
     private bool _isInitialized;
+    private bool _isShutdown;
 
     public IServiceProvider ServiceProvider => _serviceProvider;
 
@@ -126,19 +128,37 @@ public class AppHost : IAppHost
 
     public async Task ShutdownAsync()
     {
+        if (_isShutdown)
+        {
+            return;
+        }
+
         _logger.LogInformation("Shutting down ComCross Core Engine...");
 
+        await _shutdownGate.WaitAsync();
         try
         {
-            // Stop all active sessions and plugins via PluginManager
+            if (_isShutdown)
+            {
+                return;
+            }
+
+            var deviceService = _serviceProvider.GetRequiredService<DeviceService>();
+            await deviceService.DisposeAsync();
+
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.ShutdownAsync();
 
+            _isShutdown = true;
             _logger.LogInformation("Core Engine shutdown complete.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during Core Engine shutdown.");
+        }
+        finally
+        {
+            _shutdownGate.Release();
         }
     }
 
@@ -159,11 +179,12 @@ public class AppHost : IAppHost
 
     public void Dispose()
     {
-        // Sync cleanup if needed
+        _shutdownGate.Dispose();
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        return ValueTask.CompletedTask;
+        await ShutdownAsync();
+        _shutdownGate.Dispose();
     }
 }

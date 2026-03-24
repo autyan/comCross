@@ -12,6 +12,9 @@ public sealed class NetworkBusAdapterPlugin :
     IPluginUiStateEventSource,
     IMultiSessionDevicePlugin
 {
+    private const string PendingResourceKind = "pending";
+    private const string PendingListResourceId = "all";
+
     private readonly CancellationTokenSource _cts = new();
 
     private readonly object _lock = new();
@@ -133,6 +136,11 @@ public sealed class NetworkBusAdapterPlugin :
             if (_tcpListeners.TryGetValue(query.SessionId, out var tcpListener))
             {
                 var pending = tcpListener.GetPendingSnapshot();
+                if (string.Equals(query.ResourceKind, PendingResourceKind, StringComparison.Ordinal))
+                {
+                    return BuildPendingResourceSnapshot("tcp", pending, query.ResourceId);
+                }
+
                 var state = new
                 {
                     kind = "listener",
@@ -147,6 +155,11 @@ public sealed class NetworkBusAdapterPlugin :
             if (_udpListeners.TryGetValue(query.SessionId, out var udpListener))
             {
                 var pending = udpListener.GetPendingSnapshot();
+                if (string.Equals(query.ResourceKind, PendingResourceKind, StringComparison.Ordinal))
+                {
+                    return BuildPendingResourceSnapshot("udp", pending, query.ResourceId);
+                }
+
                 var state = new
                 {
                     kind = "listener",
@@ -434,7 +447,7 @@ public sealed class NetworkBusAdapterPlugin :
     private Task<PluginConnectResult> ConnectTcpServerAsync(PluginConnectCommand command, CancellationToken cancellationToken)
     {
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
-        if (string.Equals(mode, "bind", StringComparison.Ordinal))
+        if (string.Equals(mode, "bind", StringComparison.Ordinal) || IsPendingResourceTarget(command))
         {
             return Task.FromResult(BindTcpAcceptedConnection(command));
         }
@@ -446,7 +459,7 @@ public sealed class NetworkBusAdapterPlugin :
     private Task<PluginConnectResult> ConnectUdpListenAsync(PluginConnectCommand command, CancellationToken cancellationToken)
     {
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
-        if (string.Equals(mode, "bind", StringComparison.Ordinal))
+        if (string.Equals(mode, "bind", StringComparison.Ordinal) || IsPendingResourceTarget(command))
         {
             return Task.FromResult(BindUdpPeer(command));
         }
@@ -544,11 +557,10 @@ public sealed class NetworkBusAdapterPlugin :
 
     private PluginConnectResult BindTcpAcceptedConnection(PluginConnectCommand command)
     {
-        var listenerSessionId = TryReadString(command.Parameters, "listenerSessionId");
-        var pendingId = TryReadString(command.Parameters, "pendingId");
+        var (listenerSessionId, pendingId) = ResolvePendingTarget(command);
         if (string.IsNullOrWhiteSpace(listenerSessionId) || string.IsNullOrWhiteSpace(pendingId))
         {
-            return new PluginConnectResult(false, "Missing listenerSessionId/pendingId.");
+            return new PluginConnectResult(false, "Missing pending resource target.");
         }
 
         TcpListenerSession? listener;
@@ -593,11 +605,10 @@ public sealed class NetworkBusAdapterPlugin :
 
     private PluginConnectResult BindUdpPeer(PluginConnectCommand command)
     {
-        var listenerSessionId = TryReadString(command.Parameters, "listenerSessionId");
-        var pendingId = TryReadString(command.Parameters, "pendingId");
+        var (listenerSessionId, pendingId) = ResolvePendingTarget(command);
         if (string.IsNullOrWhiteSpace(listenerSessionId) || string.IsNullOrWhiteSpace(pendingId))
         {
-            return new PluginConnectResult(false, "Missing listenerSessionId/pendingId.");
+            return new PluginConnectResult(false, "Missing pending resource target.");
         }
 
         UdpListenerSession? listener;
@@ -748,12 +759,68 @@ public sealed class NetworkBusAdapterPlugin :
     {
         try
         {
-            UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent(capabilityId, SessionId: sessionId, ViewKind: "listener", Reason: reason));
+            UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent(
+                capabilityId,
+                SessionId: sessionId,
+                ViewKind: "listener",
+                Reason: reason,
+                ResourceKind: PendingResourceKind,
+                ResourceId: PendingListResourceId));
         }
         catch
         {
         }
     }
+
+    private static PluginUiStateSnapshot BuildPendingResourceSnapshot(
+        string protocol,
+        IReadOnlyList<(string Id, string DisplayName)> pending,
+        string? resourceId)
+    {
+        if (!string.IsNullOrWhiteSpace(resourceId)
+            && !string.Equals(resourceId, PendingListResourceId, StringComparison.Ordinal))
+        {
+            var selected = pending.FirstOrDefault(p => string.Equals(p.Id, resourceId, StringComparison.Ordinal));
+            var itemState = new
+            {
+                kind = "pending-item",
+                protocol,
+                item = string.IsNullOrWhiteSpace(selected.Id)
+                    ? null
+                    : new { id = selected.Id, displayName = selected.DisplayName }
+            };
+
+            return new PluginUiStateSnapshot(JsonSerializer.SerializeToElement(itemState), DateTimeOffset.UtcNow);
+        }
+
+        var state = new
+        {
+            kind = "pending-list",
+            protocol,
+            items = pending.Select(p => new { id = p.Id, displayName = p.DisplayName }).ToArray()
+        };
+
+        return new PluginUiStateSnapshot(JsonSerializer.SerializeToElement(state), DateTimeOffset.UtcNow);
+    }
+
+    private static (string? ListenerSessionId, string? PendingId) ResolvePendingTarget(PluginConnectCommand command)
+    {
+        if (!string.IsNullOrWhiteSpace(command.ScopeSessionId)
+            && string.Equals(command.ResourceKind, PendingResourceKind, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(command.ResourceId))
+        {
+            return (command.ScopeSessionId, command.ResourceId);
+        }
+
+        return (
+            TryReadString(command.Parameters, "listenerSessionId"),
+            TryReadString(command.Parameters, "pendingId"));
+    }
+
+    private static bool IsPendingResourceTarget(PluginConnectCommand command)
+        => !string.IsNullOrWhiteSpace(command.ScopeSessionId)
+            && string.Equals(command.ResourceKind, PendingResourceKind, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(command.ResourceId);
 
     private void TryWriteFrame(string sessionId, byte[] payload)
     {

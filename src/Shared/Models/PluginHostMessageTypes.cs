@@ -20,6 +20,7 @@ public static class PluginHostMessageTypes
     public const string LanguageChanged = "language-changed";
     public const string ExtensionSyncContext = "extension-sync-context";
     public const string ExtensionFramesBatch = "extension-frames-batch";
+    public const string ExtensionSyncPlugins = "extension-sync-plugins";
 
     public const string Shutdown = "shutdown";
 }

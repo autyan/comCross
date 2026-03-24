@@ -177,6 +177,11 @@ public sealed class PluginUiConfigService
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(e.ResourceKind) || !string.IsNullOrWhiteSpace(e.ResourceId))
+        {
+            return;
+        }
+
         // Avoid persisting noisy UI-state surfaces unless they are user settings/connect forms.
         // - settings:* are plugin settings pages
         // - connect-dialog is where users pick connection defaults

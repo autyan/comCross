@@ -6,6 +6,7 @@ public sealed record PluginUiStateChangedEvent(
     string? SessionId,
     string? ViewKind,
     string? ViewInstanceId,
+    string? ResourceKind,
+    string? ResourceId,
     string Key,
     object? Value);
-

@@ -74,6 +74,8 @@ internal static class Program
                 return Task.FromResult(HandleContextSync(catalog, request));
             case PluginHostMessageTypes.ExtensionFramesBatch:
                 return Task.FromResult(HandleFrameBatch(catalog, request));
+            case PluginHostMessageTypes.ExtensionSyncPlugins:
+                return Task.FromResult(HandleSyncPlugins(catalog, request));
             case PluginHostMessageTypes.GetUiState:
                 return Task.FromResult(HandleGetUiState(catalog, request));
             case PluginHostMessageTypes.Shutdown:
@@ -212,6 +214,39 @@ internal static class Program
         return new PluginHostResponse(request.Id, true);
     }
 
+    private static PluginHostResponse HandleSyncPlugins(ExtensionCatalog catalog, PluginHostRequest request)
+    {
+        if (request.Payload is null)
+        {
+            return new PluginHostResponse(request.Id, false, "Missing extension plugin sync payload.");
+        }
+
+        List<ExtensionHostPluginLoadInfo>? descriptors;
+        try
+        {
+            descriptors = request.Payload.Value.Deserialize<List<ExtensionHostPluginLoadInfo>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return new PluginHostResponse(request.Id, false, $"Invalid extension plugin sync payload: {ex.Message}");
+        }
+
+        descriptors ??= new List<ExtensionHostPluginLoadInfo>();
+
+        try
+        {
+            var results = catalog.Sync(descriptors);
+            return new PluginHostResponse(
+                request.Id,
+                true,
+                Payload: JsonSerializer.SerializeToElement(results, JsonOptions));
+        }
+        catch (Exception ex)
+        {
+            return new PluginHostResponse(request.Id, false, ex.Message);
+        }
+    }
+
     private static PluginHostResponse HandleGetUiState(ExtensionCatalog catalog, PluginHostRequest request)
     {
         if (request.Payload is null)
@@ -251,7 +286,9 @@ internal static class Program
                 payload.CapabilityId,
                 payload.SessionId,
                 payload.ViewKind,
-                payload.ViewInstanceId));
+                payload.ViewInstanceId,
+                payload.ResourceKind,
+                payload.ResourceId));
 
             var resultPayload = JsonDocument.Parse(JsonSerializer.Serialize(snapshot, JsonOptions)).RootElement.Clone();
             return new PluginHostResponse(request.Id, true, Payload: resultPayload);
@@ -358,22 +395,18 @@ internal static class Program
         string? EventPipeName,
         string? HostToken);
 
-    private sealed record ExtensionPluginLoadInfo(
-        string PluginId,
-        string PluginPath,
-        string EntryPoint);
-
     private sealed class ExtensionCatalog : IDisposable
     {
-        private readonly List<(IPluginUiStateEventSource Source, EventHandler<PluginUiStateInvalidatedEvent> Handler)> _uiStateBindings = new();
-        private readonly List<(IExtensionActionRequestSource Source, EventHandler<ExtensionActionRequest> Handler)> _actionBindings = new();
+        private readonly Dictionary<string, LoadedPlugin> _plugins;
+        private Action<string, PluginUiStateInvalidatedEvent>? _uiStateSink;
+        private Action<string, ExtensionActionRequest>? _actionSink;
 
         private ExtensionCatalog(IReadOnlyList<LoadedPlugin> plugins)
         {
-            Plugins = plugins;
+            _plugins = plugins.ToDictionary(plugin => plugin.PluginId, StringComparer.Ordinal);
         }
 
-        public IReadOnlyList<LoadedPlugin> Plugins { get; }
+        public IReadOnlyList<LoadedPlugin> Plugins => _plugins.Values.OrderBy(plugin => plugin.PluginId, StringComparer.Ordinal).ToList();
 
         public static ExtensionCatalog Load(string pluginsFilePath)
         {
@@ -382,7 +415,7 @@ internal static class Program
                 throw new FileNotFoundException("Missing plugins file.", pluginsFilePath);
             }
 
-            var descriptors = JsonSerializer.Deserialize<List<ExtensionPluginLoadInfo>>(
+            var descriptors = JsonSerializer.Deserialize<List<ExtensionHostPluginLoadInfo>>(
                 File.ReadAllText(pluginsFilePath, Encoding.UTF8),
                 JsonOptions);
 
@@ -394,19 +427,62 @@ internal static class Program
             var loaded = new List<LoadedPlugin>(descriptors.Count);
             foreach (var descriptor in descriptors)
             {
-                var loadContext = new ExtensionPluginLoadContext(descriptor.PluginPath);
-                var assembly = loadContext.LoadFromAssemblyPath(Path.GetFullPath(descriptor.PluginPath));
-                var type = assembly.GetType(descriptor.EntryPoint, throwOnError: true);
-                var instance = Activator.CreateInstance(type!);
-                if (instance is null)
-                {
-                    throw new InvalidOperationException($"Failed to instantiate extension plugin '{descriptor.PluginId}'.");
-                }
-
-                loaded.Add(new LoadedPlugin(descriptor.PluginId, instance, loadContext));
+                loaded.Add(LoadPlugin(descriptor));
             }
 
             return new ExtensionCatalog(loaded);
+        }
+
+        public IReadOnlyList<ExtensionHostPluginSyncResult> Sync(IReadOnlyList<ExtensionHostPluginLoadInfo> descriptors)
+        {
+            var results = new List<ExtensionHostPluginSyncResult>(descriptors.Count);
+            var desired = descriptors.ToDictionary(descriptor => descriptor.PluginId, StringComparer.Ordinal);
+            var next = new Dictionary<string, LoadedPlugin>(StringComparer.Ordinal);
+
+            foreach (var descriptor in descriptors)
+            {
+                if (_plugins.TryGetValue(descriptor.PluginId, out var existing) && existing.Matches(descriptor))
+                {
+                    next[descriptor.PluginId] = existing;
+                    _plugins.Remove(descriptor.PluginId);
+                    results.Add(new ExtensionHostPluginSyncResult(descriptor.PluginId, true));
+                    continue;
+                }
+
+                try
+                {
+                    var loaded = LoadPlugin(descriptor);
+                    AttachBindings(loaded);
+                    next[descriptor.PluginId] = loaded;
+                    results.Add(new ExtensionHostPluginSyncResult(descriptor.PluginId, true));
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new ExtensionHostPluginSyncResult(descriptor.PluginId, false, ex.Message));
+                }
+
+                if (existing is not null)
+                {
+                    _plugins.Remove(descriptor.PluginId);
+                    UnloadPlugin(existing);
+                }
+            }
+
+            foreach (var plugin in _plugins.Values)
+            {
+                if (!desired.ContainsKey(plugin.PluginId))
+                {
+                    UnloadPlugin(plugin);
+                }
+            }
+
+            _plugins.Clear();
+            foreach (var plugin in next.Values)
+            {
+                _plugins[plugin.PluginId] = plugin;
+            }
+
+            return results;
         }
 
         public (string PluginId, IPluginUiStateProvider Provider)? ResolveUiStateProvider(string? pluginId, string capabilityId)
@@ -437,86 +513,150 @@ internal static class Program
 
         public void BindUiStateEventSink(Action<string, PluginUiStateInvalidatedEvent> sink)
         {
+            _uiStateSink = sink;
             foreach (var plugin in Plugins)
             {
-                if (plugin.Instance is not IPluginUiStateEventSource source)
-                {
-                    continue;
-                }
-
-                EventHandler<PluginUiStateInvalidatedEvent> handler = (_, evt) => sink(plugin.PluginId, evt);
-                source.UiStateInvalidated += handler;
-                _uiStateBindings.Add((source, handler));
+                AttachUiStateBinding(plugin);
             }
         }
 
         public void BindActionRequestSink(Action<string, ExtensionActionRequest> sink)
         {
+            _actionSink = sink;
             foreach (var plugin in Plugins)
             {
-                if (plugin.Instance is not IExtensionActionRequestSource source)
-                {
-                    continue;
-                }
-
-                EventHandler<ExtensionActionRequest> handler = (_, evt) => sink(plugin.PluginId, evt);
-                source.ActionRequested += handler;
-                _actionBindings.Add((source, handler));
+                AttachActionBinding(plugin);
             }
         }
 
         public void Dispose()
         {
-            foreach (var binding in _uiStateBindings)
+            foreach (var plugin in _plugins.Values.ToList())
             {
-                try
-                {
-                    binding.Source.UiStateInvalidated -= binding.Handler;
-                }
-                catch
-                {
-                }
+                UnloadPlugin(plugin);
             }
 
-            foreach (var binding in _actionBindings)
+            _plugins.Clear();
+        }
+
+        private static LoadedPlugin LoadPlugin(ExtensionHostPluginLoadInfo descriptor)
+        {
+            var loadContext = new ExtensionPluginLoadContext(descriptor.PluginPath);
+            var assembly = loadContext.LoadFromAssemblyPath(Path.GetFullPath(descriptor.PluginPath));
+            var type = assembly.GetType(descriptor.EntryPoint, throwOnError: true);
+            var instance = Activator.CreateInstance(type!);
+            if (instance is null)
             {
-                try
-                {
-                    binding.Source.ActionRequested -= binding.Handler;
-                }
-                catch
-                {
-                }
+                throw new InvalidOperationException($"Failed to instantiate extension plugin '{descriptor.PluginId}'.");
             }
 
-            foreach (var plugin in Plugins)
-            {
-                try
-                {
-                    if (plugin.Instance is IDisposable disposable)
-                    {
-                        disposable.Dispose();
-                    }
-                }
-                catch
-                {
-                }
+            return new LoadedPlugin(descriptor.PluginId, descriptor.PluginPath, descriptor.EntryPoint, instance, loadContext);
+        }
 
-                try
+        private void AttachBindings(LoadedPlugin plugin)
+        {
+            AttachUiStateBinding(plugin);
+            AttachActionBinding(plugin);
+        }
+
+        private void AttachUiStateBinding(LoadedPlugin plugin)
+        {
+            if (_uiStateSink is null || plugin.Instance is not IPluginUiStateEventSource source || plugin.UiStateHandler is not null)
+            {
+                return;
+            }
+
+            EventHandler<PluginUiStateInvalidatedEvent> handler = (_, evt) => _uiStateSink(plugin.PluginId, evt);
+            source.UiStateInvalidated += handler;
+            plugin.UiStateHandler = handler;
+        }
+
+        private void AttachActionBinding(LoadedPlugin plugin)
+        {
+            if (_actionSink is null || plugin.Instance is not IExtensionActionRequestSource source || plugin.ActionHandler is not null)
+            {
+                return;
+            }
+
+            EventHandler<ExtensionActionRequest> handler = (_, evt) => _actionSink(plugin.PluginId, evt);
+            source.ActionRequested += handler;
+            plugin.ActionHandler = handler;
+        }
+
+        private static void UnloadPlugin(LoadedPlugin plugin)
+        {
+            try
+            {
+                if (plugin.Instance is IPluginUiStateEventSource uiSource && plugin.UiStateHandler is not null)
                 {
-                    plugin.LoadContext.Unload();
+                    uiSource.UiStateInvalidated -= plugin.UiStateHandler;
                 }
-                catch
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (plugin.Instance is IExtensionActionRequestSource actionSource && plugin.ActionHandler is not null)
                 {
+                    actionSource.ActionRequested -= plugin.ActionHandler;
                 }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (plugin.Instance is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                plugin.LoadContext.Unload();
+            }
+            catch
+            {
             }
         }
     }
 
-    private sealed record LoadedPlugin(
-        string PluginId,
-        object Instance,
-        AssemblyLoadContext LoadContext);
+    private sealed class LoadedPlugin
+    {
+        public LoadedPlugin(
+            string pluginId,
+            string pluginPath,
+            string entryPoint,
+            object instance,
+            AssemblyLoadContext loadContext)
+        {
+            PluginId = pluginId;
+            PluginPath = pluginPath;
+            EntryPoint = entryPoint;
+            Instance = instance;
+            LoadContext = loadContext;
+        }
+
+        public string PluginId { get; }
+        public string PluginPath { get; }
+        public string EntryPoint { get; }
+        public object Instance { get; }
+        public AssemblyLoadContext LoadContext { get; }
+        public EventHandler<PluginUiStateInvalidatedEvent>? UiStateHandler { get; set; }
+        public EventHandler<ExtensionActionRequest>? ActionHandler { get; set; }
+
+        public bool Matches(ExtensionHostPluginLoadInfo descriptor)
+            => string.Equals(PluginId, descriptor.PluginId, StringComparison.Ordinal)
+                && string.Equals(PluginPath, descriptor.PluginPath, StringComparison.Ordinal)
+                && string.Equals(EntryPoint, descriptor.EntryPoint, StringComparison.Ordinal);
+    }
 
     private sealed class ExtensionPluginLoadContext : AssemblyLoadContext
     {
@@ -524,7 +664,7 @@ internal static class Program
         private readonly string? _pluginDir;
 
         public ExtensionPluginLoadContext(string pluginPath)
-            : base($"ComCross-Extension-{Guid.NewGuid():N}", isCollectible: false)
+            : base($"ComCross-Extension-{Guid.NewGuid():N}", isCollectible: true)
         {
             _pluginPath = Path.GetFullPath(pluginPath);
             _pluginDir = Path.GetDirectoryName(_pluginPath);
@@ -673,7 +813,9 @@ internal static class Program
                 evt.ViewKind,
                 evt.ViewInstanceId,
                 evt.Reason,
-                pluginId);
+                pluginId,
+                evt.ResourceKind,
+                evt.ResourceId);
 
             Enqueue(JsonSerializer.Serialize(
                 new PluginHostEvent(

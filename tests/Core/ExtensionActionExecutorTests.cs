@@ -122,7 +122,14 @@ public sealed class ExtensionActionExecutorTests
         public Task<WorkspaceState> LoadStateAsync() => Task.FromResult(new WorkspaceState());
         public Task SaveCurrentStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll) => Task.CompletedTask;
         public Task EnsureDefaultWorkloadAsync() => Task.CompletedTask;
-        public Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null) => throw new NotSupportedException();
+        public Task<Session> ConnectAsync(
+            string pluginId,
+            string capabilityId,
+            string parametersJson,
+            string? sessionName = null,
+            string? scopeSessionId = null,
+            string? resourceKind = null,
+            string? resourceId = null) => throw new NotSupportedException();
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
         public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf) => Task.CompletedTask;
 

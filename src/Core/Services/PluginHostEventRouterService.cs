@@ -87,7 +87,9 @@ public sealed class PluginHostEventRouterService
             invalidated.SessionId,
             invalidated.ViewKind,
             invalidated.ViewInstanceId,
-            invalidated.Reason));
+            invalidated.Reason,
+            invalidated.ResourceKind,
+            invalidated.ResourceId));
 
         var (ok, error, snapshot) = await _uiStateFetcher.GetUiStateAsync(runtime, invalidated, cancellationToken);
         if (!ok || snapshot is null)
@@ -121,7 +123,12 @@ public sealed class PluginHostEventRouterService
         }
 
         var viewScope = PluginUiViewScope.From(invalidated.ViewKind, invalidated.ViewInstanceId);
-        _uiStateManager.SetStateSnapshot(viewScope, invalidated.SessionId, values);
+        _uiStateManager.SetStateSnapshot(
+            viewScope,
+            invalidated.SessionId,
+            values,
+            invalidated.ResourceKind,
+            invalidated.ResourceId);
     }
 
     private async Task HandleExtensionActionRequestedAsync(

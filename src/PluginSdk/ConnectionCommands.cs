@@ -5,7 +5,10 @@ namespace ComCross.PluginSdk;
 public sealed record PluginConnectCommand(
     string CapabilityId,
     JsonElement Parameters,
-    string SessionId);
+    string SessionId,
+    string? ScopeSessionId = null,
+    string? ResourceKind = null,
+    string? ResourceId = null);
 
 public sealed record PluginDisconnectCommand(
     string SessionId,

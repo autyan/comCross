@@ -21,6 +21,7 @@ public class PluginUiStateManager
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _scopesByKind = new();
 
     private const string DefaultStateKey = "__default__";
+    private const string ResourceSeparator = "::resource::";
 
     public event EventHandler<PluginUiStateChangedEvent>? UiStateChanged;
 
@@ -69,15 +70,31 @@ public class PluginUiStateManager
         return value;
     }
 
+    private static string GetContextKey(string? sessionId, string? resourceKind = null, string? resourceId = null)
+    {
+        var baseKey = sessionId ?? DefaultStateKey;
+        if (string.IsNullOrWhiteSpace(resourceKind) || string.IsNullOrWhiteSpace(resourceId))
+        {
+            return baseKey;
+        }
+
+        return $"{baseKey}{ResourceSeparator}{resourceKind}{ResourceSeparator}{resourceId}";
+    }
+
     /// <summary>
     /// Merge a batch of values into the in-memory cache.
     /// Intended for host-side seeding from persisted config before rendering controls.
     /// </summary>
-    public void MergeState(PluginUiViewScope viewScope, string? sessionId, IReadOnlyDictionary<string, object> values)
+    public void MergeState(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        IReadOnlyDictionary<string, object> values,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         foreach (var kvp in values)
         {
-            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value);
+            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value, resourceKind, resourceId);
         }
     }
 
@@ -86,10 +103,15 @@ public class PluginUiStateManager
     /// This is used by the host to apply an authoritative committed state (e.g. last successful connect parameters)
     /// and intentionally discard any previous draft values.
     /// </summary>
-    public void SetStateSnapshot(PluginUiViewScope viewScope, string? sessionId, IReadOnlyDictionary<string, object> values)
+    public void SetStateSnapshot(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        IReadOnlyDictionary<string, object> values,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         var viewKind = viewScope.ViewKind;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
 
         var kindState = _states.GetOrAdd(viewKind, _ => new());
         var sessionState = kindState.GetOrAdd(sid, _ => new());
@@ -99,27 +121,40 @@ public class PluginUiStateManager
 
         foreach (var kvp in values)
         {
-            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value);
+            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value, resourceKind, resourceId);
         }
     }
 
     /// <summary>
     /// 注册控件到特定的会话状态位
     /// </summary>
-    public void RegisterControl(PluginUiViewScope viewScope, string? sessionId, string key, IPluginUiControl control)
+    public void RegisterControl(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        string key,
+        IPluginUiControl control,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
-        RegisterControl(viewScope, sessionId, key, control, PluginUiControlUpdateKind.Value);
+        RegisterControl(viewScope, sessionId, key, control, PluginUiControlUpdateKind.Value, resourceKind, resourceId);
     }
 
     /// <summary>
     /// Register a control binding with explicit update kind.
     /// Value bindings represent a field value, Options bindings represent an options list (e.g. ComboBox ItemsSource).
     /// </summary>
-    public void RegisterControl(PluginUiViewScope viewScope, string? sessionId, string key, IPluginUiControl control, PluginUiControlUpdateKind kind)
+    public void RegisterControl(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        string key,
+        IPluginUiControl control,
+        PluginUiControlUpdateKind kind,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         var viewKind = viewScope.ViewKind;
         var scopeKey = viewScope.ScopeKey;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
 
         var scopeSet = _scopesByKind.GetOrAdd(viewKind, _ => new());
         scopeSet.TryAdd(scopeKey, 0);
@@ -154,11 +189,17 @@ public class PluginUiStateManager
     /// <summary>
     /// 更新状态位（通常由后端/另一进程推送过来）
     /// </summary>
-    public void UpdateState(PluginUiViewScope viewScope, string? sessionId, string key, object? value)
+    public void UpdateState(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        string key,
+        object? value,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         value = NormalizeValue(value);
         var viewKind = viewScope.ViewKind;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
         
         // 更新缓存 (avoid re-entrancy loops)
         var kindState = _states.GetOrAdd(viewKind, _ => new());
@@ -222,13 +263,15 @@ public class PluginUiStateManager
         string capabilityId,
         PluginUiViewScope viewScope,
         string? sessionId,
+        string? resourceKind,
+        string? resourceId,
         string key,
         object? value,
         IPluginUiControl? source = null)
     {
         value = NormalizeValue(value);
         var viewKind = viewScope.ViewKind;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
 
         // Update cache (avoid loops)
         var kindState = _states.GetOrAdd(viewKind, _ => new());
@@ -290,6 +333,8 @@ public class PluginUiStateManager
             sessionId,
             viewScope.ViewKind,
             viewScope.ViewInstanceId,
+            resourceKind,
+            resourceId,
             key,
             value));
     }
@@ -297,11 +342,16 @@ public class PluginUiStateManager
     /// <summary>
     /// 批量更新状态
     /// </summary>
-    public void UpdateStates(PluginUiViewScope viewScope, string? sessionId, IDictionary<string, object> updates)
+    public void UpdateStates(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        IDictionary<string, object> updates,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         foreach (var kvp in updates)
         {
-            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value);
+            UpdateState(viewScope, sessionId, kvp.Key, kvp.Value, resourceKind, resourceId);
         }
     }
 
@@ -333,14 +383,18 @@ public class PluginUiStateManager
     /// <summary>
     /// 切换上下文 (触发当前所有相关控件刷新)
     /// </summary>
-    public void SwitchContext(PluginUiViewScope viewScope, string? sessionId)
+    public void SwitchContext(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         var scopeKey = viewScope.ScopeKey;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
         if (!_registrations.TryGetValue(scopeKey, out var scopeRegs)) return;
         if (!scopeRegs.TryGetValue(sid, out var sessionRegs)) return;
         
-        var currentState = GetState(viewScope, sid);
+        var currentState = GetState(viewScope, sessionId, resourceKind, resourceId);
         foreach (var reg in sessionRegs)
         {
             if (currentState.TryGetValue(reg.Key, out var value))
@@ -365,10 +419,14 @@ public class PluginUiStateManager
     /// <summary>
     /// 获取当前快照
     /// </summary>
-    public IDictionary<string, object> GetState(PluginUiViewScope viewScope, string? sessionId)
+    public IDictionary<string, object> GetState(
+        PluginUiViewScope viewScope,
+        string? sessionId,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         var viewKind = viewScope.ViewKind;
-        var sid = sessionId ?? DefaultStateKey;
+        var sid = GetContextKey(sessionId, resourceKind, resourceId);
         if (_states.TryGetValue(viewKind, out var kindState)
             && kindState.TryGetValue(sid, out var sessionState))
         {
@@ -380,18 +438,23 @@ public class PluginUiStateManager
     /// <summary>
     /// 清除会话状态
     /// </summary>
-    public void ClearSession(PluginUiViewScope viewScope, string sessionId)
+    public void ClearSession(
+        PluginUiViewScope viewScope,
+        string sessionId,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
         var viewKind = viewScope.ViewKind;
         var scopeKey = viewScope.ScopeKey;
+        var contextKey = GetContextKey(sessionId, resourceKind, resourceId);
 
         if (_states.TryGetValue(viewKind, out var kindState))
         {
-            kindState.TryRemove(sessionId, out _);
+            kindState.TryRemove(contextKey, out _);
         }
         if (_registrations.TryGetValue(scopeKey, out var scopeRegs))
         {
-            scopeRegs.TryRemove(sessionId, out _);
+            scopeRegs.TryRemove(contextKey, out _);
         }
     }
 

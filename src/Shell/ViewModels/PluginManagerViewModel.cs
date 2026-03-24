@@ -377,6 +377,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
         string? sessionId,
         string? viewKind,
         string? viewInstanceId,
+        string? resourceKind,
+        string? resourceId,
         TimeSpan timeout)
     {
         try
@@ -393,6 +395,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 sessionId,
                 viewKind,
                 viewInstanceId,
+                resourceKind,
+                resourceId,
                 timeout);
 
             return ok && snapshot is not null ? snapshot.State : null;
@@ -580,6 +584,8 @@ public sealed class PluginManagerViewModel : BaseViewModel
             sessionId,
             viewKind,
             viewInstanceId,
+            resourceKind: null,
+            resourceId: null,
             timeout);
 
         if (!result.Ok || result.Snapshot is null)

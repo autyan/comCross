@@ -77,6 +77,8 @@ public sealed class PluginHostProtocolService
         string? sessionId,
         string? viewKind,
         string? viewInstanceId,
+        string? resourceKind,
+        string? resourceId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -100,7 +102,14 @@ public sealed class PluginHostProtocolService
         // If sessionId is provided, query the corresponding session host.
         // Session-scoped UI state is maintained by the session host for listener-style plugins.
         var payload = JsonSerializer.SerializeToElement(
-            new PluginHostGetUiStatePayload(capabilityId, sessionId, viewKind, viewInstanceId),
+            new PluginHostGetUiStatePayload(
+                capabilityId,
+                sessionId,
+                viewKind,
+                viewInstanceId,
+                PluginId: null,
+                ResourceKind: resourceKind,
+                ResourceId: resourceId),
             JsonOptions);
 
         PluginHostResponse? response;

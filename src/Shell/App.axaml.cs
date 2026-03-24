@@ -168,7 +168,15 @@ public partial class App : Application
             }
             finally
             {
-                _mainWindowScope?.Dispose();
+                if (_mainWindowScope is IAsyncDisposable asyncDisposable)
+                {
+                    await asyncDisposable.DisposeAsync();
+                }
+                else
+                {
+                    _mainWindowScope?.Dispose();
+                }
+
                 _mainWindowScope = null;
 
                 // Always shutdown on UI thread

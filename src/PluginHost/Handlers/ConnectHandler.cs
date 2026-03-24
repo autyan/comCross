@@ -92,7 +92,13 @@ internal static class ConnectHandler
             cts.CancelAfter(HandlerDefaults.DefaultOperationTimeout);
 
             var result = await connectable.ConnectAsync(
-                new PluginConnectCommand(payload.CapabilityId, payload.Parameters, payload.SessionId),
+                new PluginConnectCommand(
+                    payload.CapabilityId,
+                    payload.Parameters,
+                    payload.SessionId,
+                    payload.ScopeSessionId,
+                    payload.ResourceKind,
+                    payload.ResourceId),
                 cts.Token);
 
             if (result.Ok)

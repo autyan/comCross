@@ -34,6 +34,8 @@ public sealed class PluginUiStateFetcher : IPluginUiStateFetcher
                 invalidated.SessionId,
                 invalidated.ViewKind,
                 invalidated.ViewInstanceId,
+                invalidated.ResourceKind,
+                invalidated.ResourceId,
                 Timeout,
                 cancellationToken);
         }
@@ -45,6 +47,8 @@ public sealed class PluginUiStateFetcher : IPluginUiStateFetcher
             invalidated.SessionId,
             invalidated.ViewKind,
             invalidated.ViewInstanceId,
+            invalidated.ResourceKind,
+            invalidated.ResourceId,
             Timeout,
             cancellationToken);
     }

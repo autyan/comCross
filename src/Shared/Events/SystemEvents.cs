@@ -100,5 +100,7 @@ public sealed record PluginUiStateInvalidatedCoreEvent(
     string? SessionId = null,
     string? ViewKind = null,
     string? ViewInstanceId = null,
-    string? Reason = null
+    string? Reason = null,
+    string? ResourceKind = null,
+    string? ResourceId = null
 ) : SystemEvent;

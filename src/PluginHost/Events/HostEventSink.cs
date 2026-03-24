@@ -58,7 +58,10 @@ internal sealed class HostEventSink : IDisposable
                 SessionId: evt.SessionId,
                 ViewKind: evt.ViewKind,
                 ViewInstanceId: evt.ViewInstanceId,
-                Reason: evt.Reason);
+                Reason: evt.Reason,
+                PluginId: null,
+                ResourceKind: evt.ResourceKind,
+                ResourceId: evt.ResourceId);
 
             var payloadJson = JsonSerializer.Serialize(hostPayload, _jsonOptions);
             var payload = JsonDocument.Parse(payloadJson).RootElement.Clone();

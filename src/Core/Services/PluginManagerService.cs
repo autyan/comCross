@@ -275,7 +275,6 @@ public sealed class PluginManagerService
         PluginDiscoverySnapshot snapshot,
         CancellationToken cancellationToken)
     {
-        await _extensionRuntimeService.ShutdownAsync(TimeSpan.FromSeconds(2));
         var runtimes = await _extensionRuntimeService.LoadPluginsAsync(snapshot.ExtensionPlugins, _settingsService.Current.Plugins.Enabled);
         PluginManagerPlaneState.ReplacePlane(_knownRuntimes, _activeRuntimes, PluginPlane.Extension, runtimes);
         LogPlaneReload(PluginPlane.Extension, runtimes);

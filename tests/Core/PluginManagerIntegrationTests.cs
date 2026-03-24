@@ -1,5 +1,6 @@
 using ComCross.Core.Extensions;
 using ComCross.Core.Services;
+using ComCross.Plugins.Flow;
 using ComCross.Plugins.Serial;
 using ComCross.Plugins.Stats;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,25 +11,39 @@ namespace ComCross.Tests.Core;
 [Collection("plugin-manager-integration")]
 public sealed class PluginManagerIntegrationTests
 {
+    private static int? GetExtensionHostPid(ExtensionRuntimeService runtimeService)
+    {
+        var field = typeof(ExtensionRuntimeService).GetField("_hostProcess", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var process = field?.GetValue(runtimeService) as System.Diagnostics.Process;
+        return process?.HasExited == false ? process.Id : null;
+    }
+
     [Fact]
     public async Task DisableExtensionPlugin_DoesNotReloadBusPlane()
     {
         await using var harness = await PluginManagerHarness.CreateAsync();
 
         var pluginManager = harness.Services.GetRequiredService<PluginManagerService>();
+        var extensionRuntime = harness.Services.GetRequiredService<ExtensionRuntimeService>();
         await pluginManager.InitializeAsync();
 
         var serialBefore = pluginManager.GetRuntime("serial.adapter");
         var statsBefore = pluginManager.GetRuntime("serial.stats");
+        var flowBefore = pluginManager.GetRuntime("serial.flow");
+        var hostPidBefore = GetExtensionHostPid(extensionRuntime);
 
         Assert.NotNull(serialBefore);
         Assert.NotNull(statsBefore);
+        Assert.NotNull(flowBefore);
+        Assert.NotNull(hostPidBefore);
 
         var result = await pluginManager.SetPluginEnabledAsync("serial.stats", enabled: false);
 
         Assert.True(result.Success);
         Assert.Same(serialBefore, pluginManager.GetRuntime("serial.adapter"));
         Assert.Null(pluginManager.GetRuntime("serial.stats"));
+        Assert.NotNull(pluginManager.GetRuntime("serial.flow"));
+        Assert.Equal(hostPidBefore, GetExtensionHostPid(extensionRuntime));
         Assert.Contains(pluginManager.GetAllRuntimes(), runtime =>
             runtime.Info.Manifest.Id == "serial.stats" && runtime.State == PluginLoadState.Disabled);
     }
@@ -132,6 +147,7 @@ public sealed class PluginManagerIntegrationTests
             CopyHostOutputs(repoRoot, baseDir, "ExtensionHost");
             CopyHostOutputs(repoRoot, baseDir, "SessionHost");
 
+            CopyPluginAssembly(typeof(FlowTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.flow"));
             CopyPluginAssembly(typeof(SerialBusAdapterPlugin).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.adapter"));
             CopyPluginAssembly(typeof(StatsTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.stats"));
 
@@ -213,6 +229,7 @@ public sealed class PluginManagerIntegrationTests
             var target = Path.Combine(pluginDir, Path.GetFileName(assemblyPath));
             File.Copy(assemblyPath, target, overwrite: true);
         }
+
     }
 }
 

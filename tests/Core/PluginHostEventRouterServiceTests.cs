@@ -53,6 +53,51 @@ public sealed class PluginHostEventRouterServiceTests
     }
 
     [Fact]
+    public async Task RouteAsync_ForResourceScopedInvalidation_PreservesResourceTarget()
+    {
+        var eventBus = new EventBus();
+        var stateManager = new PluginUiStateManager();
+        var fetcher = new FakePluginUiStateFetcher(
+            new PluginUiStateSnapshot(
+                JsonDocument.Parse("""{"items":[{"id":"pending-1","display":"127.0.0.1:5000"}]}""").RootElement.Clone(),
+                DateTimeOffset.UtcNow));
+        var service = new PluginHostEventRouterService(
+            eventBus,
+            stateManager,
+            fetcher,
+            new FakeExtensionActionExecutor(),
+            NullLogger<PluginHostEventRouterService>.Instance);
+
+        PluginUiStateInvalidatedCoreEvent? published = null;
+        using var subscription = eventBus.Subscribe<PluginUiStateInvalidatedCoreEvent>(evt => published = evt);
+
+        var runtime = CreateRuntime("network.adapter", PluginType.BusAdapter);
+        var payload = JsonSerializer.SerializeToElement(new PluginHostUiStateInvalidatedEvent(
+            CapabilityId: "tcp.server",
+            SessionId: "listener-1",
+            ViewKind: "listener",
+            ViewInstanceId: "listener-panel",
+            Reason: "pending",
+            PluginId: null,
+            ResourceKind: "pending-client-list",
+            ResourceId: "all"));
+
+        await service.RouteAsync(runtime, new PluginHostEvent(PluginHostEventTypes.UiStateInvalidated, payload));
+
+        Assert.NotNull(published);
+        Assert.Equal("pending-client-list", published!.ResourceKind);
+        Assert.Equal("all", published.ResourceId);
+
+        var state = stateManager.GetState(
+            PluginUiViewScope.From("listener", "listener-panel"),
+            "listener-1",
+            resourceKind: "pending-client-list",
+            resourceId: "all");
+        Assert.True(state.ContainsKey("items"));
+        Assert.Equal(1, fetcher.CallCount);
+    }
+
+    [Fact]
     public async Task RouteAsync_IgnoresInvalidPayload()
     {
         var eventBus = new EventBus();

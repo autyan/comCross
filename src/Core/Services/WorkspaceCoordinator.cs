@@ -28,7 +28,14 @@ public interface IWorkspaceCoordinator
     Task EnsureDefaultWorkloadAsync();
     
     // Session Operations
-    Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null);
+    Task<Session> ConnectAsync(
+        string pluginId,
+        string capabilityId,
+        string parametersJson,
+        string? sessionName = null,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null);
     Task DeleteSessionAsync(string sessionId);
     Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf);
     Task SendDataAsync(string sessionId, byte[] data);
@@ -145,9 +152,23 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
     public Task EnsureDefaultWorkloadAsync() => _workloadService.EnsureDefaultWorkloadAsync();
 
-    public async Task<Session> ConnectAsync(string pluginId, string capabilityId, string parametersJson, string? sessionName = null)
+    public async Task<Session> ConnectAsync(
+        string pluginId,
+        string capabilityId,
+        string parametersJson,
+        string? sessionName = null,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null)
     {
-        return await _workspaceService.ConnectAsync(pluginId, capabilityId, parametersJson, sessionName);
+        return await _workspaceService.ConnectAsync(
+            pluginId,
+            capabilityId,
+            parametersJson,
+            sessionName,
+            scopeSessionId,
+            resourceKind,
+            resourceId);
     }
 
     public Task DeleteSessionAsync(string sessionId) => _workspaceService.DeleteSessionAsync(sessionId);
