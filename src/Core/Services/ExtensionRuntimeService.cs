@@ -28,9 +28,6 @@ public sealed class ExtensionRuntimeService
     private string? _eventPipeName;
     private string? _hostToken;
     private string? _pluginsFilePath;
-    private bool _hostRegistered;
-    private int? _hostProcessId;
-
     public ExtensionRuntimeService(
         PluginSignatureVerificationService signatureVerification,
         ILogger<ExtensionRuntimeService> logger)
@@ -41,7 +38,7 @@ public sealed class ExtensionRuntimeService
 
     public event Action<PluginRuntime, PluginHostEvent>? HostEventReceived;
 
-    public IReadOnlyList<PluginRuntime> LoadPlugins(
+    public async Task<IReadOnlyList<PluginRuntime>> LoadPluginsAsync(
         IReadOnlyList<PluginInfo> plugins,
         IReadOnlyDictionary<string, bool> enabledMap)
     {
@@ -77,7 +74,7 @@ public sealed class ExtensionRuntimeService
             return runtimes;
         }
 
-        var started = StartHost(loadable.Select(x => x.Plugin).ToList());
+        var started = await StartHostAsync(loadable.Select(x => x.Plugin).ToList());
         if (!started)
         {
             var error = "Extension host failed to start.";
@@ -279,7 +276,7 @@ public sealed class ExtensionRuntimeService
         }
     }
 
-    private bool RestartHost()
+    private async Task<bool> RestartHostAsync()
     {
         if (_hostedPlugins.Count == 0)
         {
@@ -290,7 +287,7 @@ public sealed class ExtensionRuntimeService
 
         DisposeHostState();
 
-        var started = StartHost(_hostedPlugins);
+        var started = await StartHostAsync(_hostedPlugins);
         if (!started)
         {
             foreach (var runtime in _activeRuntimes.Values)
@@ -309,7 +306,7 @@ public sealed class ExtensionRuntimeService
         return started;
     }
 
-    private bool StartHost(IReadOnlyList<PluginInfo> plugins)
+    private async Task<bool> StartHostAsync(IReadOnlyList<PluginInfo> plugins)
     {
         var hostPath = ResolveHostPath();
         if (hostPath is null)
@@ -337,56 +334,22 @@ public sealed class ExtensionRuntimeService
 
         try
         {
-            _hostRegistered = false;
-            _hostProcessId = null;
             _hostToken = hostToken;
+            var started = await HostSupervisorSupport.StartAsync(
+                processStart,
+                pipeName,
+                eventPipeName,
+                hostToken,
+                HostConnectTimeout,
+                HandleHostEvent,
+                _ => OnHostExited());
 
-            var process = Process.Start(processStart);
-            if (process is null)
+            if (!started.Success
+                || started.Process is null
+                || started.Client is null
+                || started.EventClient is null)
             {
-                TryDeletePluginsFile(pluginsFilePath);
-                return false;
-            }
-
-            try
-            {
-                process.EnableRaisingEvents = true;
-                process.Exited += (_, _) => OnHostExited();
-            }
-            catch
-            {
-            }
-
-            var client = new PluginHostClient(pipeName);
-            var eventClient = new PluginHostEventClient(eventPipeName);
-            eventClient.EventReceived += HandleHostEvent;
-            eventClient.Start();
-
-            var response = client.SendAsync(
-                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Ping),
-                HostConnectTimeout).GetAwaiter().GetResult();
-
-            if (response is not { Ok: true })
-            {
-                _logger.LogWarning("Extension host ping failed: {Error}", response?.Error ?? "unavailable");
-                client.Dispose();
-                eventClient.Dispose();
-                TryTerminate(process);
-                TryDeletePluginsFile(pluginsFilePath);
-                return false;
-            }
-
-            var registeredDeadline = DateTimeOffset.UtcNow + HostConnectTimeout;
-            while (!_hostRegistered && DateTimeOffset.UtcNow < registeredDeadline)
-            {
-                Thread.Sleep(30);
-            }
-
-            if (!_hostRegistered)
-            {
-                client.Dispose();
-                eventClient.Dispose();
-                TryTerminate(process);
+                _logger.LogWarning("Extension host start failed: {Error}", started.Error ?? "unavailable");
                 TryDeletePluginsFile(pluginsFilePath);
                 return false;
             }
@@ -394,15 +357,15 @@ public sealed class ExtensionRuntimeService
             lock (_hostSync)
             {
                 _hostedPlugins = plugins.ToList();
-                _hostProcess = process;
-                _hostClient = client;
-                _hostEventClient = eventClient;
+                _hostProcess = started.Process;
+                _hostClient = started.Client;
+                _hostEventClient = started.EventClient;
                 _pipeName = pipeName;
                 _eventPipeName = eventPipeName;
                 _pluginsFilePath = pluginsFilePath;
             }
 
-            _logger.LogInformation("Extension host loaded: PluginCount={Count}, Pid={Pid}", plugins.Count, process.Id);
+            _logger.LogInformation("Extension host loaded: PluginCount={Count}, Pid={Pid}", plugins.Count, started.Process.Id);
             return true;
         }
         catch (Exception ex)
@@ -415,25 +378,6 @@ public sealed class ExtensionRuntimeService
 
     private void HandleHostEvent(PluginHostEvent evt)
     {
-        if (evt.Payload is not null
-            && string.Equals(evt.Type, PluginHostEventTypes.HostRegistered, StringComparison.Ordinal))
-        {
-            try
-            {
-                var payload = evt.Payload.Value.Deserialize<PluginHostRegisteredEvent>(JsonOptions);
-                if (payload is not null
-                    && !string.IsNullOrWhiteSpace(payload.Token)
-                    && string.Equals(payload.Token, _hostToken, StringComparison.Ordinal))
-                {
-                    _hostRegistered = true;
-                    _hostProcessId = payload.ProcessId;
-                }
-            }
-            catch
-            {
-            }
-        }
-
         var targetRuntimes = ResolveEventTargets(evt);
         foreach (var runtime in targetRuntimes)
         {
@@ -506,8 +450,6 @@ public sealed class ExtensionRuntimeService
             _eventPipeName = null;
             _hostToken = null;
             _pluginsFilePath = null;
-            _hostRegistered = false;
-            _hostProcessId = null;
             _hostedPlugins = Array.Empty<PluginInfo>();
         }
     }
@@ -558,7 +500,7 @@ public sealed class ExtensionRuntimeService
 
         if (_hostProcess is null || _hostProcess.HasExited || _hostClient is null)
         {
-            var restarted = RestartHost();
+            var restarted = await RestartHostAsync();
             if (!restarted)
             {
                 return (null, new InvalidOperationException("Extension host exited."), false);
@@ -584,7 +526,7 @@ public sealed class ExtensionRuntimeService
                 return (response, error, false);
             }
 
-            var restarted = RestartHost();
+            var restarted = await RestartHostAsync();
             if (!restarted)
             {
                 return (response, error, false);
@@ -602,7 +544,7 @@ public sealed class ExtensionRuntimeService
                 return (null, ex, false);
             }
 
-            var restarted = RestartHost();
+            var restarted = await RestartHostAsync();
             if (!restarted)
             {
                 return (null, ex, false);

@@ -79,7 +79,7 @@ public sealed class WorkspaceStateFlowTests
 
         await workspaceService.LoadStateAsync();
         var createdWorkload = await workloadService.CreateWorkloadAsync("Phase D Active");
-        Assert.True(workloadService.SetActiveWorkload(createdWorkload.Id));
+        Assert.True(await workloadService.SetActiveWorkloadAsync(createdWorkload.Id));
 
         await workspaceService.SaveCurrentStateAsync(Array.Empty<ComCross.Shared.Models.Session>(), null, autoScroll: false);
 

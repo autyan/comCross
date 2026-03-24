@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\Core\ComCross.Core.csproj" />
+    <ProjectReference Include="..\src\Plugins\ComCross.Plugins.Serial\ComCross.Plugins.Serial.csproj" />
     <ProjectReference Include="..\src\Plugins\ComCross.Plugins.Stats\ComCross.Plugins.Stats.csproj" />
   </ItemGroup>
 </Project>

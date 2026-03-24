@@ -144,43 +144,38 @@ public sealed class SessionHostRuntimeService
             sessionId,
             supportsMultiSession ? "multi" : "single",
             capabilityId ?? "-");
+        SessionHostRuntime? runtime = null;
+        var started = await HostSupervisorSupport.StartAsync(
+            startInfo,
+            pipeName,
+            eventPipeName,
+            hostToken,
+            HostConnectTimeout,
+            evt =>
+            {
+                if (runtime is null)
+                {
+                    return;
+                }
 
-        var process = Process.Start(startInfo);
-        if (process is null)
+                try
+                {
+                    HostEventReceived?.Invoke(runtime, evt);
+                }
+                catch
+                {
+                }
+            });
+
+        if (!started.Success
+            || started.Process is null
+            || started.Client is null
+            || started.EventClient is null)
         {
-            throw new InvalidOperationException("Failed to start session host.");
+            throw new InvalidOperationException(started.Error ?? "Session host failed to start.");
         }
 
-        var client = new PluginHostClient(pipeName);
-        var eventClient = new PluginHostEventClient(eventPipeName);
-        eventClient.Start();
-
-        // Basic readiness: ping.
-        var response = await client.SendAsync(
-            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Ping),
-            HostConnectTimeout);
-
-        if (response is not { Ok: true })
-        {
-            client.Dispose();
-            try { eventClient.Dispose(); } catch { }
-            TryTerminate(process);
-            throw new InvalidOperationException(response?.Error ?? "Session host failed to respond.");
-        }
-
-        var runtime = new SessionHostRuntime(plugin, sessionId, process, client, eventClient);
-
-        // Bind event callback now that runtime exists.
-        eventClient.EventReceived += evt =>
-        {
-            try
-            {
-                HostEventReceived?.Invoke(runtime, evt);
-            }
-            catch
-            {
-            }
-        };
+        runtime = new SessionHostRuntime(plugin, sessionId, started.Process, started.Client, started.EventClient);
 
         var group = new HostGroup(key, runtime, supportsMultiSession);
         group.AddSession(sessionId);
@@ -194,7 +189,7 @@ public sealed class SessionHostRuntimeService
 
                 try
                 {
-                    runtime.ShutdownAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult();
+                    await runtime.ShutdownAsync(TimeSpan.FromSeconds(1));
                 }
                 catch
                 {

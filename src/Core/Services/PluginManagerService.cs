@@ -159,6 +159,19 @@ public sealed class PluginManagerService
             return new(false, PluginToggleFailureReason.NotFound);
         }
 
+        var snapshot = DiscoverPlugins();
+        var targetPlugin = snapshot.Plugins.FirstOrDefault(plugin =>
+            string.Equals(plugin.Manifest.Id, pluginId, StringComparison.Ordinal));
+        if (targetPlugin is null)
+        {
+            return new(false, PluginToggleFailureReason.NotFound);
+        }
+
+        if (!PluginManagerPlaneState.TryGetPlane(targetPlugin.Manifest, out var plane))
+        {
+            return new(false, PluginToggleFailureReason.NotFound);
+        }
+
         if (!enabled && _sessionHostRuntimeService.HasActiveSessionsForPlugin(pluginId))
         {
             return new(false, PluginToggleFailureReason.ActiveSessions);
@@ -166,7 +179,7 @@ public sealed class PluginManagerService
 
         _settingsService.Current.Plugins.Enabled[pluginId] = enabled;
         await _settingsService.SaveAsync(cancellationToken);
-        await ReloadPluginsAsync(cancellationToken);
+        await ReloadPlaneAsync(plane, snapshot, cancellationToken);
         return new(true, null);
     }
 
@@ -198,6 +211,13 @@ public sealed class PluginManagerService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var snapshot = DiscoverPlugins();
+        await ReloadBusPlaneAsync(snapshot, cancellationToken);
+        await ReloadExtensionPlaneAsync(snapshot, cancellationToken);
+    }
+
+    private PluginDiscoverySnapshot DiscoverPlugins()
+    {
         var pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
         var plugins = _discoveryService.Discover(pluginsDir);
         var busPlugins = new List<PluginInfo>();
@@ -218,21 +238,54 @@ public sealed class PluginManagerService
         }
 #endif
 
-        await _runtimeService.ShutdownAsync(
-            _activeRuntimes.Values
-                .Where(runtime => runtime.Info.Manifest.PluginType == PluginType.BusAdapter)
-                .ToList(),
-            TimeSpan.FromSeconds(2));
-        await _extensionRuntimeService.ShutdownAsync(TimeSpan.FromSeconds(2));
+        return new PluginDiscoverySnapshot(plugins, busPlugins, extensionPlugins);
+    }
 
-        _knownRuntimes.Clear();
-        _activeRuntimes.Clear();
+    private async Task ReloadPlaneAsync(
+        PluginPlane plane,
+        PluginDiscoverySnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var runtimes = _runtimeService.LoadPlugins(busPlugins, _settingsService.Current.Plugins.Enabled)
-            .Concat(_extensionRuntimeService.LoadPlugins(extensionPlugins, _settingsService.Current.Plugins.Enabled))
+        if (plane == PluginPlane.Bus)
+        {
+            await ReloadBusPlaneAsync(snapshot, cancellationToken);
+            return;
+        }
+
+        await ReloadExtensionPlaneAsync(snapshot, cancellationToken);
+    }
+
+    private async Task ReloadBusPlaneAsync(
+        PluginDiscoverySnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var existingBusRuntimes = _activeRuntimes.Values
+            .Where(runtime => PluginManagerPlaneState.TryGetPlane(runtime.Info.Manifest, out var plane) && plane == PluginPlane.Bus)
             .ToList();
 
-        _logger.LogInformation("Loaded {LoadedCount}/{TotalCount} plugin runtime(s)",
+        await _runtimeService.ShutdownAsync(existingBusRuntimes, TimeSpan.FromSeconds(2));
+        var runtimes = await _runtimeService.LoadPluginsAsync(snapshot.BusPlugins, _settingsService.Current.Plugins.Enabled);
+        PluginManagerPlaneState.ReplacePlane(_knownRuntimes, _activeRuntimes, PluginPlane.Bus, runtimes);
+        LogPlaneReload(PluginPlane.Bus, runtimes);
+    }
+
+    private async Task ReloadExtensionPlaneAsync(
+        PluginDiscoverySnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        await _extensionRuntimeService.ShutdownAsync(TimeSpan.FromSeconds(2));
+        var runtimes = await _extensionRuntimeService.LoadPluginsAsync(snapshot.ExtensionPlugins, _settingsService.Current.Plugins.Enabled);
+        PluginManagerPlaneState.ReplacePlane(_knownRuntimes, _activeRuntimes, PluginPlane.Extension, runtimes);
+        LogPlaneReload(PluginPlane.Extension, runtimes);
+    }
+
+    private void LogPlaneReload(PluginPlane plane, IReadOnlyList<PluginRuntime> runtimes)
+    {
+        _logger.LogInformation(
+            "Reloaded {Plane} plane: Loaded={LoadedCount}, Total={TotalCount}",
+            plane,
             runtimes.Count(r => r.State == PluginLoadState.Loaded),
             runtimes.Count);
 
@@ -241,22 +294,13 @@ public sealed class PluginManagerService
         {
             foreach (var runtime in runtimes)
             {
-                Console.Error.WriteLine($"[Core] Plugin runtime: {runtime.Info.Manifest.Id}, State={runtime.State}, Error={runtime.Error ?? "-"}, Capabilities={runtime.Capabilities.Count}, CapErr={runtime.CapabilitiesError ?? "-"}");
+                Console.Error.WriteLine($"[Core] {plane} runtime: {runtime.Info.Manifest.Id}, State={runtime.State}, Error={runtime.Error ?? "-"}, Capabilities={runtime.Capabilities.Count}, CapErr={runtime.CapabilitiesError ?? "-"}");
             }
         }
         catch
         {
         }
 #endif
-
-        foreach (var runtime in runtimes)
-        {
-            _knownRuntimes[runtime.Info.Manifest.Id] = runtime;
-            if (runtime.State == PluginLoadState.Loaded)
-            {
-                _activeRuntimes[runtime.Info.Manifest.Id] = runtime;
-            }
-        }
     }
 
     private void EnsureEventSubscriptions()
@@ -272,6 +316,11 @@ public sealed class PluginManagerService
         _eventSubscriptionsAttached = true;
     }
 }
+
+internal sealed record PluginDiscoverySnapshot(
+    IReadOnlyList<PluginInfo> Plugins,
+    IReadOnlyList<PluginInfo> BusPlugins,
+    IReadOnlyList<PluginInfo> ExtensionPlugins);
 
 public enum PluginToggleFailureReason
 {

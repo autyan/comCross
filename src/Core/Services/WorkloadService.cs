@@ -348,37 +348,13 @@ public sealed class WorkloadService
     }
 
     /// <summary>
-    /// Get the active workload ID (synchronous version - may cause deadlock on UI thread).
-    /// Use GetActiveWorkloadIdAsync() instead when possible.
-    /// </summary>
-    /// <returns>Active workload ID, or default workload ID if none set</returns>
-    [Obsolete("Use GetActiveWorkloadIdAsync() to avoid potential deadlocks on UI thread")]
-    public string GetActiveWorkloadId()
-    {
-        var state = LoadStateAsync().GetAwaiter().GetResult();
-        
-        if (!string.IsNullOrEmpty(state.ActiveWorkloadId))
-        {
-            // Verify the active workload still exists
-            if (state.Workloads.Any(w => w.Id == state.ActiveWorkloadId))
-            {
-                return state.ActiveWorkloadId;
-            }
-        }
-
-        // Fallback to default workload
-        var defaultWorkload = state.GetDefaultWorkload();
-        return defaultWorkload?.Id ?? state.Workloads.FirstOrDefault()?.Id ?? string.Empty;
-    }
-
-    /// <summary>
     /// Set the active workload.
     /// </summary>
     /// <param name="workloadId">Workload ID to activate</param>
     /// <returns>True if set successfully, false if workload not found</returns>
-    public bool SetActiveWorkload(string workloadId)
+    public async Task<bool> SetActiveWorkloadAsync(string workloadId)
     {
-        var result = _workspaceStateStore.UpdateAsync(state =>
+        var result = await _workspaceStateStore.UpdateAsync(state =>
         {
             var workload = state.Workloads.FirstOrDefault(w => w.Id == workloadId);
             if (workload == null)
@@ -388,7 +364,7 @@ public sealed class WorkloadService
 
             state.ActiveWorkloadId = workloadId;
             return (Success: true, WorkloadName: workload.Name);
-        }).GetAwaiter().GetResult();
+        });
 
         if (result.Success)
         {
@@ -397,17 +373,6 @@ public sealed class WorkloadService
         }
 
         return result.Success;
-    }
-
-    /// <summary>
-    /// Get a specific workload by ID (synchronous).
-    /// </summary>
-    /// <param name="workloadId">Workload ID</param>
-    /// <returns>Workload if found, null otherwise</returns>
-    public Workload? GetWorkload(string workloadId)
-    {
-        var state = LoadStateAsync().GetAwaiter().GetResult();
-        return state.Workloads.FirstOrDefault(w => w.Id == workloadId);
     }
 
     /// <summary>

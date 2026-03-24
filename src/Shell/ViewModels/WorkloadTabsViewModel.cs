@@ -50,7 +50,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
 
         // Create commands using AsyncRelayCommand and RelayCommand (same as MainWindowViewModel)
         CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
-        ActivateWorkloadCommand = new RelayCommand<string>(ActivateWorkload);
+        ActivateWorkloadCommand = new AsyncRelayCommand<string>(ActivateWorkloadAsync);
         CloseWorkloadCommand = new AsyncRelayCommand<string>(CloseWorkloadAsync);
         RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
         CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
@@ -148,7 +148,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
     /// <summary>
     /// Activate a workload (switch to it)
     /// </summary>
-    private void ActivateWorkload(string? workloadId)
+    private async Task ActivateWorkloadAsync(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
@@ -157,7 +157,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         if (tab != null && tab != ActiveTab)
         {
             ActiveTab = tab;
-            _workloadService.SetActiveWorkload(workloadId);
+            await _workloadService.SetActiveWorkloadAsync(workloadId);
             
             // Notify that active workload has changed (so statistics can be updated)
             _eventBus.Publish(new ActiveWorkloadChangedEvent(workloadId));
@@ -186,7 +186,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
             var defaultTab = Tabs.FirstOrDefault(t => t.IsDefault);
             if (defaultTab != null)
             {
-                ActivateWorkload(defaultTab.Id);
+                await ActivateWorkloadAsync(defaultTab.Id);
             }
         }
 
@@ -256,19 +256,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
 
     private void OnWorkloadCreated(WorkloadCreatedEvent e)
     {
-        var workload = _workloadService.GetWorkload(e.WorkloadId);
-        if (workload != null)
-        {
-            Tabs.Add(new WorkloadTabItemContext(
-                workload,
-                ActivateWorkloadCommand,
-                CloseWorkloadCommand,
-                RenameWorkloadCommand,
-                CopyWorkloadCommand));
-
-            // Auto-activate new workload
-            ActivateWorkload(workload.Id);
-        }
+        _ = OnWorkloadCreatedAsync(e);
     }
 
     private void OnWorkloadRenamed(WorkloadRenamedEvent e)
@@ -293,10 +281,28 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
                 var defaultTab = Tabs.FirstOrDefault(t => t.IsDefault);
                 if (defaultTab != null)
                 {
-                    ActivateWorkload(defaultTab.Id);
+                    _ = ActivateWorkloadAsync(defaultTab.Id);
                 }
             }
         }
+    }
+
+    private async Task OnWorkloadCreatedAsync(WorkloadCreatedEvent e)
+    {
+        var workload = await _workloadService.GetWorkloadAsync(e.WorkloadId);
+        if (workload == null)
+        {
+            return;
+        }
+
+        Tabs.Add(new WorkloadTabItemContext(
+            workload,
+            ActivateWorkloadCommand,
+            CloseWorkloadCommand,
+            RenameWorkloadCommand,
+            CopyWorkloadCommand));
+
+        await ActivateWorkloadAsync(workload.Id);
     }
 
     protected override void Dispose(bool disposing)

@@ -121,7 +121,7 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
     public async Task SwitchWorkloadAsync(string workloadId)
     {
         _logger.LogInformation("Switching to workload {WorkloadId}", workloadId);
-        var ok = await Task.Run(() => _workloadService.SetActiveWorkload(workloadId));
+        var ok = await _workloadService.SetActiveWorkloadAsync(workloadId);
         if (ok)
         {
             _eventBus.Publish(new ActiveWorkloadChangedEvent(workloadId));

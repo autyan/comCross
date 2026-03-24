@@ -36,7 +36,7 @@ public sealed class PluginRuntimeService
 
     public event Action<PluginRuntime, PluginHostEvent>? PluginEventReceived;
 
-    public IReadOnlyList<PluginRuntime> LoadPlugins(
+    public async Task<IReadOnlyList<PluginRuntime>> LoadPluginsAsync(
         IReadOnlyList<PluginInfo> plugins,
         IReadOnlyDictionary<string, bool> enabledMap)
     {
@@ -59,7 +59,7 @@ public sealed class PluginRuntimeService
                 continue;
             }
 
-            runtimes.Add(StartHost(plugin));
+            runtimes.Add(await StartHostAsync(plugin));
         }
 
         return runtimes;
@@ -105,7 +105,7 @@ public sealed class PluginRuntimeService
 
             if (runtime.Process is { HasExited: true })
             {
-                var restarted = RestartHost(runtime);
+                var restarted = await RestartHostAsync(runtime);
                 onError?.Invoke(runtime, new InvalidOperationException("Plugin host exited."), restarted);
                 continue;
             }
@@ -119,7 +119,7 @@ public sealed class PluginRuntimeService
             }
             catch (Exception ex)
             {
-                var recovered = RestartHost(runtime);
+                var recovered = await RestartHostAsync(runtime);
                 onError?.Invoke(runtime, ex, recovered);
                 continue;
             }
@@ -130,7 +130,7 @@ public sealed class PluginRuntimeService
             }
 
             var error = response?.Error ?? "Plugin host unavailable.";
-            var recoveredOnError = RestartHost(runtime);
+            var recoveredOnError = await RestartHostAsync(runtime);
             onError?.Invoke(runtime, new InvalidOperationException(error), recoveredOnError);
         }
     }
@@ -152,7 +152,7 @@ public sealed class PluginRuntimeService
         }
 
         // Deterministic cleanup: don't leak shared-memory segments/readers across shutdown.
-        CleanupRuntimeSessionBestEffort(runtime, "shutdown");
+        await CleanupRuntimeSessionBestEffortAsync(runtime, "shutdown");
 
         try
         {
@@ -183,19 +183,20 @@ public sealed class PluginRuntimeService
         }
     }
 
-    private PluginRuntime StartHost(PluginInfo plugin)
+    private async Task<PluginRuntime> StartHostAsync(PluginInfo plugin)
     {
         _logger.LogInformation("Starting plugin host: {PluginId}", plugin.Manifest.Id);
         var runtime = new PluginRuntime(plugin);
-        return StartHost(runtime) ? runtime : runtime;
+        await StartHostAsync(runtime);
+        return runtime;
     }
 
-    private bool RestartHost(PluginRuntime runtime)
+    private async Task<bool> RestartHostAsync(PluginRuntime runtime)
     {
         _logger.LogWarning("Restarting plugin host: {PluginId}", runtime.Info.Manifest.Id);
-        CleanupRuntimeSessionBestEffort(runtime, "restart-host");
+        await CleanupRuntimeSessionBestEffortAsync(runtime, "restart-host");
         runtime.DisposeHost();
-        var started = StartHost(runtime);
+        var started = await StartHostAsync(runtime);
         if (started)
         {
             _logger.LogInformation("Plugin host restarted: {PluginId}", runtime.Info.Manifest.Id);
@@ -208,7 +209,7 @@ public sealed class PluginRuntimeService
         return started;
     }
 
-    private void CleanupRuntimeSessionBestEffort(PluginRuntime runtime, string reason)
+    private async Task CleanupRuntimeSessionBestEffortAsync(PluginRuntime runtime, string reason)
     {
         var sessionIds = runtime.GetOpenSessionIdsSnapshot();
         if (sessionIds.Count == 0)
@@ -240,7 +241,7 @@ public sealed class PluginRuntimeService
             try
             {
                 // Deterministic cleanup for leaked segments/readers when host crashes or is restarted.
-                _sharedMemorySessionService.CleanupAsync(sessionId).GetAwaiter().GetResult();
+                await _sharedMemorySessionService.CleanupAsync(sessionId);
             }
             catch
             {
@@ -248,7 +249,7 @@ public sealed class PluginRuntimeService
         }
     }
 
-    private bool StartHost(PluginRuntime runtime)
+    private async Task<bool> StartHostAsync(PluginRuntime runtime)
     {
         var pipeName = CreatePipeName(runtime.Info.Manifest.Id);
         var eventPipeName = pipeName + "-events";
@@ -270,88 +271,56 @@ public sealed class PluginRuntimeService
         try
         {
             runtime.SetHostToken(hostToken);
-
-            var process = Process.Start(processStart);
-            if (process is null)
-            {
-                _logger.LogWarning("Failed to start plugin host process: {PluginId}", runtime.Info.Manifest.Id);
-                runtime.SetFailed("Failed to start plugin host.");
-                return false;
-            }
-
-            try
-            {
-                process.EnableRaisingEvents = true;
-                process.Exited += (_, _) => OnHostExited(runtime);
-            }
-            catch
-            {
-                // best-effort
-            }
-
-            var client = new PluginHostClient(pipeName);
-            var eventClient = new PluginHostEventClient(eventPipeName);
-            eventClient.EventReceived += evt =>
-            {
-                try
+            var started = await HostSupervisorSupport.StartAsync(
+                processStart,
+                pipeName,
+                eventPipeName,
+                hostToken,
+                HostConnectTimeout,
+                evt =>
                 {
                     HandleHostEvent(runtime, evt);
-                }
-                catch
-                {
-                }
 
-                if (ShouldPublishEvent(runtime, evt))
-                {
-                    PluginEventReceived?.Invoke(runtime, evt);
-                }
-            };
-            eventClient.Start();
+                    if (ShouldPublishEvent(runtime, evt))
+                    {
+                        PluginEventReceived?.Invoke(runtime, evt);
+                    }
+                },
+                _ => OnHostExited(runtime));
 
-            var response = client.SendAsync(
-                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Ping),
-                HostConnectTimeout).GetAwaiter().GetResult();
-
-            if (response is not { Ok: true })
+            if (!started.Success
+                || started.Process is null
+                || started.Client is null
+                || started.EventClient is null)
             {
-                var error = response?.Error ?? "Plugin host failed to respond.";
+                var error = started.Error ?? "Failed to start plugin host.";
                 _logger.LogWarning(
-                    "Plugin host ping failed: {PluginId}, Error={Error}",
+                    "Plugin host start failed: {PluginId}, Error={Error}",
                     runtime.Info.Manifest.Id,
                     error);
                 runtime.SetFailed(error);
-                client.Dispose();
-                eventClient.Dispose();
-                TryTerminate(process);
                 return false;
             }
 
-            // Wait briefly for host registration handshake (best-effort but required for binding correctness).
-            var registeredDeadline = DateTimeOffset.UtcNow + HostConnectTimeout;
-            while (!runtime.IsHostRegistered && DateTimeOffset.UtcNow < registeredDeadline)
+            var (capabilities, capabilitiesError) = await TryGetCapabilitiesAsync(started.Client);
+            runtime.SetLoaded(
+                started.Process,
+                started.Client,
+                started.EventClient,
+                pipeName,
+                eventPipeName,
+                hostToken,
+                capabilities,
+                capabilitiesError);
+            if (started.HostProcessId is { } hostProcessId)
             {
-                Thread.Sleep(30);
+                runtime.TryMarkHostRegistered(hostToken, hostProcessId);
             }
-
-            if (!runtime.IsHostRegistered)
-            {
-                _logger.LogWarning(
-                    "Plugin host registration handshake timed out: {PluginId}",
-                    runtime.Info.Manifest.Id);
-                runtime.SetFailed("Plugin host registration handshake timed out.");
-                client.Dispose();
-                eventClient.Dispose();
-                TryTerminate(process);
-                return false;
-            }
-
-            var (capabilities, capabilitiesError) = TryGetCapabilities(client);
-            runtime.SetLoaded(process, client, eventClient, pipeName, eventPipeName, hostToken, capabilities, capabilitiesError);
 
             _logger.LogInformation(
                 "Plugin host loaded: {PluginId}, Pid={Pid}, Capabilities={Count}",
                 runtime.Info.Manifest.Id,
-                process.Id,
+                started.Process.Id,
                 capabilities.Count);
             return true;
         }
@@ -371,12 +340,12 @@ public sealed class PluginRuntimeService
             return;
         }
 
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
             try
             {
                 _logger.LogWarning("Plugin host exited: {PluginId}", runtime.Info.Manifest.Id);
-                CleanupRuntimeSessionBestEffort(runtime, "host-exited");
+                await CleanupRuntimeSessionBestEffortAsync(runtime, "host-exited");
             }
             catch
             {
@@ -478,13 +447,13 @@ public sealed class PluginRuntimeService
         return true;
     }
 
-    private static (IReadOnlyList<PluginCapabilityDescriptor> Capabilities, string? Error) TryGetCapabilities(PluginHostClient client)
+    private static async Task<(IReadOnlyList<PluginCapabilityDescriptor> Capabilities, string? Error)> TryGetCapabilitiesAsync(PluginHostClient client)
     {
         try
         {
-            var response = client.SendAsync(
+            var response = await client.SendAsync(
                 new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.GetCapabilities),
-                RequestTimeout).GetAwaiter().GetResult();
+                RequestTimeout);
 
             if (response is not { Ok: true })
             {
