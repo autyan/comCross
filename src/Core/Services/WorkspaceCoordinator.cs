@@ -111,7 +111,9 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
     public async Task<IEnumerable<Session>> GetActiveSessionsAsync()
     {
-        return await _workspaceService.GetActiveSessionsAsync();
+        var sessions = await _workspaceService.GetActiveSessionsAsync();
+        var activeSessionIds = await _workloadService.GetActiveWorkloadSessionIdsAsync();
+        return sessions.Where(session => activeSessionIds.Contains(session.Id)).ToList();
     }
 
     public async Task<Workload?> GetCurrentWorkloadAsync()

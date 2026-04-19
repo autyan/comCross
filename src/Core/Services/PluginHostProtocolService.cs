@@ -160,6 +160,76 @@ public sealed class PluginHostProtocolService
         }
     }
 
+    public async Task<(bool Ok, string? Error, PluginCommandResult? Result)> ExecuteActionAsync(
+        PluginRuntime runtime,
+        string actionName,
+        string? sessionId,
+        JsonElement? parameters,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        {
+            return (false, "Plugin not loaded.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(actionName))
+        {
+            return (false, "Missing actionName.", null);
+        }
+
+        var payload = JsonSerializer.SerializeToElement(
+            new PluginHostExecuteActionPayload(actionName, parameters),
+            JsonOptions);
+
+        PluginHostResponse? response;
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            response = await runtime.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.ExecuteAction, Payload: payload),
+                timeout);
+        }
+        else
+        {
+            var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+            if (sessionHost is null)
+            {
+                return (false, "Session host not running.", null);
+            }
+
+            response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.ExecuteAction, SessionId: sessionId, Payload: payload),
+                timeout);
+        }
+
+        if (response is null)
+        {
+            return (false, "Plugin host unavailable.", null);
+        }
+
+        if (!response.Ok)
+        {
+            return (false, response.Error, null);
+        }
+
+        if (response.Payload is null)
+        {
+            return (true, null, new PluginCommandResult(true));
+        }
+
+        try
+        {
+            var result = response.Payload.Value.Deserialize<PluginCommandResult>(JsonOptions);
+            return result is null
+                ? (false, "Invalid execute-action payload.", null)
+                : (true, null, result);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Invalid execute-action payload: {ex.Message}", null);
+        }
+    }
+
     public async Task<PluginConnectResult> ConnectAsync(
         PluginRuntime runtime,
         string capabilityId,

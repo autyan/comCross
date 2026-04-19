@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia.Threading;
 using ComCross.Core.Models;
 using ComCross.Core.Services;
 using ComCross.Shared.Events;
@@ -29,6 +30,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
     private readonly IDisposable _workloadCreatedSubscription;
     private readonly IDisposable _workloadRenamedSubscription;
     private readonly IDisposable _workloadDeletedSubscription;
+    private readonly IDisposable _activeWorkloadChangedSubscription;
     private WorkloadTabItemViewModel? _activeTab;
 
     public WorkloadTabsViewModel(
@@ -51,13 +53,14 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         // Create commands using AsyncRelayCommand and RelayCommand (same as MainWindowViewModel)
         CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
         ActivateWorkloadCommand = new AsyncRelayCommand<string>(ActivateWorkloadAsync);
-        CloseWorkloadCommand = new AsyncRelayCommand<string>(CloseWorkloadAsync);
+        DeleteWorkloadCommand = new AsyncRelayCommand<string>(DeleteWorkloadAsync);
         RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
         CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
 
         _workloadCreatedSubscription = _eventBus.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
         _workloadRenamedSubscription = _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
         _workloadDeletedSubscription = _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
+        _activeWorkloadChangedSubscription = _eventBus.Subscribe<ActiveWorkloadChangedEvent>(OnActiveWorkloadChanged);
     }
 
     /// <summary>
@@ -90,7 +93,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
 
     public ICommand CreateWorkloadCommand { get; }
     public ICommand ActivateWorkloadCommand { get; }
-    public ICommand CloseWorkloadCommand { get; }
+    public ICommand DeleteWorkloadCommand { get; }
     public ICommand RenameWorkloadCommand { get; }
     public ICommand CopyWorkloadCommand { get; }
 
@@ -109,7 +112,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
             Tabs.Add(new WorkloadTabItemContext(
                 workload,
                 ActivateWorkloadCommand,
-                CloseWorkloadCommand,
+                DeleteWorkloadCommand,
                 RenameWorkloadCommand,
                 CopyWorkloadCommand));
         }
@@ -164,33 +167,43 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         }
     }
 
+    private void OnActiveWorkloadChanged(ActiveWorkloadChangedEvent e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var tab = Tabs.FirstOrDefault(t => string.Equals(t.Id, e.WorkloadId, StringComparison.Ordinal));
+            if (tab != null)
+            {
+                ActiveTab = tab;
+            }
+        });
+    }
+
     /// <summary>
     /// Close a workload tab
     /// </summary>
-    private async Task CloseWorkloadAsync(string? workloadId)
+    private async Task DeleteWorkloadAsync(string? workloadId)
     {
         if (string.IsNullOrEmpty(workloadId))
             return;
 
         var tab = Tabs.FirstOrDefault(t => t.Id == workloadId);
-        if (tab == null || !tab.CanClose)
+        if (tab == null || !tab.CanDelete)
             return;
 
-        // TODO: Show confirmation dialog if workload has active sessions
-        
-        Tabs.Remove(tab);
-
-        // If closed tab was active, activate another tab
-        if (tab == ActiveTab)
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            L["dialog.deleteWorkload.title"],
+            string.Format(L["dialog.deleteWorkload.message"], tab.FullName));
+        if (!confirmed)
         {
-            var defaultTab = Tabs.FirstOrDefault(t => t.IsDefault);
-            if (defaultTab != null)
-            {
-                await ActivateWorkloadAsync(defaultTab.Id);
-            }
+            return;
         }
 
-        await Task.CompletedTask;
+        var (success, errorMessage) = await _workloadService.DeleteWorkloadAsync(workloadId);
+        if (!success && !string.IsNullOrWhiteSpace(errorMessage))
+        {
+            await MessageBoxService.ShowWarningAsync(L["dialog.deleteWorkload.title"], errorMessage);
+        }
     }
 
     /// <summary>
@@ -298,7 +311,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         Tabs.Add(new WorkloadTabItemContext(
             workload,
             ActivateWorkloadCommand,
-            CloseWorkloadCommand,
+            DeleteWorkloadCommand,
             RenameWorkloadCommand,
             CopyWorkloadCommand));
 
@@ -312,6 +325,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
             _workloadCreatedSubscription.Dispose();
             _workloadRenamedSubscription.Dispose();
             _workloadDeletedSubscription.Dispose();
+            _activeWorkloadChangedSubscription.Dispose();
             Tabs.Dispose();
         }
 

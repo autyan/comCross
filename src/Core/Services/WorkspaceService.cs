@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ComCross.Core.Models;
+using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 
@@ -18,6 +19,7 @@ public sealed class WorkspaceService
     private readonly NotificationService _notificationService;
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
+    private readonly IEventBus _eventBus;
 
     private bool _sessionsRestored;
 
@@ -27,7 +29,8 @@ public sealed class WorkspaceService
         LogStorageService logStorageService,
         NotificationService notificationService,
         WorkspaceStateStore workspaceStateStore,
-        WorkloadService workloadService)
+        WorkloadService workloadService,
+        IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
@@ -35,6 +38,7 @@ public sealed class WorkspaceService
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
     }
 
     /// <summary>
@@ -270,23 +274,41 @@ public sealed class WorkspaceService
     /// </summary>
     public async Task DeleteSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        var session = _deviceService.GetSession(sessionId);
-        if (session != null && session.Status == SessionStatus.Connected)
+        var orderedSessionIds = CollectSessionDeletionOrder(_deviceService.GetAllSessions(), sessionId);
+        if (orderedSessionIds.Count == 0)
         {
-            await DisconnectAsync(sessionId, cancellationToken);
+            return;
         }
 
-        _deviceService.RemoveSession(sessionId);
-        ClearMessages(sessionId);
-        await _workloadService.RemoveSessionFromAllWorkloadsAsync(sessionId);
+        foreach (var deleteId in orderedSessionIds)
+        {
+            var session = _deviceService.GetSession(deleteId);
+            if (session != null && session.Status == SessionStatus.Connected)
+            {
+                await DisconnectAsync(deleteId, cancellationToken);
+            }
+
+            _deviceService.RemoveSession(deleteId);
+            ClearMessages(deleteId);
+            await _workloadService.RemoveSessionFromAllWorkloadsAsync(deleteId);
+        }
+
         await _workspaceStateStore.UpdateAsync(state =>
         {
-            state.SessionDescriptors.RemoveAll(descriptor => string.Equals(descriptor.Id, sessionId, StringComparison.Ordinal));
-            if (state.UiState?.ActiveSessionId == sessionId)
+            state.SessionDescriptors.RemoveAll(descriptor =>
+                orderedSessionIds.Contains(descriptor.Id, StringComparer.Ordinal));
+
+            if (state.UiState?.ActiveSessionId is { Length: > 0 } activeSessionId
+                && orderedSessionIds.Contains(activeSessionId, StringComparer.Ordinal))
             {
                 state.UiState.ActiveSessionId = null;
             }
         }, cancellationToken);
+
+        foreach (var deleteId in orderedSessionIds)
+        {
+            _eventBus.Publish(new SessionDeletedEvent(deleteId));
+        }
     }
 
     /// <summary>
@@ -315,5 +337,30 @@ public sealed class WorkspaceService
             state.UiState.ActiveSessionId = activeSession?.Id;
             state.UiState.AutoScroll = autoScroll;
         }, cancellationToken);
+    }
+
+    private static List<string> CollectSessionDeletionOrder(IEnumerable<Session> sessions, string rootSessionId)
+    {
+        var byParent = sessions.ToLookup(session => session.ParentSessionId, StringComparer.Ordinal);
+        var ordered = new List<string>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        void Visit(string sessionId)
+        {
+            if (!visited.Add(sessionId))
+            {
+                return;
+            }
+
+            foreach (var child in byParent[sessionId])
+            {
+                Visit(child.Id);
+            }
+
+            ordered.Add(sessionId);
+        }
+
+        Visit(rootSessionId);
+        return ordered;
     }
 }

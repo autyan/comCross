@@ -7,9 +7,57 @@
              x:Class="ComCross.Shell.Views.MessageStreamView"
              x:DataType="vm:MessageStreamViewModel">
     
-    <Grid RowDefinitions="Auto,Auto,*">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <!-- Current Session Context -->
+        <Border Grid.Row="0" Background="#10171C" Padding="16,12" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{Binding CurrentSessionLabel}"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="#87909B" />
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActiveSessionDisplayName}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Foreground="#E6EDF3"
+                                   VerticalAlignment="Center" />
+                        <Border Background="#1B242A"
+                                BorderBrush="#25303A"
+                                BorderThickness="1"
+                                CornerRadius="999"
+                                Padding="8,2">
+                            <TextBlock Text="{Binding ActiveSessionStatusLabel}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="#B7C1CC" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding ActiveSessionDetailText}"
+                               FontSize="11"
+                               Foreground="#87909B"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Background="#141F27"
+                        BorderBrush="#25303A"
+                        BorderThickness="1"
+                        CornerRadius="999"
+                        Padding="10,4"
+                        Margin="16,0,0,0"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding HasActiveSession}">
+                    <TextBlock Text="{Binding ActiveSessionTypeLabel}"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="#BDE3FF" />
+                </Border>
+            </Grid>
+        </Border>
+
         <!-- Search Bar -->
-        <Border Grid.Row="0" Background="#141B1F" Padding="16" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+        <Border Grid.Row="1" Background="#141B1F" Padding="16" BorderBrush="#25303A" BorderThickness="0,0,0,1">
             <TextBox Text="{Binding SearchQuery}" 
                      Watermark="{Binding L[stream.search.placeholder]}" 
                      Background="#1B242A"
@@ -17,7 +65,7 @@
         </Border>
 
         <!-- Metrics Bar -->
-        <Border Grid.Row="1" Background="#141B1F" Padding="16,8" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+        <Border Grid.Row="2" Background="#141B1F" Padding="16,8" BorderBrush="#25303A" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -65,7 +113,7 @@
         </Border>
 
         <!-- Message List -->
-        <ListBox Grid.Row="2"
+        <ListBox Grid.Row="3"
                  x:Name="MessageList"
                  ItemsSource="{Binding MessageItems}" 
                  Background="#0F1417" 

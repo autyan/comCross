@@ -105,6 +105,55 @@ public sealed class NetworkBusAdapterPluginTests
         await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp"), CancellationToken.None);
     }
 
+    [Fact]
+    public async Task TcpListener_PendingResource_CanBeRejectedViaCustomAction()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeTcpPort();
+
+        var listenParams = JsonSerializer.SerializeToElement(new
+        {
+            listenHost = "127.0.0.1",
+            listenPort,
+            backlog = 8
+        });
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand("tcp.server", listenParams, "listener-tcp-reject"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, listenPort);
+
+        var pendingId = await WaitForPendingAsync(plugin, "tcp.server", "listener-tcp-reject");
+        Assert.False(string.IsNullOrWhiteSpace(pendingId));
+
+        var rejectResult = await plugin.ExecuteActionAsync(
+            new PluginActionCommand(
+                "network.reject-pending",
+                "listener-tcp-reject",
+                JsonSerializer.SerializeToElement(new { pendingId })),
+            CancellationToken.None);
+
+        Assert.True(rejectResult.Ok, rejectResult.Error);
+
+        var snapshot = plugin.GetUiState(new PluginUiStateQuery(
+            "tcp.server",
+            "listener-tcp-reject",
+            ViewKind: "listener",
+            ViewInstanceId: null,
+            ResourceKind: "pending",
+            ResourceId: "all"));
+
+        Assert.True(snapshot.State.TryGetProperty("items", out var items));
+        Assert.Equal(JsonValueKind.Array, items.ValueKind);
+        Assert.Empty(items.EnumerateArray());
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-tcp-reject"), CancellationToken.None);
+    }
+
     private static async Task<string?> WaitForPendingAsync(
         NetworkBusAdapterPlugin plugin,
         string capabilityId,

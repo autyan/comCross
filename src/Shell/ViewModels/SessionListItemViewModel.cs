@@ -13,6 +13,7 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     private int _indentLevel;
     private string? _overrideName;
     private bool _isCollapsed;
+    private int _listenerChildCount;
 
     public SessionListItemViewModel(ILocalizationService localization)
         : base(localization)
@@ -44,6 +45,9 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
             if (SetProperty(ref _indentLevel, value))
             {
                 OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(HasParent));
+                OnPropertyChanged(nameof(ShowConnectionBadge));
+                OnPropertyChanged(nameof(ConnectionBadgeText));
             }
         }
     }
@@ -84,6 +88,29 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     public string ChevronGlyph => IsCollapsed ? "▶" : "▼";
     public bool ShowStats => !IsListener;
     public bool HasParent => IndentLevel > 0;
+    public bool ShowConnectionBadge
+        => IsConnection && string.Equals(Session.PluginId, "network.adapter", StringComparison.Ordinal);
+
+    public string ConnectionBadgeText
+        => HasParent ? L["network.session.badge.inbound"] : L["network.session.badge.client"];
+
+    public int ListenerChildCount
+    {
+        get => _listenerChildCount;
+        set
+        {
+            if (SetProperty(ref _listenerChildCount, value))
+            {
+                OnPropertyChanged(nameof(ListenerSummaryText));
+                OnPropertyChanged(nameof(HasListenerChildren));
+            }
+        }
+    }
+
+    public bool HasListenerChildren => ListenerChildCount > 0;
+
+    public string ListenerSummaryText => string.Format(L["network.session.listener.connections"], ListenerChildCount);
+
     public string Endpoint
     {
         get
@@ -125,6 +152,8 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
                 OnPropertyChanged(nameof(IsConnection));
                 OnPropertyChanged(nameof(ShowChevron));
                 OnPropertyChanged(nameof(ShowStats));
+                OnPropertyChanged(nameof(ShowConnectionBadge));
+                OnPropertyChanged(nameof(ConnectionBadgeText));
                 break;
             case nameof(Session.ParametersJson):
             case nameof(Session.Endpoint):

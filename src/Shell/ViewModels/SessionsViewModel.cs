@@ -31,24 +31,7 @@ public sealed class SessionsViewModel : BaseViewModel
         try
         {
             await _workspaceCoordinator.DeleteSessionAsync(sessionId);
-
-            var session = sessions.FirstOrDefault(s => s.Id == sessionId);
-            if (session is null)
-            {
-                return activeSession;
-            }
-
-            var wasActive = string.Equals(activeSession?.Id, sessionId, StringComparison.Ordinal);
-            sessions.Remove(session);
-
-            Session? newActive = activeSession;
-            if (wasActive)
-            {
-                newActive = sessions.FirstOrDefault();
-            }
-
-            await _workspaceCoordinator.SaveCurrentStateAsync(sessions, newActive, _display.AutoScrollEnabled);
-            return newActive;
+            return activeSession;
         }
         catch (Exception ex)
         {

@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using ComCross.Core.Services;
+using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
@@ -22,6 +27,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public const string BusAdapterViewKind = "bus-adapter";
 
     private const string PluginAdapterPrefix = "plugin:";
+    private const string NetworkRejectPendingAction = "network.reject-pending";
+    private const string NetworkRejectAllPendingAction = "network.reject-all-pending";
     private const string SerialPluginId = SerialPortsHostService.SerialPluginId;
     private const string SerialCapabilityId = SerialPortsHostService.SerialCapabilityId;
     private readonly string _viewKind;
@@ -38,6 +45,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly SerialPortsHostService _serialPorts;
     private readonly ICapabilityDispatcher _dispatcher;
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
+    private readonly IEventBus _eventBus;
     private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
     private readonly ILogger<BusAdapterSelectorViewModel>? _logger;
     private IReadOnlyList<PluginCapabilityLaunchOption> _lastOptions = Array.Empty<PluginCapabilityLaunchOption>();
@@ -45,6 +53,11 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private int _panelLoadGeneration;
     private readonly EventHandler<string> _languageChangedHandler;
     private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
+    private readonly IDisposable _sessionCreatedSubscription;
+    private readonly IDisposable _sessionDeletedSubscription;
+    private readonly IDisposable _pluginUiInvalidatedSubscription;
+    private int _listenerConnectionCount;
+    private string? _networkParentDisplayName;
 
     public BusAdapterSelectorViewModel(
         ILocalizationService localization,
@@ -55,6 +68,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         SerialPortsHostService serialPorts,
         ICapabilityDispatcher dispatcher,
         IWorkspaceCoordinator workspaceCoordinator,
+        IEventBus eventBus,
         IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory,
         string viewKind = BusAdapterViewKind,
         string? viewInstanceId = null,
@@ -70,13 +84,22 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         _serialPorts = serialPorts;
         _dispatcher = dispatcher;
         _workspaceCoordinator = workspaceCoordinator;
+        _eventBus = eventBus;
         _adapterItemFactory = adapterItemFactory;
         _logger = logger;
 
         AdapterItems = new ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo>(_adapterItemFactory);
+        ListenerConnections = new ObservableCollection<NetworkManagedConnectionRow>();
+        ListenerPendingItems = new ObservableCollection<NetworkPendingResourceRow>();
 
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => CanConnect);
         DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => CanDisconnect);
+        DeleteActiveSessionCommand = new AsyncRelayCommand(DeleteActiveSessionAsync, () => CanDeleteActiveSession);
+        AcceptAllPendingCommand = new AsyncRelayCommand(AcceptAllPendingAsync, () => CanAcceptAllPending);
+        DisconnectAllManagedSessionsCommand = new AsyncRelayCommand(DisconnectAllManagedSessionsAsync, () => CanDisconnectAllManagedSessions);
+        RejectAllPendingCommand = new AsyncRelayCommand(RejectAllPendingAsync, () => CanRejectAllPending);
+        DisconnectManagedSessionCommand = new AsyncRelayCommand<string>(DisconnectManagedSessionAsync);
+        DeleteManagedSessionCommand = new AsyncRelayCommand<string>(DeleteManagedSessionAsync);
 
         _activeSessionPropertyChangedHandler = (_, args) =>
         {
@@ -86,8 +109,16 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 OnPropertyChanged(nameof(CanEditConfiguration));
                 OnPropertyChanged(nameof(CanConnect));
                 OnPropertyChanged(nameof(CanDisconnect));
+                OnPropertyChanged(nameof(CanDeleteActiveSession));
+                OnPropertyChanged(nameof(CanAcceptAllPending));
+                OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+                OnPropertyChanged(nameof(CanRejectAllPending));
                 ConnectCommand.RaiseCanExecuteChanged();
                 DisconnectCommand.RaiseCanExecuteChanged();
+                DeleteActiveSessionCommand.RaiseCanExecuteChanged();
+                AcceptAllPendingCommand.RaiseCanExecuteChanged();
+                DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+                RejectAllPendingCommand.RaiseCanExecuteChanged();
             }
         };
         
@@ -107,6 +138,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         };
 
         Localization.LanguageChanged += _languageChangedHandler;
+        _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
+        _sessionDeletedSubscription = _eventBus.Subscribe<SessionDeletedEvent>(OnSessionDeleted);
+        _pluginUiInvalidatedSubscription = _eventBus.Subscribe<PluginUiStateInvalidatedCoreEvent>(OnPluginUiStateInvalidated);
     }
 
     public ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo> AdapterItems { get; }
@@ -115,19 +149,128 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public AsyncRelayCommand DisconnectCommand { get; }
 
+    public AsyncRelayCommand DeleteActiveSessionCommand { get; }
+
+    public AsyncRelayCommand AcceptAllPendingCommand { get; }
+
+    public AsyncRelayCommand DisconnectAllManagedSessionsCommand { get; }
+
+    public AsyncRelayCommand RejectAllPendingCommand { get; }
+
+    public AsyncRelayCommand<string> DisconnectManagedSessionCommand { get; }
+
+    public AsyncRelayCommand<string> DeleteManagedSessionCommand { get; }
+
+    public ObservableCollection<NetworkManagedConnectionRow> ListenerConnections { get; }
+
+    public ObservableCollection<NetworkPendingResourceRow> ListenerPendingItems { get; }
+
     public bool IsConnected => _activeSession?.Status == SessionStatus.Connected;
 
-    public bool CanEditConfiguration => !IsConnected;
+    public bool IsNetworkSelectionMode
+        => string.Equals(_activeSession?.PluginId, "network.adapter", StringComparison.Ordinal);
+
+    public bool IsCreateMode => !IsNetworkSelectionMode;
+
+    public bool IsListenerManagerMode
+        => IsNetworkSelectionMode && _activeSession?.Kind == SessionKind.Listener;
+
+    public bool IsConnectionDetailMode
+        => IsNetworkSelectionMode && _activeSession is not null && _activeSession.Kind != SessionKind.Listener;
+
+    public bool CanEditConfiguration => !IsConnected && IsCreateMode;
 
     public bool CanConnect
         => SelectedAdapter?.PluginId != null
            && SelectedAdapter?.CapabilityId != null
            && (SelectedAdapterItem?.IsEnabled ?? false)
-           && !IsConnected;
+           && !IsConnected
+           && IsCreateMode;
 
     public bool CanDisconnect
         => _activeSession?.Id is { Length: > 0 }
            && IsConnected;
+
+    public bool CanDeleteActiveSession => _activeSession?.Id is { Length: > 0 };
+
+    public string NetworkSelectionTitle
+    {
+        get
+        {
+            if (_activeSession is null)
+            {
+                return string.Empty;
+            }
+
+            if (IsListenerManagerMode)
+            {
+                return _activeSession.CapabilityId switch
+                {
+                    "tcp.server" => L["network.session.listener.tcp"],
+                    "udp.listen" => L["network.session.listener.udp"],
+                    _ => L["network.session.listener.generic"]
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
+            {
+                return L["network.session.connection.inbound"];
+            }
+
+            return _activeSession.CapabilityId switch
+            {
+                "tcp" => L["network.session.client.tcp"],
+                "udp" => L["network.session.client.udp"],
+                _ => L["network.session.connection.generic"]
+            };
+        }
+    }
+
+    public string NetworkSelectionEndpoint => _activeSession?.Endpoint ?? string.Empty;
+
+    public string NetworkSelectionStatus
+        => _activeSession?.Status == SessionStatus.Connected
+            ? L["status.connected"]
+            : L["status.disconnected"];
+
+    public string? NetworkParentDisplayName
+    {
+        get => _networkParentDisplayName;
+        private set => SetProperty(ref _networkParentDisplayName, value);
+    }
+
+    public int ListenerConnectionCount
+    {
+        get => _listenerConnectionCount;
+        private set => SetProperty(ref _listenerConnectionCount, value);
+    }
+
+    public string ListenerConnectionSummary
+        => string.Format(L["network.session.listener.connections"], ListenerConnectionCount);
+
+    public bool HasListenerConnections => ListenerConnections.Count > 0;
+
+    public bool HasListenerPendingItems => ListenerPendingItems.Count > 0;
+
+    public bool CanAcceptAllPending => IsListenerManagerMode && HasListenerPendingItems;
+
+    public bool CanDisconnectAllManagedSessions => IsListenerManagerMode && HasListenerConnections;
+
+    public bool CanRejectAllPending => IsListenerManagerMode && HasListenerPendingItems;
+
+    public int ListenerPendingCount => ListenerPendingItems.Count;
+
+    public string ListenerPendingSummary
+        => string.Format(L["network.session.pending.connections"], ListenerPendingCount);
+
+    public string PendingBulkActionLabel
+        => _activeSession?.CapabilityId switch
+        {
+            "udp.listen" => L["network.session.manager.bindAllPending"],
+            _ => L["network.session.manager.acceptAllPending"]
+        };
+
+    public string PendingRejectAllLabel => L["network.session.manager.clearAllPending"];
 
     public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
     {
@@ -186,6 +329,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         if (disposing)
         {
             Localization.LanguageChanged -= _languageChangedHandler;
+            _sessionCreatedSubscription.Dispose();
+            _sessionDeletedSubscription.Dispose();
+            _pluginUiInvalidatedSubscription.Dispose();
             AdapterItems.Dispose();
         }
 
@@ -303,13 +449,39 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(IsNetworkSelectionMode));
+        OnPropertyChanged(nameof(IsCreateMode));
+        OnPropertyChanged(nameof(IsListenerManagerMode));
+        OnPropertyChanged(nameof(IsConnectionDetailMode));
         OnPropertyChanged(nameof(CanEditConfiguration));
         OnPropertyChanged(nameof(CanConnect));
         OnPropertyChanged(nameof(CanDisconnect));
+        OnPropertyChanged(nameof(CanDeleteActiveSession));
+        OnPropertyChanged(nameof(CanAcceptAllPending));
+        OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+        OnPropertyChanged(nameof(CanRejectAllPending));
+        OnPropertyChanged(nameof(NetworkSelectionTitle));
+        OnPropertyChanged(nameof(NetworkSelectionEndpoint));
+        OnPropertyChanged(nameof(NetworkSelectionStatus));
+        OnPropertyChanged(nameof(ListenerConnectionSummary));
+        OnPropertyChanged(nameof(HasListenerConnections));
+        OnPropertyChanged(nameof(HasListenerPendingItems));
+        OnPropertyChanged(nameof(ListenerPendingSummary));
+        OnPropertyChanged(nameof(PendingBulkActionLabel));
+        OnPropertyChanged(nameof(PendingRejectAllLabel));
         ConnectCommand.RaiseCanExecuteChanged();
         DisconnectCommand.RaiseCanExecuteChanged();
+        DeleteActiveSessionCommand.RaiseCanExecuteChanged();
+        AcceptAllPendingCommand.RaiseCanExecuteChanged();
+        DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+        RejectAllPendingCommand.RaiseCanExecuteChanged();
         
-        if (session != null && !string.IsNullOrEmpty(session.AdapterId))
+        if (IsNetworkSelectionMode)
+        {
+            ConfigPanel = null;
+            _ = RefreshNetworkSelectionContextAsync();
+        }
+        else if (session != null && !string.IsNullOrEmpty(session.AdapterId))
         {
             // Restore adapter selection
             SelectAdapterById(session.AdapterId);
@@ -344,7 +516,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         // Always reload panel when session changes so controls are registered under the correct session.
         // Otherwise, switching sessions can appear to "stop updating" because controls remain bound
         // to the previous session's registration bucket.
-        if (!string.Equals(previousSessionId, _activeSessionId, StringComparison.Ordinal))
+        if (!string.Equals(previousSessionId, _activeSessionId, StringComparison.Ordinal) && IsCreateMode)
         {
             _ = LoadConfigPanelAsync();
         }
@@ -355,6 +527,323 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
             _stateManager.SwitchContext(viewScope, _activeSessionId);
         }
+    }
+
+    private async Task RefreshNetworkSelectionContextAsync()
+    {
+        if (!IsNetworkSelectionMode || _activeSession is null)
+        {
+            NetworkParentDisplayName = null;
+            ListenerConnectionCount = 0;
+            ListenerConnections.Clear();
+            ListenerPendingItems.Clear();
+            OnPropertyChanged(nameof(HasListenerConnections));
+            OnPropertyChanged(nameof(HasListenerPendingItems));
+            OnPropertyChanged(nameof(ListenerPendingSummary));
+            OnPropertyChanged(nameof(CanAcceptAllPending));
+            OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+            OnPropertyChanged(nameof(CanRejectAllPending));
+            AcceptAllPendingCommand.RaiseCanExecuteChanged();
+            DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+            RejectAllPendingCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        try
+        {
+            var sessions = (await _workspaceCoordinator.GetActiveSessionsAsync()).ToList();
+
+            if (IsListenerManagerMode)
+            {
+                var childSessions = sessions
+                    .Where(session => string.Equals(session.ParentSessionId, _activeSession.Id, StringComparison.Ordinal))
+                    .OrderBy(session => session.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                ListenerConnectionCount = childSessions.Count;
+                NetworkParentDisplayName = null;
+                ReplaceListenerConnections(childSessions);
+                await RefreshPendingResourceRowsAsync();
+                OnPropertyChanged(nameof(ListenerConnectionSummary));
+                OnPropertyChanged(nameof(HasListenerConnections));
+                OnPropertyChanged(nameof(HasListenerPendingItems));
+                OnPropertyChanged(nameof(ListenerPendingSummary));
+                OnPropertyChanged(nameof(CanAcceptAllPending));
+                OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+                OnPropertyChanged(nameof(CanRejectAllPending));
+                AcceptAllPendingCommand.RaiseCanExecuteChanged();
+                DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+                RejectAllPendingCommand.RaiseCanExecuteChanged();
+                return;
+            }
+
+            ListenerConnectionCount = 0;
+            ListenerConnections.Clear();
+            ListenerPendingItems.Clear();
+            if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
+            {
+                NetworkParentDisplayName = sessions
+                    .FirstOrDefault(session => string.Equals(session.Id, _activeSession.ParentSessionId, StringComparison.Ordinal))
+                    ?.Name;
+            }
+            else
+            {
+                NetworkParentDisplayName = null;
+            }
+        }
+        catch
+        {
+            ListenerConnectionCount = 0;
+            NetworkParentDisplayName = null;
+            ListenerConnections.Clear();
+            ListenerPendingItems.Clear();
+        }
+
+        OnPropertyChanged(nameof(HasListenerConnections));
+        OnPropertyChanged(nameof(HasListenerPendingItems));
+        OnPropertyChanged(nameof(ListenerPendingSummary));
+        OnPropertyChanged(nameof(CanAcceptAllPending));
+        OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+        OnPropertyChanged(nameof(CanRejectAllPending));
+        AcceptAllPendingCommand.RaiseCanExecuteChanged();
+        DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+        RejectAllPendingCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ReplaceListenerConnections(IReadOnlyList<Session> sessions)
+    {
+        ListenerConnections.Clear();
+        foreach (var session in sessions)
+        {
+            ListenerConnections.Add(new NetworkManagedConnectionRow(
+                session.Id,
+                session.Name,
+                session.Endpoint,
+                session.Status,
+                session.RxBytes,
+                session.TxBytes,
+                L["status.tx"],
+                L["status.rx"],
+                L["menu.disconnect"],
+                L["session.menu.delete"],
+                L["status.connected"],
+                L["status.disconnected"],
+                DisconnectManagedSessionAsync,
+                DeleteManagedSessionAsync));
+        }
+    }
+
+    private async Task RefreshPendingResourceRowsAsync()
+    {
+        ListenerPendingItems.Clear();
+
+        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(_activeSession.CapabilityId))
+        {
+            return;
+        }
+
+        var state = await _pluginManager.TryGetUiStateAsync(
+            "network.adapter",
+            _activeSession.CapabilityId,
+            _activeSession.Id,
+            viewKind: "listener",
+            viewInstanceId: null,
+            resourceKind: "pending",
+            resourceId: "all",
+            timeout: TimeSpan.FromSeconds(1));
+
+        if (state is null || state.Value.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (!state.Value.TryGetProperty("items", out var items) || items.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            var display = item.TryGetProperty("displayName", out var displayEl)
+                ? displayEl.GetString()
+                : item.TryGetProperty("display", out var displayAlt) ? displayAlt.GetString() : null;
+
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                ListenerPendingItems.Add(new NetworkPendingResourceRow(
+                    id!,
+                    display ?? id!,
+                    GetPendingActionLabel(),
+                    L["network.session.manager.rejectPending"],
+                    AcceptPendingResourceAsync,
+                    RejectPendingResourceAsync));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasListenerPendingItems));
+        OnPropertyChanged(nameof(ListenerPendingSummary));
+    }
+
+    private string GetPendingActionLabel()
+        => _activeSession?.CapabilityId switch
+        {
+            "udp.listen" => L["network.session.manager.bindPending"],
+            _ => L["network.session.manager.acceptPending"]
+        };
+
+    private async Task AcceptAllPendingAsync()
+    {
+        if (!CanAcceptAllPending)
+        {
+            return;
+        }
+
+        var pendingSnapshot = ListenerPendingItems.ToList();
+        foreach (var item in pendingSnapshot)
+        {
+            await AcceptPendingResourceCoreAsync(item.PendingId, item.DisplayName, refreshAfter: false);
+        }
+
+        await RefreshNetworkSelectionContextAsync();
+    }
+
+    private async Task RejectAllPendingAsync()
+    {
+        if (!CanRejectAllPending || _activeSession is null)
+        {
+            return;
+        }
+
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            L["dialog.network.clearPending.title"],
+            string.Format(L["dialog.network.clearPending.message"], _activeSession.Name));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var (ok, error) = await _pluginManager.ExecutePluginActionAsync(
+            "network.adapter",
+            _activeSession.Id,
+            NetworkRejectAllPendingAction,
+            new { });
+
+        if (!ok)
+        {
+            await MessageBoxService.ShowErrorAsync(
+                L["dialog.deleteSession.title"],
+                error ?? L["error.unknown"]);
+            return;
+        }
+
+        await RefreshNetworkSelectionContextAsync();
+    }
+
+    private async Task AcceptPendingResourceAsync(string? pendingId, string? displayName)
+        => await AcceptPendingResourceCoreAsync(pendingId, displayName, refreshAfter: true);
+
+    private async Task RejectPendingResourceAsync(string? pendingId)
+    {
+        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId))
+        {
+            return;
+        }
+
+        var (ok, error) = await _pluginManager.ExecutePluginActionAsync(
+            "network.adapter",
+            _activeSession.Id,
+            NetworkRejectPendingAction,
+            new { pendingId });
+
+        if (!ok)
+        {
+            await MessageBoxService.ShowErrorAsync(
+                L["dialog.deleteSession.title"],
+                error ?? L["error.unknown"]);
+            return;
+        }
+
+        await RefreshNetworkSelectionContextAsync();
+    }
+
+    private async Task AcceptPendingResourceCoreAsync(string? pendingId, string? displayName, bool refreshAfter)
+    {
+        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId))
+        {
+            return;
+        }
+
+        var parameters = BuildPendingConnectionParameters(_activeSession.CapabilityId, displayName);
+        var parametersJson = System.Text.Json.JsonSerializer.Serialize(parameters);
+        var sessionName = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+
+        await _workspaceCoordinator.ConnectAsync(
+            "network.adapter",
+            _activeSession.CapabilityId ?? string.Empty,
+            parametersJson,
+            sessionName,
+            scopeSessionId: _activeSession.Id,
+            resourceKind: "pending",
+            resourceId: pendingId);
+
+        if (refreshAfter)
+        {
+            await RefreshNetworkSelectionContextAsync();
+        }
+    }
+
+    private static object BuildPendingConnectionParameters(string? capabilityId, string? displayName)
+    {
+        object parameters = new
+        {
+            endpoint = displayName
+        };
+
+        if (!TryParseHostPort(displayName, out var host, out var port))
+        {
+            return parameters;
+        }
+
+        return capabilityId switch
+        {
+            "tcp.server" => new { host, port, endpoint = displayName },
+            "udp.listen" => new { remoteHost = host, remotePort = port, endpoint = displayName },
+            _ => parameters
+        };
+    }
+
+    private static bool TryParseHostPort(string? displayName, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return false;
+        }
+
+        var lastColon = displayName.LastIndexOf(':');
+        if (lastColon <= 0 || lastColon >= displayName.Length - 1)
+        {
+            return false;
+        }
+
+        var h = displayName[..lastColon].Trim();
+        var p = displayName[(lastColon + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(h) || !int.TryParse(p, out var parsed) || parsed is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        host = h;
+        port = parsed;
+        return true;
     }
 
     private static bool IsNullOrBlank(object? value)
@@ -586,11 +1075,91 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         await _dispatcher.DispatchAsync(pluginId, sessionId, ComCross.Shared.Models.PluginHostMessageTypes.Disconnect, null);
     }
 
+    private async Task DeleteActiveSessionAsync()
+    {
+        if (_activeSession?.Id is not { Length: > 0 } sessionId)
+        {
+            return;
+        }
+
+        var message = IsListenerManagerMode
+            ? string.Format(L["dialog.deleteSession.listener.message"], _activeSession.Name)
+            : string.Format(L["dialog.deleteSession.message"], _activeSession.Name);
+
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            L["dialog.deleteSession.title"],
+            message);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.DeleteSessionAsync(sessionId);
+    }
+
+    private async Task DisconnectManagedSessionAsync(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.CloseSessionAsync(sessionId);
+        await RefreshNetworkSelectionContextAsync();
+    }
+
+    private async Task DisconnectAllManagedSessionsAsync()
+    {
+        if (!CanDisconnectAllManagedSessions)
+        {
+            return;
+        }
+
+        var sessionIds = ListenerConnections
+            .Select(item => item.SessionId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToList();
+
+        foreach (var sessionId in sessionIds)
+        {
+            await _workspaceCoordinator.CloseSessionAsync(sessionId);
+        }
+
+        await RefreshNetworkSelectionContextAsync();
+    }
+
+    private async Task DeleteManagedSessionAsync(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var row = ListenerConnections.FirstOrDefault(item => string.Equals(item.SessionId, sessionId, StringComparison.Ordinal));
+        var displayName = row?.Name ?? sessionId;
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            L["dialog.deleteSession.title"],
+            string.Format(L["dialog.deleteSession.message"], displayName));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.DeleteSessionAsync(sessionId);
+        await RefreshNetworkSelectionContextAsync();
+    }
+
     /// <summary>
     /// Load the configuration panel for the selected adapter
     /// </summary>
     private async System.Threading.Tasks.Task LoadConfigPanelAsync()
     {
+        if (IsNetworkSelectionMode)
+        {
+            ConfigPanel = null;
+            return;
+        }
+
         var generation = System.Threading.Interlocked.Increment(ref _panelLoadGeneration);
         var expectedSessionId = _activeSessionId;
         var expectedAdapterId = _selectedAdapter?.Id;
@@ -902,6 +1471,57 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
     }
 
+    private void OnSessionCreated(SessionCreatedEvent evt)
+    {
+        if (!IsNetworkSelectionMode || _activeSession is null)
+        {
+            return;
+        }
+
+        if (IsListenerManagerMode && string.Equals(evt.Session.ParentSessionId, _activeSession.Id, StringComparison.Ordinal))
+        {
+            Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
+        }
+    }
+
+    private void OnSessionDeleted(SessionDeletedEvent evt)
+    {
+        if (!IsNetworkSelectionMode || _activeSession is null)
+        {
+            return;
+        }
+
+        if (IsListenerManagerMode)
+        {
+            Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
+        }
+        else if (string.Equals(_activeSession.ParentSessionId, evt.SessionId, StringComparison.Ordinal))
+        {
+            Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
+        }
+    }
+
+    private void OnPluginUiStateInvalidated(PluginUiStateInvalidatedCoreEvent evt)
+    {
+        if (!IsListenerManagerMode || _activeSession is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(evt.PluginId, "network.adapter", StringComparison.Ordinal)
+            || !string.Equals(evt.SessionId, _activeSession.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!string.Equals(evt.ResourceKind, "pending", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
+    }
+
     private string? TryGetLocalized(string key)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -1073,4 +1693,82 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         return null;
     }
+}
+
+public sealed class NetworkManagedConnectionRow
+{
+    private readonly string _connectedText;
+    private readonly string _disconnectedText;
+
+    public NetworkManagedConnectionRow(
+        string sessionId,
+        string name,
+        string endpoint,
+        SessionStatus status,
+        long rxBytes,
+        long txBytes,
+        string txLabel,
+        string rxLabel,
+        string disconnectLabel,
+        string deleteLabel,
+        string connectedText,
+        string disconnectedText,
+        Func<string?, Task> disconnectAsync,
+        Func<string?, Task> deleteAsync)
+    {
+        SessionId = sessionId;
+        Name = name;
+        Endpoint = endpoint;
+        Status = status;
+        RxBytes = rxBytes;
+        TxBytes = txBytes;
+        TxLabel = txLabel;
+        RxLabel = rxLabel;
+        DisconnectLabel = disconnectLabel;
+        DeleteLabel = deleteLabel;
+        _connectedText = connectedText;
+        _disconnectedText = disconnectedText;
+        DisconnectCommand = new AsyncRelayCommand(() => disconnectAsync(SessionId));
+        DeleteCommand = new AsyncRelayCommand(() => deleteAsync(SessionId));
+    }
+
+    public string SessionId { get; }
+
+    public string Name { get; }
+
+    public string Endpoint { get; }
+
+    public SessionStatus Status { get; }
+
+    public long RxBytes { get; }
+
+    public long TxBytes { get; }
+
+    public string TxLabel { get; }
+
+    public string RxLabel { get; }
+
+    public string DisconnectLabel { get; }
+
+    public string DeleteLabel { get; }
+
+    public string StatusText
+        => Status == SessionStatus.Connected ? _connectedText : _disconnectedText;
+
+    public AsyncRelayCommand DisconnectCommand { get; }
+
+    public AsyncRelayCommand DeleteCommand { get; }
+}
+
+public sealed record NetworkPendingResourceRow(
+    string PendingId,
+    string DisplayName,
+    string ActionLabel,
+    string RejectLabel,
+    Func<string?, string?, Task> ConnectAsync,
+    Func<string?, Task> RejectAsync)
+{
+    public AsyncRelayCommand ConnectCommand { get; } = new(() => ConnectAsync(PendingId, DisplayName));
+
+    public AsyncRelayCommand RejectCommand { get; } = new(() => RejectAsync(PendingId));
 }

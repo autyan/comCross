@@ -44,6 +44,8 @@ internal sealed class PluginHostRequestRouter
                 return ApplySharedMemorySegmentHandler.Handle(request, _state, _jsonOptions);
             case PluginHostMessageTypes.SetBackpressure:
                 return SetBackpressureHandler.Handle(request, _state, _jsonOptions);
+            case PluginHostMessageTypes.ExecuteAction:
+                return await ExecuteActionHandler.HandleAsync(request, _state, _jsonOptions, cancellationToken);
             case PluginHostMessageTypes.SendData:
                 return await SendDataHandler.HandleAsync(request, _state, _jsonOptions, cancellationToken);
             case PluginHostMessageTypes.LanguageChanged:

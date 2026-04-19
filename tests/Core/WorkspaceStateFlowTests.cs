@@ -1,5 +1,6 @@
 using ComCross.Core.Extensions;
 using ComCross.Core.Services;
+using ComCross.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -88,7 +89,42 @@ public sealed class WorkspaceStateFlowTests
         Assert.Equal(createdWorkload.Id, persistedState!.ActiveWorkloadId);
     }
 
-    private static SessionDescriptor CreateDescriptor(string sessionId)
+    [Fact]
+    public async Task DeleteListenerSessionAsync_RemovesChildSessionsFromRuntimeAndPersistedState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+
+        deviceService.RestoreSession(CreateDescriptor("listener-1", SessionKind.Listener));
+        deviceService.RestoreSession(CreateDescriptor("child-1", SessionKind.Connection, parentSessionId: "listener-1"));
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "listener-1");
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "child-1");
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        await workspaceService.DeleteSessionAsync("listener-1");
+
+        Assert.Null(deviceService.GetSession("listener-1"));
+        Assert.Null(deviceService.GetSession("child-1"));
+
+        var workload = await workloadService.GetWorkloadAsync(activeWorkloadId);
+        Assert.NotNull(workload);
+        Assert.DoesNotContain("listener-1", workload!.SessionIds);
+        Assert.DoesNotContain("child-1", workload.SessionIds);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+        Assert.DoesNotContain(persistedState!.SessionDescriptors, descriptor => descriptor.Id == "listener-1");
+        Assert.DoesNotContain(persistedState.SessionDescriptors, descriptor => descriptor.Id == "child-1");
+    }
+
+    private static SessionDescriptor CreateDescriptor(string sessionId, SessionKind kind = SessionKind.Connection, string? parentSessionId = null)
     {
         return new SessionDescriptor
         {
@@ -97,7 +133,9 @@ public sealed class WorkspaceStateFlowTests
             AdapterId = "plugin:serial.adapter:serial",
             PluginId = "serial.adapter",
             CapabilityId = "serial",
-            ParametersJson = """{"port":"COM1","baudRate":115200}"""
+            ParametersJson = """{"port":"COM1","baudRate":115200}""",
+            Kind = kind,
+            ParentSessionId = parentSessionId
         };
     }
 

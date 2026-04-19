@@ -375,6 +375,29 @@ public sealed class WorkloadService
         return result.Success;
     }
 
+    public async Task<IReadOnlySet<string>> GetSessionIdsForWorkloadAsync(string? workloadId)
+    {
+        if (string.IsNullOrWhiteSpace(workloadId))
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var state = await LoadStateAsync();
+        var workload = state.Workloads.FirstOrDefault(w => string.Equals(w.Id, workloadId, StringComparison.Ordinal));
+        if (workload is null)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return new HashSet<string>(workload.SessionIds, StringComparer.Ordinal);
+    }
+
+    public async Task<IReadOnlySet<string>> GetActiveWorkloadSessionIdsAsync()
+    {
+        var activeWorkloadId = await GetActiveWorkloadIdAsync();
+        return await GetSessionIdsForWorkloadAsync(activeWorkloadId);
+    }
+
     /// <summary>
     /// Ensure a default workload exists. If not, create one.
     /// Called during application startup.

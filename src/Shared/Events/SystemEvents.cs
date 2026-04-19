@@ -59,6 +59,13 @@ public sealed record SessionClosedEvent(
     string SessionId,
     string? Reason = null
 ) : SystemEvent;
+
+/// <summary>
+/// Session was removed from workspace state and in-memory session navigation.
+/// </summary>
+public sealed record SessionDeletedEvent(
+    string SessionId
+) : SystemEvent;
 /// <summary>
 /// Data received event
 /// </summary>

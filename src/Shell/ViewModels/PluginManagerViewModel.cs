@@ -407,6 +407,40 @@ public sealed class PluginManagerViewModel : BaseViewModel
         }
     }
 
+    public async Task<(bool Ok, string? Error)> ExecutePluginActionAsync(
+        string pluginId,
+        string? sessionId,
+        string actionName,
+        object? parameters,
+        TimeSpan? timeout = null)
+    {
+        try
+        {
+            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            if (runtime is null || runtime.State != PluginLoadState.Loaded)
+            {
+                return (false, "Plugin runtime not available.");
+            }
+
+            JsonElement? payload = parameters is null
+                ? null
+                : JsonSerializer.SerializeToElement(parameters);
+
+            var (ok, error, _) = await _protocolService.ExecuteActionAsync(
+                runtime,
+                actionName,
+                sessionId,
+                payload,
+                timeout ?? TimeSpan.FromSeconds(5));
+
+            return (ok, error);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
     public object? TryGetSettingsFieldDefaultValue(string pluginId, string pageId, string fieldKey)
     {
         try

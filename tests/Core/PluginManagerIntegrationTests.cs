@@ -1,9 +1,11 @@
 using ComCross.Core.Extensions;
 using ComCross.Core.Services;
 using ComCross.Plugins.Flow;
+using ComCross.Plugins.Network;
 using ComCross.Plugins.Serial;
 using ComCross.Plugins.Stats;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 using Xunit;
 
 namespace ComCross.Tests.Core;
@@ -111,6 +113,42 @@ public sealed class PluginManagerIntegrationTests
         Assert.Equal(PluginToggleFailureReason.NotFound, result.FailureReason);
     }
 
+    [Fact]
+    public async Task ExecuteActionAsync_RoutesCustomPluginAction_ToSessionHost()
+    {
+        await using var harness = await PluginManagerHarness.CreateAsync();
+
+        var pluginManager = harness.Services.GetRequiredService<PluginManagerService>();
+        var sessionHosts = harness.Services.GetRequiredService<SessionHostRuntimeService>();
+        var protocol = harness.Services.GetRequiredService<PluginHostProtocolService>();
+        await pluginManager.InitializeAsync();
+
+        var networkRuntime = Assert.Single(pluginManager.GetAllRuntimes(), runtime => runtime.Info.Manifest.Id == "network.adapter");
+        await sessionHosts.EnsureStartedAsync(
+            networkRuntime.Info,
+            "listener-action",
+            capabilityId: "tcp.server",
+            supportsMultiSession: true,
+            multiSessionGroupId: "listener-action");
+
+        try
+        {
+            var (ok, error, _) = await protocol.ExecuteActionAsync(
+                networkRuntime,
+                "network.reject-all-pending",
+                "listener-action",
+                JsonSerializer.SerializeToElement(new { }),
+                TimeSpan.FromSeconds(3));
+
+            Assert.False(ok);
+            Assert.Equal("Listener session not found.", error);
+        }
+        finally
+        {
+            await sessionHosts.StopAsync("listener-action", TimeSpan.FromSeconds(1), "test-cleanup");
+        }
+    }
+
     private sealed class PluginManagerHarness : IAsyncDisposable
     {
         private readonly string _configDirectory;
@@ -148,6 +186,7 @@ public sealed class PluginManagerIntegrationTests
             CopyHostOutputs(repoRoot, baseDir, "SessionHost");
 
             CopyPluginAssembly(typeof(FlowTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.flow"));
+            CopyPluginAssembly(typeof(NetworkBusAdapterPlugin).Assembly.Location, Path.Combine(pluginsDirectory, "z-network.adapter"));
             CopyPluginAssembly(typeof(SerialBusAdapterPlugin).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.adapter"));
             CopyPluginAssembly(typeof(StatsTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.stats"));
 

@@ -16,6 +16,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private readonly IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> _itemFactory;
 
     private IDisposable? _messageSubscription;
+    private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
 
     private Session? _activeSession;
     private string _searchQuery = string.Empty;
@@ -33,6 +34,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         _settingsService = settingsService;
         Display = display;
         _itemFactory = itemFactory;
+        _activeSessionPropertyChangedHandler = OnActiveSessionPropertyChanged;
 
         MessageItems = new ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext>(_itemFactory);
 
@@ -78,6 +80,62 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     public string DisplayModeLabel => IsHexDisplayMode ? "HEX" : "STR";
 
+    public bool HasActiveSession => _activeSession is not null;
+
+    public string CurrentSessionLabel => L["stream.session.current"];
+
+    public string ActiveSessionDisplayName => _activeSession?.Name ?? L["stream.session.none"];
+
+    public string ActiveSessionStatusLabel => _activeSession is null
+        ? L["stream.session.none"]
+        : _activeSession.Status == SessionStatus.Connected
+            ? L["status.connected"]
+            : L["status.disconnected"];
+
+    public string ActiveSessionDetailText
+    {
+        get
+        {
+            if (_activeSession is null)
+            {
+                return L["stream.session.noneHint"];
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activeSession.Endpoint))
+            {
+                return _activeSession.Endpoint;
+            }
+
+            return L["stream.session.endpointPlaceholder"];
+        }
+    }
+
+    public string ActiveSessionTypeLabel
+    {
+        get
+        {
+            if (_activeSession is null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
+            {
+                return L["network.session.connection.inbound"];
+            }
+
+            return _activeSession.CapabilityId switch
+            {
+                "tcp.server" => L["network.session.listener.tcp"],
+                "udp.listen" => L["network.session.listener.udp"],
+                "tcp" => L["network.session.client.tcp"],
+                "udp" => L["network.session.client.udp"],
+                "serial" => L["stream.session.serial"],
+                _ => L["stream.session.generic"]
+            };
+        }
+    }
+
     public void ToggleDisplayMode() => IsHexDisplayMode = !IsHexDisplayMode;
 
     public void SetActiveSession(Session? session)
@@ -87,7 +145,13 @@ public sealed class MessageStreamViewModel : BaseViewModel
             return;
         }
 
+        if (_activeSession is not null)
+        {
+            _activeSession.PropertyChanged -= _activeSessionPropertyChangedHandler;
+        }
+
         ActiveSession = session;
+        RaiseSessionContextChanged();
 
         _messageSubscription?.Dispose();
         _messageSubscription = null;
@@ -98,6 +162,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
         {
             return;
         }
+
+        _activeSession.PropertyChanged += _activeSessionPropertyChangedHandler;
 
         var sessionId = _activeSession.Id;
         _messageSubscription = _messageStream.Subscribe(sessionId, message =>
@@ -169,6 +235,37 @@ public sealed class MessageStreamViewModel : BaseViewModel
         }
     }
 
+    private void OnActiveSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _activeSession))
+        {
+            return;
+        }
+
+        if (e.PropertyName is nameof(Session.Name)
+            or nameof(Session.Status)
+            or nameof(Session.Endpoint)
+            or nameof(Session.ParametersJson)
+            or nameof(Session.PluginId)
+            or nameof(Session.CapabilityId)
+            or nameof(Session.ParentSessionId)
+            or null
+            or "")
+        {
+            RaiseSessionContextChanged();
+        }
+    }
+
+    private void RaiseSessionContextChanged()
+    {
+        OnPropertyChanged(nameof(HasActiveSession));
+        OnPropertyChanged(nameof(CurrentSessionLabel));
+        OnPropertyChanged(nameof(ActiveSessionDisplayName));
+        OnPropertyChanged(nameof(ActiveSessionStatusLabel));
+        OnPropertyChanged(nameof(ActiveSessionDetailText));
+        OnPropertyChanged(nameof(ActiveSessionTypeLabel));
+    }
+
     private void RefreshDisplayMode()
     {
         foreach (var item in MessageItems)
@@ -204,6 +301,10 @@ public sealed class MessageStreamViewModel : BaseViewModel
         if (disposing)
         {
             Display.PropertyChanged -= OnDisplayPropertyChanged;
+            if (_activeSession is not null)
+            {
+                _activeSession.PropertyChanged -= _activeSessionPropertyChangedHandler;
+            }
             _messageSubscription?.Dispose();
             _messageSubscription = null;
             MessageItems.Dispose();

@@ -12,6 +12,7 @@ public static class PluginHostMessageTypes
     public const string GetUiState = "get-ui-state";
     public const string ApplySharedMemorySegment = "apply-shared-memory-segment";
     public const string SetBackpressure = "set-backpressure";
+    public const string ExecuteAction = "execute-action";
 
     // Data plane (Session Host only)
     public const string SendData = "send-data";

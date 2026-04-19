@@ -31,6 +31,7 @@ public class CapabilityDispatcher : ICapabilityDispatcher
     private readonly DeviceService _deviceService;
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerService _pluginManager;
+    private readonly PluginHostProtocolService _protocolService;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<CapabilityDispatcher> _logger;
@@ -39,6 +40,7 @@ public class CapabilityDispatcher : ICapabilityDispatcher
         DeviceService deviceService,
         PluginUiStateManager stateManager,
         PluginManagerService pluginManager,
+        PluginHostProtocolService protocolService,
         IEventBus eventBus,
         IServiceProvider serviceProvider,
         ILogger<CapabilityDispatcher> logger)
@@ -46,6 +48,7 @@ public class CapabilityDispatcher : ICapabilityDispatcher
         _deviceService = deviceService;
         _stateManager = stateManager;
         _pluginManager = pluginManager;
+        _protocolService = protocolService;
         _eventBus = eventBus;
         _serviceProvider = serviceProvider;
         _logger = logger;
@@ -169,19 +172,17 @@ public class CapabilityDispatcher : ICapabilityDispatcher
         _logger.LogDebug("Forwarding custom action '{Action}' to plugin '{PluginId}'", actionName, pluginId);
         
         var payloadElement = parameters == null ? null : (JsonElement?)JsonSerializer.SerializeToElement(parameters);
-        var request = new PluginHostRequest(
-            Guid.NewGuid().ToString("N"),
+        var (ok, error, _) = await _protocolService.ExecuteActionAsync(
+            runtime,
             actionName,
             sessionId,
-            null,
-            payloadElement
-        );
+            payloadElement,
+            TimeSpan.FromSeconds(10));
 
-        var response = await runtime.Client.SendAsync(request, TimeSpan.FromSeconds(10));
-        if (response != null && !response.Ok)
+        if (!ok)
         {
-            _logger.LogError("Plugin action '{Action}' failed: {Error}", actionName, response.Error);
-            throw new Exception($"Action '{actionName}' failed: {response.Error}");
+            _logger.LogError("Plugin action '{Action}' failed: {Error}", actionName, error);
+            throw new Exception($"Action '{actionName}' failed: {error}");
         }
     }
 

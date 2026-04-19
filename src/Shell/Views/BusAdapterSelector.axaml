@@ -3,9 +3,270 @@
              xmlns:vm="clr-namespace:ComCross.Shell.ViewModels"
              xmlns:models="clr-namespace:ComCross.Shell.Models"
              x:Class="ComCross.Shell.Views.BusAdapterSelector"
-             x:DataType="vm:BusAdapterSelectorViewModel">
+             x:DataType="vm:BusAdapterSelectorViewModel"
+             x:Name="SelectorRoot">
 
   <StackPanel Spacing="12">
+    <Border Background="#162026"
+            BorderBrush="#25303A"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="12"
+            IsVisible="{Binding IsNetworkSelectionMode}">
+      <StackPanel Spacing="10">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{Binding NetworkSelectionTitle}"
+                     FontSize="13"
+                     FontWeight="SemiBold"
+                     Foreground="#E6EDF3" />
+          <TextBlock Text="{Binding NetworkSelectionEndpoint}"
+                     FontSize="11"
+                     FontFamily="JetBrains Mono, Consolas, monospace"
+                     Foreground="#93A0AC"
+                     IsVisible="{Binding NetworkSelectionEndpoint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,*">
+          <Border Grid.Column="0" Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,4,0">
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding L[network.session.status]}" FontSize="10" Foreground="#87909B" />
+              <TextBlock Text="{Binding NetworkSelectionStatus}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="4,0,0,0"
+                  IsVisible="{Binding IsListenerManagerMode}">
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding L[network.session.connections]}" FontSize="10" Foreground="#87909B" />
+              <TextBlock Text="{Binding ListenerConnectionSummary}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Background="#11181D"
+                BorderBrush="#25303A"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,8"
+                IsVisible="{Binding NetworkParentDisplayName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <StackPanel Spacing="2">
+            <TextBlock Text="{Binding L[network.session.parent]}" FontSize="10" Foreground="#87909B" />
+            <TextBlock Text="{Binding NetworkParentDisplayName}" FontSize="12" Foreground="#E6EDF3" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="{Binding L[network.session.listener.hint]}"
+                   FontSize="11"
+                   Foreground="#87909B"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding IsListenerManagerMode}" />
+
+        <StackPanel Spacing="10" IsVisible="{Binding IsListenerManagerMode}">
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Grid.Column="0"
+                         Text="{Binding L[network.session.manager.activeConnections]}"
+                         FontSize="11"
+                         FontWeight="SemiBold"
+                         Foreground="#E6EDF3" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding ListenerConnectionSummary}"
+                         FontSize="10"
+                         Foreground="#87909B"
+                         Margin="0,0,12,0" />
+              <Button Grid.Column="2"
+                      Content="{Binding L[network.session.manager.disconnectAll]}"
+                      Command="{Binding DisconnectAllManagedSessionsCommand}"
+                      IsVisible="{Binding CanDisconnectAllManagedSessions}"
+                      HorizontalAlignment="Right" />
+            </Grid>
+
+            <Border Background="#0F1519"
+                    BorderBrush="#25303A"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8">
+              <Grid RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0"
+                           Text="{Binding L[network.session.manager.emptyConnections]}"
+                           FontSize="11"
+                           Foreground="#87909B"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding !HasListenerConnections}" />
+
+                <ScrollViewer Grid.Row="1"
+                              MaxHeight="220"
+                              VerticalScrollBarVisibility="Auto"
+                              IsVisible="{Binding HasListenerConnections}">
+                  <ItemsControl ItemsSource="{Binding ListenerConnections}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:NetworkManagedConnectionRow">
+                        <Border Background="#162026"
+                                BorderBrush="#25303A"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,0,8"
+                                Padding="10,8">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                              <TextBlock Text="{Binding Name}"
+                                         FontSize="12"
+                                         FontWeight="SemiBold"
+                                         Foreground="#E6EDF3" />
+                              <TextBlock Text="{Binding Endpoint}"
+                                         FontSize="11"
+                                         FontFamily="JetBrains Mono, Consolas, monospace"
+                                         Foreground="#93A0AC" />
+                              <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock FontSize="10" Foreground="#87909B">
+                                  <Run Text="{Binding TxLabel}" />
+                                  <Run Text=" " />
+                                  <Run Text="{Binding TxBytes}" Foreground="#3AA0FF" />
+                                </TextBlock>
+                                <TextBlock FontSize="10" Foreground="#87909B">
+                                  <Run Text="{Binding RxLabel}" />
+                                  <Run Text=" " />
+                                  <Run Text="{Binding RxBytes}" Foreground="#3DD6C6" />
+                                </TextBlock>
+                              </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="6" HorizontalAlignment="Right">
+                              <Border Background="#11181D"
+                                      BorderBrush="#25303A"
+                                      BorderThickness="1"
+                                      CornerRadius="999"
+                                      Padding="8,2">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                  <Ellipse Width="6" Height="6" VerticalAlignment="Center">
+                                  <Ellipse.Fill>
+                                    <SolidColorBrush Color="{Binding Status, Converter={StaticResource StatusColorConverter}}" />
+                                  </Ellipse.Fill>
+                                  </Ellipse>
+                                  <TextBlock Text="{Binding StatusText}"
+                                             FontSize="10"
+                                             Foreground="#B7C1CC" />
+                                </StackPanel>
+                              </Border>
+
+                              <Button Content="{Binding DisconnectLabel}"
+                                      Command="{Binding DisconnectCommand}"
+                                      HorizontalAlignment="Stretch" />
+
+                              <Button Content="{Binding DeleteLabel}"
+                                      Command="{Binding DeleteCommand}"
+                                      HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Grid>
+            </Border>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <TextBlock Grid.Column="0"
+                         Text="{Binding L[network.session.manager.pendingConnections]}"
+                         FontSize="11"
+                         FontWeight="SemiBold"
+                         Foreground="#E6EDF3" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding ListenerPendingSummary}"
+                         FontSize="10"
+                         Foreground="#87909B"
+                         Margin="0,0,12,0" />
+              <Button Grid.Column="2"
+                      Content="{Binding PendingBulkActionLabel}"
+                      Command="{Binding AcceptAllPendingCommand}"
+                      IsVisible="{Binding CanAcceptAllPending}"
+                      HorizontalAlignment="Right"
+                      Margin="0,0,8,0"
+                      Classes="accent" />
+              <Button Grid.Column="3"
+                      Content="{Binding PendingRejectAllLabel}"
+                      Command="{Binding RejectAllPendingCommand}"
+                      IsVisible="{Binding CanRejectAllPending}"
+                      HorizontalAlignment="Right" />
+            </Grid>
+
+            <Border Background="#0F1519"
+                    BorderBrush="#25303A"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8">
+              <Grid RowDefinitions="Auto,*">
+                <TextBlock Grid.Row="0"
+                           Text="{Binding L[network.session.manager.emptyPending]}"
+                           FontSize="11"
+                           Foreground="#87909B"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding !HasListenerPendingItems}" />
+
+                <ScrollViewer Grid.Row="1"
+                              MaxHeight="180"
+                              VerticalScrollBarVisibility="Auto"
+                              IsVisible="{Binding HasListenerPendingItems}">
+                  <ItemsControl ItemsSource="{Binding ListenerPendingItems}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:NetworkPendingResourceRow">
+                        <Border Background="#162026"
+                                BorderBrush="#25303A"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,0,8"
+                                Padding="10,8">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                              <TextBlock Text="{Binding DisplayName}"
+                                         FontSize="12"
+                                         FontWeight="SemiBold"
+                                         Foreground="#E6EDF3" />
+                              <TextBlock Text="{Binding PendingId}"
+                                         FontSize="10"
+                                         FontFamily="JetBrains Mono, Consolas, monospace"
+                                         Foreground="#93A0AC" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        Spacing="8"
+                                        VerticalAlignment="Center"
+                                        Margin="12,0,0,0">
+                              <Button Content="{Binding ActionLabel}"
+                                      Command="{Binding ConnectCommand}"
+                                      Classes="accent" />
+                              <Button Content="{Binding RejectLabel}"
+                                      Command="{Binding RejectCommand}" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Grid>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,*">
+          <Button Grid.Column="0"
+                  Content="{Binding L[menu.disconnect]}"
+                  Command="{Binding DisconnectCommand}"
+                  IsVisible="{Binding CanDisconnect}"
+                  Margin="0,0,4,0" />
+          <Button Grid.Column="1"
+                  Content="{Binding L[session.menu.delete]}"
+                  Command="{Binding DeleteActiveSessionCommand}"
+                  IsEnabled="{Binding CanDeleteActiveSession}"
+                  Margin="4,0,0,0" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Spacing="12" IsVisible="{Binding IsCreateMode}">
     <!-- Section Header -->
     <TextBlock Text="{Binding L[sidebar.busAdapter]}" 
                FontSize="11" 
@@ -82,5 +343,6 @@
               IsVisible="{Binding CanDisconnect}"
               Margin="4,6,0,0" />
     </Grid>
+    </StackPanel>
   </StackPanel>
 </UserControl>

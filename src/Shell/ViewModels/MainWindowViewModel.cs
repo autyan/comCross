@@ -270,6 +270,7 @@ public class MainWindowViewModel : BaseViewModel
             // Workloads: ensure default workload and load tabs.
             await _workspaceCoordinator.EnsureDefaultWorkloadAsync();
             await WorkloadTabsViewModel.LoadWorkloadsAsync();
+            await LeftSidebar.SyncToActiveWorkloadAsync();
 
             _appLogService.Info("Application UI state initialized.");
         }

@@ -31,6 +31,7 @@ internal sealed class RoleGatekeeper
             or PluginHostMessageTypes.Connect
             or PluginHostMessageTypes.Disconnect
             or PluginHostMessageTypes.SetBackpressure
+            or PluginHostMessageTypes.ExecuteAction
             or PluginHostMessageTypes.SendData
             or PluginHostMessageTypes.Shutdown;
     }

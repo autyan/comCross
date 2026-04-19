@@ -4,7 +4,10 @@ using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Avalonia.Threading;
+using ComCross.Core.Services;
+using ComCross.Shell.Services;
 using ComCross.PluginSdk.UI;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
@@ -13,15 +16,30 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
+public enum LeftSidebarSection
+{
+    QuickCreate,
+    Sessions
+}
+
 public sealed class LeftSidebarViewModel : BaseViewModel
 {
+    private const int ListenerPreviewLimit = 5;
+
     private readonly IEventBus _eventBus;
+    private readonly WorkloadService _workloadService;
+    private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private readonly PluginUiStateManager _pluginUiStateManager;
+    private readonly PluginManagerViewModel _pluginManager;
     private readonly BusAdapterSelectorViewModel _busAdapterSelectorViewModel;
+    private readonly IObjectFactory _objectFactory;
     private readonly IItemVmFactory<SessionListItemViewModel, Session> _sessionItemFactory;
 
     private readonly IDisposable _sessionCreatedSubscription;
     private readonly IDisposable _sessionClosedSubscription;
+    private readonly IDisposable _sessionDeletedSubscription;
+    private readonly IDisposable _activeWorkloadChangedSubscription;
+    private readonly EventHandler _pluginsReloadedHandler;
 
     private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
 
@@ -37,39 +55,156 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private string? _preferredActiveSessionId;
     private SessionListItemViewModel? _selectedSessionItem;
     private bool _syncingSelection;
+    private HashSet<string> _visibleSessionIds = new(StringComparer.Ordinal);
+    private LeftSidebarSection _activeSection = LeftSidebarSection.QuickCreate;
 
     public LeftSidebarViewModel(
         ILocalizationService localization,
         IEventBus eventBus,
+        WorkloadService workloadService,
+        IWorkspaceCoordinator workspaceCoordinator,
         PluginUiStateManager pluginUiStateManager,
+        PluginManagerViewModel pluginManager,
         BusAdapterSelectorViewModel busAdapterSelectorViewModel,
+        IObjectFactory objectFactory,
         IItemVmFactory<SessionListItemViewModel, Session> sessionItemFactory)
         : base(localization)
     {
         _eventBus = eventBus;
+        _workloadService = workloadService;
+        _workspaceCoordinator = workspaceCoordinator;
         _pluginUiStateManager = pluginUiStateManager;
+        _pluginManager = pluginManager;
         _busAdapterSelectorViewModel = busAdapterSelectorViewModel;
+        _objectFactory = objectFactory;
         _sessionItemFactory = sessionItemFactory;
 
         _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
         _sessionClosedSubscription = _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
+        _sessionDeletedSubscription = _eventBus.Subscribe<SessionDeletedEvent>(OnSessionDeleted);
+        _activeWorkloadChangedSubscription = _eventBus.Subscribe<ActiveWorkloadChangedEvent>(OnActiveWorkloadChanged);
         SessionItems = new ItemVmCollection<SessionListItemViewModel, Session>(_sessionItemFactory);
+        QuickCreateSelectorViewModel = _objectFactory.Create<BusAdapterSelectorViewModel>(
+            BusAdapterSelectorViewModel.BusAdapterViewKind,
+            $"left-quick-create-{Guid.NewGuid():N}");
+        QuickCreateSelectorViewModel.UpdatePluginAdapters(_pluginManager.GetAllCapabilityOptions());
+        _pluginsReloadedHandler = (_, _) =>
+        {
+            QuickCreateSelectorViewModel.UpdatePluginAdapters(_pluginManager.GetAllCapabilityOptions());
+        };
+        _pluginManager.PluginsReloaded += _pluginsReloadedHandler;
+        ShowQuickCreateSectionCommand = new RelayCommand(() => ActiveSection = LeftSidebarSection.QuickCreate);
+        ShowSessionsSectionCommand = new RelayCommand(() => ActiveSection = LeftSidebarSection.Sessions);
+        DisconnectActiveSessionCommand = new AsyncRelayCommand(DisconnectActiveSessionAsync, () => CanDisconnectActiveSession);
+        DeleteActiveSessionCommand = new AsyncRelayCommand(DeleteActiveSessionAsync, () => CanDeleteActiveSession);
 
         _activeSessionPropertyChangedHandler = (_, args) =>
         {
             if (args.PropertyName == nameof(Session.Status) || string.IsNullOrEmpty(args.PropertyName))
             {
                 IsConnected = _activeSession?.Status == SessionStatus.Connected;
+                OnPropertyChanged(nameof(ActiveSessionStatusText));
+                OnPropertyChanged(nameof(CanDisconnectActiveSession));
+                DisconnectActiveSessionCommand.RaiseCanExecuteChanged();
             }
         };
     }
 
     public BusAdapterSelectorViewModel BusAdapterSelectorViewModel => _busAdapterSelectorViewModel;
 
+    public BusAdapterSelectorViewModel QuickCreateSelectorViewModel { get; }
+
+    public RelayCommand ShowQuickCreateSectionCommand { get; }
+
+    public RelayCommand ShowSessionsSectionCommand { get; }
+
+    public AsyncRelayCommand DisconnectActiveSessionCommand { get; }
+
+    public AsyncRelayCommand DeleteActiveSessionCommand { get; }
+
     public ObservableCollection<Session> Sessions { get; } = new();
 
     // UI-only collection for typed, compiled bindings.
     public ItemVmCollection<SessionListItemViewModel, Session> SessionItems { get; }
+
+    public LeftSidebarSection ActiveSection
+    {
+        get => _activeSection;
+        set
+        {
+            if (SetProperty(ref _activeSection, value))
+            {
+                OnPropertyChanged(nameof(IsQuickCreateSection));
+                OnPropertyChanged(nameof(IsSessionsSection));
+            }
+        }
+    }
+
+    public bool IsQuickCreateSection => ActiveSection == LeftSidebarSection.QuickCreate;
+
+    public bool IsSessionsSection => ActiveSection == LeftSidebarSection.Sessions;
+
+    public bool HasActiveSession => _activeSession is not null;
+
+    public bool ShowNetworkSessionPanel
+        => string.Equals(_activeSession?.PluginId, "network.adapter", StringComparison.Ordinal);
+
+    public bool ShowSimpleSessionCard => !ShowNetworkSessionPanel;
+
+    public string QuickCreateTabLabel => L["sidebar.tab.quickCreate"];
+
+    public string SessionsTabLabel => L["sidebar.tab.sessions"];
+
+    public string QuickCreateTitle => L["sidebar.quickCreate.title"];
+
+    public string QuickCreateHint => L["sidebar.quickCreate.hint"];
+
+    public string CurrentSessionTitle => L["sidebar.currentSession.title"];
+
+    public string CurrentSessionEmptyTitle => L["sidebar.currentSession.empty"];
+
+    public string CurrentSessionEmptyHint => L["sidebar.currentSession.emptyHint"];
+
+    public string ActiveSessionNameText => _activeSession?.Name ?? CurrentSessionEmptyTitle;
+
+    public string ActiveSessionEndpointText => _activeSession?.Endpoint ?? string.Empty;
+
+    public string ActiveSessionStatusText => _activeSession is null
+        ? L["stream.session.none"]
+        : _activeSession.Status == SessionStatus.Connected
+            ? L["status.connected"]
+            : L["status.disconnected"];
+
+    public string ActiveSessionTypeText
+    {
+        get
+        {
+            if (_activeSession is null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
+            {
+                return L["network.session.connection.inbound"];
+            }
+
+            return _activeSession.CapabilityId switch
+            {
+                "tcp.server" => L["network.session.listener.tcp"],
+                "udp.listen" => L["network.session.listener.udp"],
+                "tcp" => L["network.session.client.tcp"],
+                "udp" => L["network.session.client.udp"],
+                "serial" => L["stream.session.serial"],
+                _ => L["stream.session.generic"]
+            };
+        }
+    }
+
+    public bool CanDisconnectActiveSession
+        => _activeSession?.Id is { Length: > 0 } && _activeSession.Status == SessionStatus.Connected;
+
+    public bool CanDeleteActiveSession => _activeSession?.Id is { Length: > 0 };
 
     public SessionListItemViewModel? SelectedSessionItem
     {
@@ -142,6 +277,17 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             _busAdapterSelectorViewModel.SetActiveSession(_activeSession);
 
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
+            OnPropertyChanged(nameof(HasActiveSession));
+            OnPropertyChanged(nameof(ShowNetworkSessionPanel));
+            OnPropertyChanged(nameof(ShowSimpleSessionCard));
+            OnPropertyChanged(nameof(ActiveSessionNameText));
+            OnPropertyChanged(nameof(ActiveSessionEndpointText));
+            OnPropertyChanged(nameof(ActiveSessionStatusText));
+            OnPropertyChanged(nameof(ActiveSessionTypeText));
+            OnPropertyChanged(nameof(CanDisconnectActiveSession));
+            OnPropertyChanged(nameof(CanDeleteActiveSession));
+            DisconnectActiveSessionCommand.RaiseCanExecuteChanged();
+            DeleteActiveSessionCommand.RaiseCanExecuteChanged();
             ActiveSessionChanged?.Invoke(this, _activeSession);
         }
     }
@@ -153,6 +299,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     }
 
     public event EventHandler<Session?>? ActiveSessionChanged;
+
+    public Task SyncToActiveWorkloadAsync() => RefreshVisibleSessionsForCurrentWorkloadAsync();
 
     public void RefreshSessionItems()
     {
@@ -205,6 +353,29 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         _preferredActiveSessionId = null;
     }
 
+    private void OnActiveWorkloadChanged(ActiveWorkloadChangedEvent e)
+    {
+        _ = RefreshVisibleSessionsForCurrentWorkloadAsync();
+    }
+
+    private async Task RefreshVisibleSessionsForCurrentWorkloadAsync()
+    {
+        var visibleSessionIds = await _workloadService.GetActiveWorkloadSessionIdsAsync();
+        Dispatcher.UIThread.Post(() =>
+        {
+            _visibleSessionIds = new HashSet<string>(visibleSessionIds, StringComparer.Ordinal);
+            RebuildSessionItems();
+
+            if (ActiveSession is not null && _visibleSessionIds.Contains(ActiveSession.Id))
+            {
+                return;
+            }
+
+            var nextVisibleSession = Sessions.FirstOrDefault(session => _visibleSessionIds.Contains(session.Id));
+            ActiveSession = nextVisibleSession;
+        });
+    }
+
     private void OnSessionCreated(SessionCreatedEvent e)
     {
         Dispatcher.UIThread.Post(() =>
@@ -235,10 +406,20 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                     ActiveSession = existing;
                 }
             }
+            else if (!string.IsNullOrWhiteSpace(InferEffectiveParentSessionId(existing)) && ActiveSession is not null)
+            {
+                // New inbound child connections should not steal focus from the user's current listener/session selection.
+                if (SelectedSessionItem is null && ActiveSession is not null)
+                {
+                    SelectedSessionItem = SessionItems.FirstOrDefault(i => ReferenceEquals(i.Session, ActiveSession));
+                }
+            }
             else
             {
                 ActiveSession = existing;
             }
+
+            ActiveSection = LeftSidebarSection.Sessions;
         });
     }
 
@@ -331,15 +512,18 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     {
         // Preserve the current active session while we rebuild viewmodels.
         var activeSession = _activeSession;
+        var visibleSessions = Sessions
+            .Where(session => _visibleSessionIds.Count == 0 || _visibleSessionIds.Contains(session.Id))
+            .ToList();
 
         // Keep connection index map bounded to current sessions.
-        var aliveIds = Sessions.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        var aliveIds = visibleSessions.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
         foreach (var key in _connectionIndexBySessionId.Keys.Where(k => !aliveIds.Contains(k)).ToList())
         {
             _connectionIndexBySessionId.Remove(key);
         }
 
-        var effectiveParentBySessionId = Sessions.ToDictionary(
+        var effectiveParentBySessionId = visibleSessions.ToDictionary(
             s => s.Id,
             InferEffectiveParentSessionId,
             StringComparer.Ordinal);
@@ -351,7 +535,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             SessionItems.Clear();
 
             // Display order: top-level sessions first; children (connections) immediately after their listener.
-            foreach (var top in Sessions.Where(s => string.IsNullOrWhiteSpace(effectiveParentBySessionId.GetValueOrDefault(s.Id))))
+            foreach (var top in visibleSessions.Where(s => string.IsNullOrWhiteSpace(effectiveParentBySessionId.GetValueOrDefault(s.Id))))
             {
                 var topItem = SessionItems.Add(top);
                 topItem.IndentLevel = 0;
@@ -360,6 +544,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                     : (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "udp.listen")
                         ? "UDP Listener"
                         : null;
+                topItem.ListenerChildCount = visibleSessions.Count(s =>
+                    string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal));
 
                 topItem.IsCollapsed = topItem.IsListener && _collapsedListenerSessionIds.Contains(top.Id);
 
@@ -368,9 +554,23 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                     continue;
                 }
 
-                foreach (var child in Sessions
-                             .Where(s => string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal))
-                             .OrderBy(s => _connectionIndexBySessionId.TryGetValue(s.Id, out var idx) ? idx : int.MaxValue))
+                var orderedChildren = visibleSessions
+                    .Where(s => string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal))
+                    .OrderBy(s => _connectionIndexBySessionId.TryGetValue(s.Id, out var idx) ? idx : int.MaxValue)
+                    .ToList();
+
+                var visibleChildIds = orderedChildren
+                    .Take(ListenerPreviewLimit)
+                    .Select(s => s.Id)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                if (activeSession is not null
+                    && string.Equals(effectiveParentBySessionId.GetValueOrDefault(activeSession.Id), top.Id, StringComparison.Ordinal))
+                {
+                    visibleChildIds.Add(activeSession.Id);
+                }
+
+                foreach (var child in orderedChildren.Where(s => visibleChildIds.Contains(s.Id)))
                 {
                     EnsureConnectionIndex(child, top.Id);
                     var idx = _connectionIndexBySessionId.TryGetValue(child.Id, out var assigned) ? assigned : 0;
@@ -382,9 +582,9 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             }
 
             // Orphans: sessions with missing parents still show as top-level.
-            foreach (var orphan in Sessions.Where(s =>
+            foreach (var orphan in visibleSessions.Where(s =>
                          !string.IsNullOrWhiteSpace(effectiveParentBySessionId.GetValueOrDefault(s.Id))
-                         && Sessions.All(p => !string.Equals(p.Id, effectiveParentBySessionId.GetValueOrDefault(s.Id), StringComparison.Ordinal))))
+                         && visibleSessions.All(p => !string.Equals(p.Id, effectiveParentBySessionId.GetValueOrDefault(s.Id), StringComparison.Ordinal))))
             {
                 var orphanItem = SessionItems.Add(orphan);
                 orphanItem.IndentLevel = 0;
@@ -417,17 +617,87 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             if (ActiveSession?.Id == e.SessionId)
             {
                 IsConnected = false;
+                OnPropertyChanged(nameof(ActiveSessionStatusText));
+                OnPropertyChanged(nameof(CanDisconnectActiveSession));
+                DisconnectActiveSessionCommand.RaiseCanExecuteChanged();
                 ActiveSessionChanged?.Invoke(this, ActiveSession);
             }
         });
+    }
+
+    private void OnSessionDeleted(SessionDeletedEvent e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var removed = Sessions.FirstOrDefault(s => string.Equals(s.Id, e.SessionId, StringComparison.Ordinal));
+            if (removed is null)
+            {
+                return;
+            }
+
+            var nextActiveId = ActiveSession is not null && string.Equals(ActiveSession.Id, e.SessionId, StringComparison.Ordinal)
+                ? InferEffectiveParentSessionId(removed)
+                : ActiveSession?.Id;
+
+            Sessions.Remove(removed);
+            RebuildSessionItems();
+
+            ActiveSession = !string.IsNullOrWhiteSpace(nextActiveId)
+                ? Sessions.FirstOrDefault(s => string.Equals(s.Id, nextActiveId, StringComparison.Ordinal))
+                : Sessions.FirstOrDefault();
+        });
+    }
+
+    private async Task DisconnectActiveSessionAsync()
+    {
+        if (_activeSession?.Id is not { Length: > 0 } sessionId)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.CloseSessionAsync(sessionId);
+    }
+
+    private async Task DeleteActiveSessionAsync()
+    {
+        if (_activeSession is null)
+        {
+            return;
+        }
+
+        var title = L["dialog.deleteSession.title"];
+        var messageKey = _activeSession.Kind == SessionKind.Listener
+            ? "dialog.deleteSession.listener.message"
+            : "dialog.deleteSession.message";
+        var confirmed = await MessageBoxService.ShowConfirmAsync(title, string.Format(L[messageKey], _activeSession.Name));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.DeleteSessionAsync(_activeSession.Id);
+    }
+
+    public int GetChildConnectionCount(string listenerSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(listenerSessionId))
+        {
+            return 0;
+        }
+
+        return Sessions.Count(session => string.Equals(InferEffectiveParentSessionId(session), listenerSessionId, StringComparison.Ordinal));
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            _pluginManager.PluginsReloaded -= _pluginsReloadedHandler;
             _sessionCreatedSubscription.Dispose();
             _sessionClosedSubscription.Dispose();
+            _sessionDeletedSubscription.Dispose();
+            _activeWorkloadChangedSubscription.Dispose();
+            QuickCreateSelectorViewModel.Dispose();
             SessionItems.Dispose();
         }
 

@@ -8,7 +8,7 @@ namespace ComCross.Shell.ViewModels;
 public sealed record WorkloadTabItemContext(
     Workload Workload,
     ICommand ActivateCommand,
-    ICommand CloseCommand,
+    ICommand DeleteCommand,
     ICommand RenameCommand,
     ICommand CopyCommand);
 
@@ -44,7 +44,7 @@ public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<Wor
         _isDefault = context.Workload.IsDefault;
 
         ActivateCommand = context.ActivateCommand;
-        CloseCommand = context.CloseCommand;
+        DeleteCommand = context.DeleteCommand;
         RenameCommand = context.RenameCommand;
         CopyCommand = context.CopyCommand;
 
@@ -132,11 +132,6 @@ public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<Wor
     }
 
     /// <summary>
-    /// Can this workload be closed? (Default workload cannot be closed)
-    /// </summary>
-    public bool CanClose => !IsDefault;
-
-    /// <summary>
     /// Can this workload be deleted? (Default workload cannot be deleted)
     /// </summary>
     public bool CanDelete => !IsDefault;
@@ -151,7 +146,9 @@ public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<Wor
     /// </summary>
     public bool CanCopy => true;
 
-    public string CloseToolTip => L["workload.close"];
+    public string DefaultBadge => L["workload.defaultBadge"];
+
+    public string ActiveBadge => L["workload.activeBadge"];
 
     public string RenameHeader => L["workload.rename"];
 
@@ -162,7 +159,7 @@ public sealed class WorkloadTabItemViewModel : BaseViewModel, IInitializable<Wor
     // Commands are assigned during Init.
     public ICommand ActivateCommand { get; private set; } = null!;
 
-    public ICommand CloseCommand { get; private set; } = null!;
+    public ICommand DeleteCommand { get; private set; } = null!;
 
     public ICommand RenameCommand { get; private set; } = null!;
 

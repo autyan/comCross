@@ -8,12 +8,15 @@ namespace ComCross.Plugins.Network;
 public sealed class NetworkBusAdapterPlugin :
     IConnectableBusAdapterPlugin,
     ITransmittableBusAdapterPlugin,
+    IPluginActionHandler,
     IPluginUiStateProvider,
     IPluginUiStateEventSource,
     IMultiSessionDevicePlugin
 {
     private const string PendingResourceKind = "pending";
     private const string PendingListResourceId = "all";
+    private const string RejectPendingAction = "network.reject-pending";
+    private const string RejectAllPendingAction = "network.reject-all-pending";
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -262,6 +265,21 @@ public sealed class NetworkBusAdapterPlugin :
         {
             _txGate.Release();
         }
+    }
+
+    public Task<PluginCommandResult> ExecuteActionAsync(PluginActionCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.ActionName))
+        {
+            return Task.FromResult(new PluginCommandResult(false, "Missing action name."));
+        }
+
+        return command.ActionName switch
+        {
+            RejectPendingAction => Task.FromResult(RejectPending(command)),
+            RejectAllPendingAction => Task.FromResult(RejectAllPending(command)),
+            _ => Task.FromResult(new PluginCommandResult(false, $"Unknown action: {command.ActionName}"))
+        };
     }
 
     public void SetSharedMemoryWriter(ISharedMemoryWriter writer)
@@ -641,6 +659,71 @@ public sealed class NetworkBusAdapterPlugin :
 
         NotifyListenerInvalidated(listener!.CapabilityId, listener!.SessionId, "peer-bound");
         return new PluginConnectResult(true, SessionId: command.SessionId);
+    }
+
+    private PluginCommandResult RejectPending(PluginActionCommand command)
+    {
+        var listenerSessionId = command.SessionId;
+        var pendingId = TryReadString(command.Parameters, "pendingId");
+        if (string.IsNullOrWhiteSpace(listenerSessionId) || string.IsNullOrWhiteSpace(pendingId))
+        {
+            return new PluginCommandResult(false, "Missing listener session or pendingId.");
+        }
+
+        lock (_lock)
+        {
+            if (_tcpListeners.TryGetValue(listenerSessionId, out var tcpListener))
+            {
+                if (!tcpListener.TryRejectPending(pendingId))
+                {
+                    return new PluginCommandResult(false, "Pending connection not found.");
+                }
+
+                NotifyListenerInvalidated(tcpListener.CapabilityId, tcpListener.SessionId, "pending-rejected");
+                return new PluginCommandResult(true);
+            }
+
+            if (_udpListeners.TryGetValue(listenerSessionId, out var udpListener))
+            {
+                if (!udpListener.TryRejectPending(pendingId))
+                {
+                    return new PluginCommandResult(false, "Pending peer not found.");
+                }
+
+                NotifyListenerInvalidated(udpListener.CapabilityId, udpListener.SessionId, "pending-rejected");
+                return new PluginCommandResult(true);
+            }
+        }
+
+        return new PluginCommandResult(false, "Listener session not found.");
+    }
+
+    private PluginCommandResult RejectAllPending(PluginActionCommand command)
+    {
+        var listenerSessionId = command.SessionId;
+        if (string.IsNullOrWhiteSpace(listenerSessionId))
+        {
+            return new PluginCommandResult(false, "Missing listener session.");
+        }
+
+        lock (_lock)
+        {
+            if (_tcpListeners.TryGetValue(listenerSessionId, out var tcpListener))
+            {
+                tcpListener.RejectAllPending();
+                NotifyListenerInvalidated(tcpListener.CapabilityId, tcpListener.SessionId, "pending-cleared");
+                return new PluginCommandResult(true);
+            }
+
+            if (_udpListeners.TryGetValue(listenerSessionId, out var udpListener))
+            {
+                udpListener.RejectAllPending();
+                NotifyListenerInvalidated(udpListener.CapabilityId, udpListener.SessionId, "pending-cleared");
+                return new PluginCommandResult(true);
+            }
+        }
+
+        return new PluginCommandResult(false, "Listener session not found.");
     }
 
     private async Task TcpReadLoopAsync(string sessionId, NetworkStream stream, CancellationToken cancellationToken)
@@ -1035,6 +1118,31 @@ public sealed class NetworkBusAdapterPlugin :
             return null;
         }
 
+        public bool TryRejectPending(string pendingId)
+        {
+            if (!_pending.TryGetValue(pendingId, out var pending))
+            {
+                return false;
+            }
+
+            _pending.Remove(pendingId);
+            try { pending.Client.Dispose(); } catch { }
+            return true;
+        }
+
+        public int RejectAllPending()
+        {
+            var pending = _pending.Values.ToArray();
+            _pending.Clear();
+
+            foreach (var item in pending)
+            {
+                try { item.Client.Dispose(); } catch { }
+            }
+
+            return pending.Length;
+        }
+
         public IReadOnlyList<(string Id, string DisplayName)> GetPendingSnapshot()
             => _pending.Values.Select(p => (p.Id, p.DisplayName)).ToArray();
 
@@ -1112,6 +1220,27 @@ public sealed class NetworkBusAdapterPlugin :
             _pendingById.Remove(pendingId);
             _pendingIdByPeerKey.Remove(key);
             return pending;
+        }
+
+        public bool TryRejectPending(string pendingId)
+        {
+            if (!_pendingById.TryGetValue(pendingId, out var pending))
+            {
+                return false;
+            }
+
+            var key = GetPeerKey(pending.RemoteEndPoint);
+            _pendingById.Remove(pendingId);
+            _pendingIdByPeerKey.Remove(key);
+            return true;
+        }
+
+        public int RejectAllPending()
+        {
+            var count = _pendingById.Count;
+            _pendingById.Clear();
+            _pendingIdByPeerKey.Clear();
+            return count;
         }
 
         public IReadOnlyList<(string Id, string DisplayName)> GetPendingSnapshot()

@@ -59,6 +59,33 @@
         <Setter Property="Foreground" Value="#5BB5FF" />
     </Style>
 
+    <Style Selector="ToggleButton.tool-segment">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#93A0AC" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:pointerover">
+        <Setter Property="Background" Value="#18222A" />
+        <Setter Property="Foreground" Value="#D6DEE6" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:checked">
+        <Setter Property="Background" Value="#2E93F5" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:checked:pointerover">
+        <Setter Property="Background" Value="#46A2FB" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
     <!-- Button Styles (kept for backward compatibility) -->
     <Style Selector="Button.tool-tab">
         <Setter Property="Background" Value="Transparent" />

@@ -10,25 +10,29 @@
     
     <Grid RowDefinitions="Auto,*">
         <!-- Tool Tabs -->
-        <Border Grid.Row="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="8">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <ToggleButton Classes="tool-tab"
+        <Border Grid.Row="0" Background="#182127" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="12">
+            <Border Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="10" Padding="4">
+                <Grid ColumnDefinitions="*,*">
+                    <ToggleButton Grid.Column="0"
+                              Classes="tool-segment"
                               IsChecked="{Binding IsSendTabActive}"
-                              Click="OnSendTabClick">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="📨" FontSize="14" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding L[tool.send]}" VerticalAlignment="Center" />
-                    </StackPanel>
-                </ToggleButton>
-                <ToggleButton Classes="tool-tab"
+                              Click="OnSendTabClick"
+                              Margin="0,0,3,0">
+                        <TextBlock Text="{Binding L[tool.send]}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </ToggleButton>
+                    <ToggleButton Grid.Column="1"
+                              Classes="tool-segment"
                               IsChecked="{Binding IsCommandsTabActive}"
-                              Click="OnCommandsTabClick">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="⚒️" FontSize="14" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding L[tool.commands]}" VerticalAlignment="Center" />
-                    </StackPanel>
-                </ToggleButton>
-            </StackPanel>
+                              Click="OnCommandsTabClick"
+                              Margin="3,0,0,0">
+                        <TextBlock Text="{Binding L[tool.commands]}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </ToggleButton>
+                </Grid>
+            </Border>
         </Border>
 
         <!-- Tool Content -->
