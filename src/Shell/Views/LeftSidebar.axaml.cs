@@ -1,13 +1,13 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia;
+using ComCross.PluginSdk.UI;
+using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using ComCross.Shell.Services;
-using ComCross.PluginSdk.UI;
 
 namespace ComCross.Shell.Views;
 
@@ -17,7 +17,7 @@ public partial class LeftSidebar : BaseUserControl
     {
         InitializeComponent();
     }
-    
+
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
@@ -29,20 +29,17 @@ public partial class LeftSidebar : BaseUserControl
         {
             var objectFactory = ShellUiServices.ObjectFactory;
             var dialog = objectFactory.Create<ConnectDialog>();
-            // Create a dedicated selector VM for the dialog so its rendered controls
-            // are not shared with the sidebar's visual tree.
             var viewInstanceId = Guid.NewGuid().ToString("N");
             var selectorVm = objectFactory.Create<BusAdapterSelectorViewModel>(vm.PluginManager, BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId);
             dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, selectorVm);
 
             await dialog.ShowDialog(owner);
 
-            // Clean up per-instance registrations; shared state is preserved by ViewKind.
             var stateManager = ShellUiServices.PluginUiStateManager;
             stateManager.ClearViewScope(new PluginUiViewScope(BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId));
         }
     }
-    
+
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button)
@@ -68,22 +65,22 @@ public partial class LeftSidebar : BaseUserControl
         }
 
         var flyout = new MenuFlyout();
-        
+
         var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
-        renameItem.Click += async (s, args) => await ShowRenameDialogAsync(session, vm);
-        
+        renameItem.Click += async (_, _) => await ShowRenameDialogAsync(session, vm);
+
         var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
-        deleteItem.Click += async (s, args) =>
+        deleteItem.Click += async (_, _) =>
         {
             var newActive = await vm.SessionsVm.DeleteSessionAsync(vm.Sessions, vm.ActiveSession, session.Id);
             vm.LeftSidebar.RefreshSessionItems();
             vm.ActiveSession = newActive;
         };
-        
+
         flyout.Items.Add(renameItem);
         flyout.Items.Add(new Separator());
         flyout.Items.Add(deleteItem);
-        
+
         flyout.ShowAt(button);
     }
 
@@ -105,7 +102,7 @@ public partial class LeftSidebar : BaseUserControl
             sidebarVm.ToggleListenerCollapsed(itemVm.Session.Id);
         }
     }
-    
+
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)

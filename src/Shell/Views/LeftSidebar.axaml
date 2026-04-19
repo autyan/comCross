@@ -9,199 +9,303 @@
              x:DataType="vm:LeftSidebarViewModel"
              x:Name="LeftSidebarRoot">
     
-            <UserControl.Resources>
+    <UserControl.Resources>
         <Geometry x:Key="IconChevronRight">M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z</Geometry>
         <Geometry x:Key="IconChevronDown">M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z</Geometry>
         <Geometry x:Key="IconWifi">M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20ZM12,6C8.69,6 6,8.69 6,12C6,15.31 8.69,18 12,18C15.31,18 18,15.31 18,12C18,8.69 15.31,6 12,6ZM12,16C9.79,16 8,14.21 8,12C8,9.79 9.79,8 12,8C14.21,8 16,9.79 16,12C16,14.21 14.21,16 12,16Z</Geometry>
+        <Geometry x:Key="IconPlusPanel">M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z</Geometry>
+        <Geometry x:Key="IconSessionsPanel">M4,6C4,4.9 4.9,4 6,4H18C19.1,4 20,4.9 20,6V10C20,11.1 19.1,12 18,12H6C4.9,12 4,11.1 4,10V6ZM6,6V10H18V6H6ZM4,16C4,14.9 4.9,14 6,14H18C19.1,14 20,14.9 20,16V18C20,19.1 19.1,20 18,20H6C4.9,20 4,19.1 4,18V16ZM6,16V18H18V16H6Z</Geometry>
+        <Geometry x:Key="IconReconnect">M12,5V2L8,6L12,10V7C15.31,7 18,9.69 18,13C18,16.31 15.31,19 12,19C8.69,19 6,16.31 6,13H4C4,17.42 7.58,21 12,21C16.42,21 20,17.42 20,13C20,8.58 16.42,5 12,5Z</Geometry>
+        <Geometry x:Key="IconTune">M3,17V19H9V17H3ZM3,5V7H13V5H3ZM13,21V19H21V17H13V15H11V21H13ZM7,9V11H3V13H7V15H9V9H7ZM21,13V11H11V13H21ZM17,9V15H19V9H17Z</Geometry>
+        <Geometry x:Key="IconBack">M20,11V13H7.83L13.42,18.59L12,20L4,12L12,4L13.42,5.41L7.83,11H20Z</Geometry>
     </UserControl.Resources>
 
-    <Border Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,0,1,0">
-        <Grid ColumnDefinitions="64,*" Margin="0">
-            <Border Grid.Column="0" Background="#10161B" BorderBrush="#25303A" BorderThickness="0,0,1,0">
-                <StackPanel Margin="8" Spacing="8">
-                    <Button Command="{Binding ShowQuickCreateSectionCommand}"
-                            Classes.active="{Binding IsQuickCreateSection}"
-                            ToolTip.Tip="{Binding QuickCreateTabLabel}"
-                            Padding="8,12">
-                        <Button.Styles>
-                            <Style Selector="Button">
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="BorderBrush" Value="#25303A" />
-                                <Setter Property="BorderThickness" Value="1" />
-                                <Setter Property="CornerRadius" Value="10" />
-                            </Style>
-                            <Style Selector="Button.active">
-                                <Setter Property="Background" Value="#173149" />
-                                <Setter Property="BorderBrush" Value="#2F6F9B" />
-                            </Style>
-                            <Style Selector="Button:pointerover">
-                                <Setter Property="Background" Value="#182128" />
-                            </Style>
-                        </Button.Styles>
-                        <TextBlock Text="{Binding QuickCreateTabLabel}"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   FontSize="11"
-                                   FontWeight="SemiBold" />
-                    </Button>
+    <UserControl.Styles>
+        <StyleInclude Source="avares://ComCross.Shell/Animations/SidebarAnimations.axaml" />
+        <Style Selector="Button.activity-tab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="#70808E" />
+        </Style>
+        <Style Selector="Button.activity-tab:pointerover">
+            <Setter Property="Background" Value="#151B21" />
+            <Setter Property="Foreground" Value="#DCE6EE" />
+        </Style>
+        <Style Selector="Button.activity-tab.active">
+            <Setter Property="Foreground" Value="#F4F8FB" />
+        </Style>
+        <Style Selector="Button.activity-tab PathIcon">
+            <Setter Property="Foreground" Value="#70808E" />
+        </Style>
+        <Style Selector="Button.activity-tab:pointerover PathIcon">
+            <Setter Property="Foreground" Value="#DCE6EE" />
+        </Style>
+        <Style Selector="Button.activity-tab.active PathIcon">
+            <Setter Property="Foreground" Value="#F4F8FB" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-action">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#1A222A" />
+            <Setter Property="BorderBrush" Value="#2A343D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-action:pointerover">
+            <Setter Property="Background" Value="#202B34" />
+            <Setter Property="BorderBrush" Value="#39505F" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-action:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-action PathIcon">
+            <Setter Property="Foreground" Value="#D5DEE6" />
+        </Style>
+    </UserControl.Styles>
 
-                    <Button Command="{Binding ShowSessionsSectionCommand}"
-                            Classes.active="{Binding IsSessionsSection}"
-                            ToolTip.Tip="{Binding SessionsTabLabel}"
-                            Padding="8,12">
-                        <Button.Styles>
-                            <Style Selector="Button">
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="BorderBrush" Value="#25303A" />
-                                <Setter Property="BorderThickness" Value="1" />
-                                <Setter Property="CornerRadius" Value="10" />
-                            </Style>
-                            <Style Selector="Button.active">
-                                <Setter Property="Background" Value="#173149" />
-                                <Setter Property="BorderBrush" Value="#2F6F9B" />
-                            </Style>
-                            <Style Selector="Button:pointerover">
-                                <Setter Property="Background" Value="#182128" />
-                            </Style>
-                        </Button.Styles>
-                        <TextBlock Text="{Binding SessionsTabLabel}"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   FontSize="11"
-                                   FontWeight="SemiBold" />
-                    </Button>
-                </StackPanel>
+    <Border Background="#11161C" BorderBrush="#28323A" BorderThickness="0,0,1,0">
+        <Grid ColumnDefinitions="52,*" Margin="0">
+            <Border Grid.Column="0" Background="#0D1217" BorderBrush="#202830" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="0"
+                            Margin="10,10,10,8"
+                            Width="32"
+                            Height="32"
+                            CornerRadius="10"
+                            Background="#1C252D"
+                            BorderBrush="#2A333C"
+                            BorderThickness="1">
+                        <PathIcon Data="{StaticResource IconWifi}"
+                                  Width="16"
+                                  Height="16"
+                                  Foreground="#4FC3B5"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Row="1" Margin="0,4,0,0" Spacing="2">
+                        <Button Classes="activity-tab"
+                                Command="{Binding ShowQuickCreateSectionCommand}"
+                                Classes.active="{Binding IsQuickCreateSection}"
+                                ToolTip.Tip="{Binding QuickCreateTabLabel}">
+                            <Grid Width="36" Height="42">
+                                <Border Width="3"
+                                        Height="22"
+                                        Background="#4AA3FF"
+                                        CornerRadius="0,3,3,0"
+                                        HorizontalAlignment="Left"
+                                        IsVisible="{Binding IsQuickCreateSection}" />
+                                <PathIcon Data="{StaticResource IconPlusPanel}"
+                                          Width="18"
+                                          Height="18"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                            </Grid>
+                        </Button>
+
+                        <Button Classes="activity-tab"
+                                Command="{Binding ShowSessionsSectionCommand}"
+                                Classes.active="{Binding IsSessionsSection}"
+                                ToolTip.Tip="{Binding SessionsTabLabel}">
+                            <Grid Width="36" Height="42">
+                                <Border Width="3"
+                                        Height="22"
+                                        Background="#4AA3FF"
+                                        CornerRadius="0,3,3,0"
+                                        HorizontalAlignment="Left"
+                                        IsVisible="{Binding IsSessionsSection}" />
+                                <PathIcon Data="{StaticResource IconSessionsPanel}"
+                                          Width="18"
+                                          Height="18"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <Grid Grid.Column="1" Margin="16">
-                <ScrollViewer IsVisible="{Binding IsQuickCreateSection}" VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="14">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="{Binding QuickCreateTitle}"
-                                       FontSize="12"
-                                       FontWeight="Bold"
-                                       Foreground="#E6EDF3" />
-                            <TextBlock Text="{Binding QuickCreateHint}"
-                                       FontSize="11"
-                                       Foreground="#87909B"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-
-                        <views:BusAdapterSelector DataContext="{Binding QuickCreateSelectorViewModel}" />
-                    </StackPanel>
-                </ScrollViewer>
-
-                <Grid IsVisible="{Binding IsSessionsSection}" RowDefinitions="Auto,Auto,*">
-                    <Grid Grid.Row="0" IsVisible="{Binding ShowSimpleSessionCard}">
-                        <Border Background="#162026"
-                                BorderBrush="#25303A"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12">
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding CurrentSessionTitle}"
-                                           FontSize="11"
-                                           FontWeight="Bold"
-                                           Foreground="#87909B" />
-
-                                <StackPanel Spacing="4" IsVisible="{Binding HasActiveSession}">
-                                    <TextBlock Text="{Binding ActiveSessionNameText}"
-                                               FontSize="14"
-                                               FontWeight="SemiBold"
-                                               Foreground="#E6EDF3" />
-                                    <TextBlock Text="{Binding ActiveSessionEndpointText}"
-                                               FontSize="11"
-                                               Foreground="#93A0AC"
-                                               FontFamily="JetBrains Mono, Consolas, monospace"
-                                               IsVisible="{Binding ActiveSessionEndpointText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                </StackPanel>
-
-                                <StackPanel Spacing="4" IsVisible="{Binding !HasActiveSession}">
-                                    <TextBlock Text="{Binding CurrentSessionEmptyTitle}"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
-                                               Foreground="#E6EDF3" />
-                                    <TextBlock Text="{Binding CurrentSessionEmptyHint}"
-                                               FontSize="11"
-                                               Foreground="#87909B"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-
-                                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasActiveSession}">
-                                    <Border Background="#11181D"
-                                            BorderBrush="#25303A"
-                                            BorderThickness="1"
-                                            CornerRadius="999"
-                                            Padding="8,2">
-                                        <TextBlock Text="{Binding ActiveSessionStatusText}"
-                                                   FontSize="10"
-                                                   Foreground="#B7C1CC" />
-                                    </Border>
-                                    <Border Background="#141F27"
-                                            BorderBrush="#25303A"
-                                            BorderThickness="1"
-                                            CornerRadius="999"
-                                            Padding="8,2">
-                                        <TextBlock Text="{Binding ActiveSessionTypeText}"
-                                                   FontSize="10"
-                                                   Foreground="#BDE3FF" />
-                                    </Border>
-                                </StackPanel>
-
-                                <Grid ColumnDefinitions="*,*" IsVisible="{Binding HasActiveSession}">
-                                    <Button Grid.Column="0"
-                                            Content="{Binding L[menu.disconnect]}"
-                                            Command="{Binding DisconnectActiveSessionCommand}"
-                                            IsEnabled="{Binding CanDisconnectActiveSession}"
-                                            Margin="0,0,4,0" />
-                                    <Button Grid.Column="1"
-                                            Content="{Binding L[session.menu.delete]}"
-                                            Command="{Binding DeleteActiveSessionCommand}"
-                                            IsEnabled="{Binding CanDeleteActiveSession}"
-                                            Margin="4,0,0,0" />
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <Grid Grid.Row="0" IsVisible="{Binding ShowNetworkSessionPanel}">
-                        <views:BusAdapterSelector DataContext="{Binding BusAdapterSelectorViewModel}" />
-                    </Grid>
-
-                    <Separator Grid.Row="1" Background="#25303A" Height="1" Margin="0,16,0,16" />
-
-                    <Grid Grid.Row="2" RowDefinitions="Auto,*">
+            <Border Grid.Column="1" Background="#151C22">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0"
+                            Background="#161E25"
+                            BorderBrush="#232D35"
+                            BorderThickness="0,0,0,1"
+                            Padding="16,14,16,12">
                         <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding L[sidebar.sessions]}" 
-                                       FontSize="11" 
-                                       FontWeight="Bold" 
-                                       Foreground="#87909B"
-                                       VerticalAlignment="Center" />
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="{Binding QuickCreateTitle}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="#E8EEF4"
+                                           IsVisible="{Binding IsQuickCreateSection}" />
+                                <TextBlock Text="{Binding L[sidebar.sessions]}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="#E8EEF4"
+                                           IsVisible="{Binding IsSessionsSection}" />
+                                <TextBlock Text="{Binding QuickCreateHint}"
+                                           FontSize="11"
+                                           Foreground="#81909D"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding IsQuickCreateSection}" />
+                                <TextBlock Text="{Binding L[sidebar.currentSession.title]}"
+                                           FontSize="11"
+                                           Foreground="#81909D"
+                                           IsVisible="{Binding IsSessionsSection}" />
+                            </StackPanel>
+
                             <Button Grid.Column="1"
-                                    Content="＋"
-                                    FontSize="16"
+                                    Width="30"
+                                    Height="30"
+                                    Padding="0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
                                     Background="Transparent"
-                                    BorderThickness="0"
-                                    Padding="8,4"
+                                    BorderBrush="#25303A"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
                                     ToolTip.Tip="{Binding L[sidebar.newSession]}"
-                                    Command="{Binding ShowQuickCreateSectionCommand}">
-                                <Button.Styles>
-                                    <Style Selector="Button:pointerover">
-                                        <Setter Property="Background" Value="#1A2530" />
-                                    </Style>
-                                </Button.Styles>
+                                    Command="{Binding ShowQuickCreateSectionCommand}"
+                                    IsVisible="{Binding IsSessionsSection}">
+                                <PathIcon Data="{StaticResource IconPlusPanel}"
+                                          Width="16"
+                                          Height="16"
+                                          Foreground="#C9D3DC"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
                             </Button>
                         </Grid>
+                    </Border>
 
-                        <ListBox ItemsSource="{Binding SessionItems}"
-                                 Grid.Row="1"
-                                 Margin="0,12,0,0"
-                                 SelectedItem="{Binding SelectedSessionItem}" 
-                                 SelectionMode="Single"
-                                 Background="Transparent" 
-                                 BorderThickness="0"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <Grid Grid.Row="1">
+                        <ScrollViewer IsVisible="{Binding IsQuickCreateSection}" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="14" Margin="16">
+                                <Border Background="#182229"
+                                        BorderBrush="#27333C"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="12">
+                                    <views:BusAdapterSelector DataContext="{Binding QuickCreateSelectorViewModel}" />
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <Grid IsVisible="{Binding IsSessionsSection}" RowDefinitions="Auto,Auto,*">
+                            <StackPanel Grid.Row="0" Margin="16,16,16,0" Spacing="12">
+                                <Border Background="#182229"
+                                        BorderBrush="#27333C"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="12"
+                                        IsVisible="{Binding !HasActiveSession}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding CurrentSessionEmptyTitle}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#E6EDF3" />
+                                        <TextBlock Text="{Binding CurrentSessionEmptyHint}"
+                                                   FontSize="11"
+                                                   Foreground="#87909B"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#182229"
+                                        BorderBrush="#27333C"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="12"
+                                        IsVisible="{Binding HasActiveSession}">
+                                    <StackPanel Spacing="12">
+                                        <Border Background="Transparent"
+                                                Classes.collapsible-surface="True"
+                                                Classes.expanded="{Binding ShowSessionStatusSurface}">
+                                            <views:BusAdapterSelector DataContext="{Binding BusAdapterSelectorViewModel}" />
+                                        </Border>
+
+                                        <Border Background="Transparent"
+                                                Classes.collapsible-surface="True"
+                                                Classes.expanded="{Binding ShowReconnectParametersSurface}">
+                                            <ScrollViewer MaxHeight="420"
+                                                          VerticalScrollBarVisibility="Auto"
+                                                          HorizontalScrollBarVisibility="Disabled">
+                                                <views:BusAdapterSelector DataContext="{Binding ReconnectEditorSelectorViewModel}" />
+                                            </ScrollViewer>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#141B21"
+                                        BorderBrush="#27333C"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="12,10"
+                                        IsVisible="{Binding CanReconnectActiveSession}">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="12"
+                                                    HorizontalAlignment="Left"
+                                                    IsVisible="{Binding ShowSessionStatusSurface}">
+                                            <Button Classes="sidebar-icon-action"
+                                                    Command="{Binding DirectReconnectCommand}"
+                                                    ToolTip.Tip="{Binding DirectReconnectLabel}">
+                                                <PathIcon Data="{StaticResource IconReconnect}"
+                                                          Width="20"
+                                                          Height="20"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                            </Button>
+                                            <Button Classes="sidebar-icon-action"
+                                                    Command="{Binding ShowReconnectParametersSurfaceCommand}"
+                                                    ToolTip.Tip="{Binding EditReconnectLabel}">
+                                                <PathIcon Data="{StaticResource IconTune}"
+                                                          Width="20"
+                                                          Height="20"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                            </Button>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Left"
+                                                    IsVisible="{Binding ShowReconnectParametersSurface}">
+                                            <Button Classes="sidebar-icon-action"
+                                                    Command="{Binding ShowSessionStatusSurfaceCommand}"
+                                                    ToolTip.Tip="{Binding BackToStatusLabel}">
+                                                <PathIcon Data="{StaticResource IconBack}"
+                                                          Width="20"
+                                                          Height="20"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <Separator Grid.Row="1" Background="#25303A" Height="1" Margin="16,16,16,0" />
+
+                            <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="16">
+                                <TextBlock Grid.Row="0"
+                                           Text="{Binding L[sidebar.sessions]}"
+                                           FontSize="11"
+                                           FontWeight="Bold"
+                                           Foreground="#87909B"
+                                           VerticalAlignment="Center" />
+
+                                <ListBox ItemsSource="{Binding SessionItems}"
+                                         Grid.Row="1"
+                                         Margin="0,12,0,0"
+                                         SelectedItem="{Binding SelectedSessionItem}"
+                                         SelectionMode="Single"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem">
                             <Setter Property="Padding" Value="0" />
@@ -431,6 +535,8 @@
                     </Grid>
                 </Grid>
             </Grid>
+        </Grid>
+        </Border>
         </Grid>
     </Border>
 </UserControl>

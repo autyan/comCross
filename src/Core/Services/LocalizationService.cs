@@ -401,6 +401,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["sidebar.currentSession.title"] = "Current Session",
             ["sidebar.currentSession.empty"] = "No Session Selected",
             ["sidebar.currentSession.emptyHint"] = "Select a session from the list below, or switch to Quick Create to start a new one.",
+            ["sidebar.reconnect.direct"] = "Reconnect",
+            ["sidebar.reconnect.edit"] = "Reconnect With Params",
+            ["sidebar.reconnect.back"] = "Back To Status",
 
             // Session
             ["session.menu.rename"] = "Rename",

@@ -58,6 +58,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly IDisposable _pluginUiInvalidatedSubscription;
     private int _listenerConnectionCount;
     private string? _networkParentDisplayName;
+    private bool _forceCreateMode;
+    private string? _reconnectTargetSessionId;
 
     public BusAdapterSelectorViewModel(
         ILocalizationService localization,
@@ -168,9 +170,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public bool IsConnected => _activeSession?.Status == SessionStatus.Connected;
 
     public bool IsNetworkSelectionMode
-        => string.Equals(_activeSession?.PluginId, "network.adapter", StringComparison.Ordinal);
+        => !_forceCreateMode
+           && string.Equals(_activeSession?.PluginId, "network.adapter", StringComparison.Ordinal);
 
-    public bool IsCreateMode => !IsNetworkSelectionMode;
+    public bool IsCreateMode => _forceCreateMode || !IsNetworkSelectionMode;
 
     public bool IsListenerManagerMode
         => IsNetworkSelectionMode && _activeSession?.Kind == SessionKind.Listener;
@@ -274,6 +277,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public void UpdatePluginAdapters(IReadOnlyList<PluginCapabilityLaunchOption> options)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => UpdatePluginAdapters(options));
+            return;
+        }
+
         _lastOptions = options;
 
         var previouslySelectedId = SelectedAdapter?.Id;
@@ -348,6 +357,15 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             SelectedAdapterItem = adapter;
         }
     }
+
+    public void PrepareReconnect(Session? session)
+    {
+        _forceCreateMode = session is not null;
+        _reconnectTargetSessionId = session?.Id;
+        SetActiveSession(session);
+    }
+
+    public Task ExecuteConnectAsync() => ConnectAsync();
 
     /// <summary>
     /// Currently selected bus adapter
@@ -881,7 +899,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         // Use the currently bound state bucket (active session if present, otherwise default).
-        var stateKey = _activeSessionId;
+        var stateKey = _reconnectTargetSessionId ?? _activeSessionId;
         var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
         var currentState = _stateManager.GetState(viewScope, stateKey);
 
@@ -916,9 +934,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         // If we have a disconnected session selected, reconnect it (reuse its id);
         // otherwise always create a new session.
-        var targetSessionId = (_activeSession is not null && _activeSession.Status != SessionStatus.Connected)
+        var targetSessionId = _reconnectTargetSessionId
+            ?? ((_activeSession is not null && _activeSession.Status != SessionStatus.Connected)
             ? _activeSession.Id
-            : null;
+            : null);
 
         // Resource contention rule (UI-host policy): only force disconnect if the *same resource* is already occupied.
         // For Serial, the resource key is the port path/name.
