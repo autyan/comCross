@@ -42,6 +42,16 @@ public partial class LeftSidebar : BaseUserControl
 
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
+        OpenSessionDetailFromSender(sender, openReconnectEditor: false);
+    }
+
+    private void OnSessionConnectionParametersClick(object? sender, RoutedEventArgs e)
+    {
+        OpenSessionDetailFromSender(sender, openReconnectEditor: true);
+    }
+
+    private void OpenSessionDetailFromSender(object? sender, bool openReconnectEditor)
+    {
         if (sender is not Button button)
         {
             return;
@@ -51,6 +61,7 @@ public partial class LeftSidebar : BaseUserControl
         {
             Session s => s,
             SessionListItemViewModel itemVm => itemVm.Session,
+            LeftSidebarViewModel sidebarVm => sidebarVm.ActiveSession,
             _ => null
         };
 
@@ -63,25 +74,7 @@ public partial class LeftSidebar : BaseUserControl
         {
             return;
         }
-
-        var flyout = new MenuFlyout();
-
-        var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
-        renameItem.Click += async (_, _) => await ShowRenameDialogAsync(session, vm);
-
-        var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
-        deleteItem.Click += async (_, _) =>
-        {
-            var newActive = await vm.SessionsVm.DeleteSessionAsync(vm.Sessions, vm.ActiveSession, session.Id);
-            vm.LeftSidebar.RefreshSessionItems();
-            vm.ActiveSession = newActive;
-        };
-
-        flyout.Items.Add(renameItem);
-        flyout.Items.Add(new Separator());
-        flyout.Items.Add(deleteItem);
-
-        flyout.ShowAt(button);
+        vm.OpenSessionDetail(session, openReconnectEditor);
     }
 
     private void OnToggleListenerCollapseClick(object? sender, RoutedEventArgs e)

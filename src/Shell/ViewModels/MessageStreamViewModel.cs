@@ -21,6 +21,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private Session? _activeSession;
     private string _searchQuery = string.Empty;
     private bool _isHexDisplayMode;
+    private bool _isMetricsBarVisible;
 
     public MessageStreamViewModel(
         ILocalizationService localization,
@@ -76,6 +77,12 @@ public sealed class MessageStreamViewModel : BaseViewModel
                 RefreshDisplayMode();
             }
         }
+    }
+
+    public bool IsMetricsBarVisible
+    {
+        get => _isMetricsBarVisible;
+        set => SetProperty(ref _isMetricsBarVisible, value);
     }
 
     public string DisplayModeLabel => IsHexDisplayMode ? "HEX" : "STR";
@@ -137,6 +144,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
     }
 
     public void ToggleDisplayMode() => IsHexDisplayMode = !IsHexDisplayMode;
+
+    public void ToggleMetricsBar() => IsMetricsBarVisible = !IsMetricsBarVisible;
 
     public void SetActiveSession(Session? session)
     {

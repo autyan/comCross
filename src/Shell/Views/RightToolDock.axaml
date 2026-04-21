@@ -8,107 +8,230 @@
              x:Class="ComCross.Shell.Views.RightToolDock"
              x:DataType="vm:RightToolDockViewModel">
     
-    <Grid RowDefinitions="Auto,*">
-        <!-- Tool Tabs -->
-        <Border Grid.Row="0" Background="#182127" BorderBrush="#25303A" BorderThickness="0,0,0,1" Padding="12">
-            <Border Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="10" Padding="4">
-                <Grid ColumnDefinitions="*,*">
-                    <ToggleButton Grid.Column="0"
-                              Classes="tool-segment"
-                              IsChecked="{Binding IsSendTabActive}"
-                              Click="OnSendTabClick"
-                              Margin="0,0,3,0">
-                        <TextBlock Text="{Binding L[tool.send]}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </ToggleButton>
-                    <ToggleButton Grid.Column="1"
-                              Classes="tool-segment"
-                              IsChecked="{Binding IsCommandsTabActive}"
-                              Click="OnCommandsTabClick"
-                              Margin="3,0,0,0">
-                        <TextBlock Text="{Binding L[tool.commands]}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </ToggleButton>
-                </Grid>
-            </Border>
-        </Border>
-
-        <!-- Tool Content -->
-        <Border Grid.Row="1" Background="#1B242A" Padding="16">
+    <Grid>
+        <Border Background="{StaticResource Bg2Brush}" Padding="16">
             <ScrollViewer>
                 <StackPanel Spacing="16">
                     <!-- Send Tool -->
-                    <StackPanel Spacing="12" IsVisible="{Binding IsSendTabActive}">
-                        <TextBlock Text="{Binding L[tool.send.message]}" FontSize="12" FontWeight="Bold" Foreground="#87909B" />
+                    <StackPanel Spacing="14" IsVisible="{Binding IsSendTabActive}">
+                        <TextBlock Text="发送消息"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Text1Brush}" />
                         <TextBox x:Name="SendMessageBox"
-                                 Watermark="{Binding L[tool.send.message.placeholder]}" 
-                                 Height="100" 
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
+                                 Text="{Binding MessageInput, Mode=TwoWay}"
+                                 Watermark="输入消息... (Ctrl+Enter 发送)"
+                                 Height="116"
+                                 Classes="prototype-editor"
+                                 KeyDown="OnSendMessageBoxKeyDown"
                                  IsEnabled="{Binding IsConnected}" />
-                        
-                        <!-- Send Options in compact layout -->
-                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                            <!-- Core mode toggle (STR/HEX) -->
-                            <Border Grid.Column="0" Grid.Row="0"
-                                    CornerRadius="6"
-                                    BorderBrush="#25303A"
-                                    BorderThickness="1"
-                                    Background="#0F1417"
-                                    Padding="10,6"
-                                    Margin="0,0,8,4"
-                                    Cursor="Hand"
-                                    PointerPressed="OnToggleSendMode">
-                                <TextBlock Text="{Binding SendModeLabel}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           Foreground="#E6EDF3" />
-                            </Border>
-                            <CheckBox Grid.Column="1" Grid.Row="0" 
-                                      x:Name="ClearAfterSendCheckBox" 
-                                      Content="{Binding L[tool.send.clearAfterSend]}" 
-                                      Margin="8,0,0,4" />
-                            <CheckBox Grid.Column="0" Grid.Row="1" 
-                                      x:Name="AddCrCheckBox" 
-                                      Content="{Binding L[tool.send.addcr]}" 
-                                      IsChecked="{Binding Settings.ConnectionDefaultAddCr}" 
-                                      Margin="0,4,8,0" />
-                            <CheckBox Grid.Column="1" Grid.Row="1" 
-                                      x:Name="AddLfCheckBox" 
-                                      Content="{Binding L[tool.send.addlf]}" 
-                                      IsChecked="{Binding Settings.ConnectionDefaultAddLf}" 
-                                      Margin="8,4,0,0" />
+
+                        <Grid ColumnDefinitions="*,36">
+                            <Button Grid.Column="0"
+                                    Classes="prototype-plain"
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="{Binding CanSend}"
+                                    Click="OnSendClick"
+                                    Margin="0,0,8,0">
+                                <Border Height="40"
+                                        CornerRadius="6"
+                                        Background="{StaticResource PrimaryButtonBrush}">
+                                    <Grid ColumnDefinitions="18,Auto"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center">
+                                        <Path Data="{StaticResource SendIcon}"
+                                              Width="16"
+                                              Height="16"
+                                              Stretch="Uniform"
+                                              Stroke="{StaticResource WhiteBrush}"
+                                              StrokeThickness="1.7"
+                                              StrokeLineCap="Round"
+                                              StrokeJoin="Round"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Margin="8,0,0,0"
+                                                   Text="发送"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource WhiteBrush}"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </Button>
+
+                            <Button Grid.Column="1"
+                                    Classes="prototype-plain"
+                                    Width="36"
+                                    Height="40"
+                                    IsEnabled="{Binding CanClearInput}"
+                                    Click="OnClearInputClick">
+                                <Border Width="36"
+                                        Height="40"
+                                        CornerRadius="6"
+                                        Background="{StaticResource Bg1Brush}"
+                                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                                        BorderThickness="1">
+                                    <Path Data="{StaticResource Trash2Icon}"
+                                          Width="16"
+                                          Height="16"
+                                          Stretch="Uniform"
+                                          Stroke="{StaticResource Text2Brush}"
+                                          StrokeThickness="1.6"
+                                          StrokeLineCap="Round"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                                </Border>
+                            </Button>
                         </Grid>
 
-                        <Button Content="{Binding L[tool.send.button]}" 
-                                Classes="accent" 
-                                IsEnabled="{Binding IsConnected}" 
-                                Click="OnSendClick" />
-                        
-                        <!-- Stream Actions -->
-                        <Separator Background="#25303A" Margin="0,8" />
-                        
-                        <Grid ColumnDefinitions="*,*">
-                            <Button Grid.Column="0" 
-                                    Content="{Binding L[menu.clear]}" 
-                                    Click="OnClearClick"
-                                    IsEnabled="{Binding IsConnected}"
-                                    HorizontalAlignment="Stretch" 
-                                    Margin="0,0,4,0" />
-                            <Button Grid.Column="1" 
-                                    Content="{Binding L[menu.export]}" 
-                                    Click="OnExportClick"
-                                    IsEnabled="{Binding IsConnected}"
-                                    HorizontalAlignment="Stretch" 
-                                    Margin="4,0,0,0" />
-                        </Grid>
+                        <Button Classes="prototype-plain"
+                                HorizontalAlignment="Stretch"
+                                Click="OnToggleAdvancedOptionsClick">
+                            <Border Height="36"
+                                    CornerRadius="6"
+                                    Background="{StaticResource Bg1Brush}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    Padding="12,0">
+                                <Grid ColumnDefinitions="16,*"
+                                      VerticalAlignment="Center">
+                                    <PathIcon Data="{Binding AdvancedOptionsChevronIcon}"
+                                              Width="14"
+                                              Height="14"
+                                              Foreground="{StaticResource Text2Brush}"
+                                              VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Margin="6,0,0,0"
+                                               Text="高级选项"
+                                               FontSize="11"
+                                               Foreground="{StaticResource Text2Brush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Button>
+
+                        <Border ClipToBounds="True"
+                                IsVisible="{Binding IsAdvancedOptionsOpen}">
+                            <Border Classes="prototype-panel"
+                                    Background="{StaticResource Bg1Brush}"
+                                    Padding="12">
+                                <StackPanel Spacing="12">
+                                    <Grid ColumnDefinitions="*,*">
+                                        <Border Grid.Column="0"
+                                                CornerRadius="{StaticResource RadiusSm}"
+                                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                                BorderThickness="1"
+                                                Background="{StaticResource Bg0Brush}"
+                                                Padding="10,6"
+                                                Margin="0,0,4,0"
+                                                Cursor="Hand"
+                                                PointerPressed="OnToggleSendMode">
+                                            <TextBlock Text="{Binding SendModeLabel}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource Text0Brush}" />
+                                        </Border>
+                                        <CheckBox Grid.Column="1"
+                                                  x:Name="ClearAfterSendCheckBox"
+                                                  Classes="prototype-check"
+                                                  Content="{Binding L[tool.send.clearAfterSend]}"
+                                                  Margin="4,0,0,0"
+                                                  IsChecked="{Binding ClearAfterSend}" />
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="*,*">
+                                        <CheckBox Grid.Column="0"
+                                                  x:Name="AddCrCheckBox"
+                                                  Classes="prototype-check"
+                                                  Content="{Binding L[tool.send.addcr]}"
+                                                  Margin="0,0,4,0"
+                                                  IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
+                                        <CheckBox Grid.Column="1"
+                                                  x:Name="AddLfCheckBox"
+                                                  Classes="prototype-check"
+                                                  Content="{Binding L[tool.send.addlf]}"
+                                                  Margin="4,0,0,0"
+                                                  IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Border>
+
+                        <StackPanel Spacing="10" Margin="0,8,0,0">
+                            <TextBlock Text="快捷命令"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text1Brush}" />
+                            <ItemsControl ItemsSource="{Binding QuickCommands}"
+                                          IsVisible="{Binding HasQuickCommands}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="0,0,0,8"
+                                                Classes="prototype-plain"
+                                                HorizontalAlignment="Stretch"
+                                                Click="OnQuickCommandClick">
+                                            <Border Height="70"
+                                                    Classes="prototype-panel"
+                                                    Background="{StaticResource Bg1Brush}"
+                                                    Padding="12,10">
+                                                <StackPanel Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{StaticResource Text0Brush}" />
+                                                    <TextBlock Text="{Binding Payload}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource Text2Brush}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Content="查看所有命令..."
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="{Binding CanOpenCommandEditor}"
+                                    Click="OnOpenAllCommandsClick" />
+                        </StackPanel>
                     </StackPanel>
 
-                    <views:CommandCenterView DataContext="{Binding CommandCenter}" IsVisible="{Binding IsActive}" />
+                    <StackPanel Spacing="12" IsVisible="{Binding IsCommandsTabActive}">
+                        <Border Background="{StaticResource Bg1Brush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12,10">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Button Grid.Column="0"
+                                        Classes="prototype-plain"
+                                        Width="24"
+                                        Height="24"
+                                        Click="OnBackToSendClick">
+                                    <PathIcon Data="M15 18l-6-6 6-6"
+                                              Width="14"
+                                              Height="14"
+                                              Foreground="{StaticResource Text1Brush}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                                </Button>
+                                <TextBlock Grid.Column="1"
+                                           Margin="8,0,0,0"
+                                           Text="{Binding L[tool.commands]}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text0Brush}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <views:CommandCenterView DataContext="{Binding CommandCenter}" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Border>

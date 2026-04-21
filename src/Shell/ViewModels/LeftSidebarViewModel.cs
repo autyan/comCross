@@ -61,7 +61,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private SessionListItemViewModel? _selectedSessionItem;
     private bool _syncingSelection;
     private HashSet<string> _visibleSessionIds = new(StringComparer.Ordinal);
-    private LeftSidebarSection _activeSection = LeftSidebarSection.QuickCreate;
+    private LeftSidebarSection _activeSection = LeftSidebarSection.Sessions;
     private LeftSidebarSessionSurfaceMode _sessionSurfaceMode = LeftSidebarSessionSurfaceMode.Status;
 
     public LeftSidebarViewModel(
@@ -114,6 +114,26 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             {
                 IsConnected = _activeSession?.Status == SessionStatus.Connected;
                 SyncReconnectSurface();
+            }
+
+            if (args.PropertyName is nameof(Session.Name) or "" or null)
+            {
+                OnPropertyChanged(nameof(CurrentSessionName));
+            }
+
+            if (args.PropertyName is nameof(Session.Endpoint) or "" or null)
+            {
+                OnPropertyChanged(nameof(CurrentSessionEndpoint));
+            }
+
+            if (args.PropertyName is nameof(Session.RxBytes) or "" or null)
+            {
+                OnPropertyChanged(nameof(CurrentSessionRxBytes));
+            }
+
+            if (args.PropertyName is nameof(Session.TxBytes) or "" or null)
+            {
+                OnPropertyChanged(nameof(CurrentSessionTxBytes));
             }
         };
     }
@@ -205,6 +225,14 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public string BackToStatusLabel => L["sidebar.reconnect.back"];
 
+    public string CurrentSessionName => _activeSession?.Name ?? string.Empty;
+
+    public string CurrentSessionEndpoint => _activeSession?.Endpoint ?? string.Empty;
+
+    public string CurrentSessionRxBytes => $"{_activeSession?.RxBytes ?? 0:N0}";
+
+    public string CurrentSessionTxBytes => $"{_activeSession?.TxBytes ?? 0:N0}";
+
     public SessionListItemViewModel? SelectedSessionItem
     {
         get => _selectedSessionItem;
@@ -280,6 +308,10 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
             OnPropertyChanged(nameof(HasActiveSession));
             OnPropertyChanged(nameof(CanReconnectActiveSession));
+            OnPropertyChanged(nameof(CurrentSessionName));
+            OnPropertyChanged(nameof(CurrentSessionEndpoint));
+            OnPropertyChanged(nameof(CurrentSessionRxBytes));
+            OnPropertyChanged(nameof(CurrentSessionTxBytes));
             DirectReconnectCommand.RaiseCanExecuteChanged();
             ActiveSessionChanged?.Invoke(this, _activeSession);
         }
@@ -398,12 +430,15 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             _visibleSessionIds = new HashSet<string>(visibleSessionIds, StringComparer.Ordinal);
             RebuildSessionItems();
 
-            if (ActiveSession is not null && _visibleSessionIds.Contains(ActiveSession.Id))
+            if (ActiveSession is not null
+                && (_visibleSessionIds.Count == 0 || _visibleSessionIds.Contains(ActiveSession.Id)))
             {
                 return;
             }
 
-            var nextVisibleSession = Sessions.FirstOrDefault(session => _visibleSessionIds.Contains(session.Id));
+            var nextVisibleSession = _visibleSessionIds.Count == 0
+                ? Sessions.FirstOrDefault()
+                : Sessions.FirstOrDefault(session => _visibleSessionIds.Contains(session.Id));
             ActiveSession = nextVisibleSession;
         });
     }

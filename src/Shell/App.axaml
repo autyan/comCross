@@ -4,15 +4,22 @@
              x:Class="ComCross.Shell.App"
              RequestedThemeVariant="Dark">
     <Application.Resources>
-        <converters:StatusColorConverter x:Key="StatusColorConverter"/>
-        <converters:LevelColorConverter x:Key="LevelColorConverter"/>
-        <converters:DirectionColorConverter x:Key="DirectionColorConverter"/>
-        <converters:IndentMarginConverter x:Key="IndentMarginConverter"/>
-        <converters:ListenerBackgroundConverter x:Key="ListenerBackgroundConverter"/>
-        <converters:IsZeroConverter x:Key="IsZeroConverter"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="/Assets/Icons/IconResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:StatusColorConverter x:Key="StatusColorConverter"/>
+            <converters:LevelColorConverter x:Key="LevelColorConverter"/>
+            <converters:DirectionColorConverter x:Key="DirectionColorConverter"/>
+            <converters:IndentMarginConverter x:Key="IndentMarginConverter"/>
+            <converters:ListenerBackgroundConverter x:Key="ListenerBackgroundConverter"/>
+            <converters:IsZeroConverter x:Key="IsZeroConverter"/>
+        </ResourceDictionary>
     </Application.Resources>
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="/Styles/DesignTokens.axaml"/>
+        <StyleInclude Source="/Styles/ControlThemes.axaml"/>
         <StyleInclude Source="/Styles/CustomStyles.axaml"/>
     </Application.Styles>
 </Application>

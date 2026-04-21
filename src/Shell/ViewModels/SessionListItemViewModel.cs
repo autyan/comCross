@@ -71,6 +71,10 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
 
     public bool IsListener => Session.Kind == SessionKind.Listener;
     public bool IsConnection => !IsListener;
+    public bool IsNetworkConnection
+        => IsConnection && string.Equals(Session.PluginId, "network.adapter", StringComparison.Ordinal);
+    public bool IsSerialConnection
+        => IsConnection && string.Equals(Session.CapabilityId, "serial", StringComparison.Ordinal);
     public bool ShowChevron => IsListener;
 
     public bool IsCollapsed
@@ -148,8 +152,12 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
                 OnPropertyChanged(nameof(Endpoint));
                 break;
             case nameof(Session.Kind):
+            case nameof(Session.PluginId):
+            case nameof(Session.CapabilityId):
                 OnPropertyChanged(nameof(IsListener));
                 OnPropertyChanged(nameof(IsConnection));
+                OnPropertyChanged(nameof(IsNetworkConnection));
+                OnPropertyChanged(nameof(IsSerialConnection));
                 OnPropertyChanged(nameof(ShowChevron));
                 OnPropertyChanged(nameof(ShowStats));
                 OnPropertyChanged(nameof(ShowConnectionBadge));

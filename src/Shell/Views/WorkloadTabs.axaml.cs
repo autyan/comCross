@@ -23,21 +23,19 @@ public partial class WorkloadTabs : BaseUserControl
 
     private void OnNotificationsClick(object? sender, RoutedEventArgs e)
     {
-        // Get MainWindow and toggle notifications
         var mainWindow = this.FindAncestorOfType<Window>();
         if (mainWindow?.DataContext is MainWindowViewModel vm)
         {
-            vm.IsNotificationsOpen = !vm.IsNotificationsOpen;
+            vm.ToggleNotifications();
         }
     }
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        // Get MainWindow and toggle settings
         var mainWindow = this.FindAncestorOfType<Window>();
         if (mainWindow?.DataContext is MainWindowViewModel vm)
         {
-            vm.IsSettingsOpen = !vm.IsSettingsOpen;
+            vm.ToggleSettings();
         }
     }
 

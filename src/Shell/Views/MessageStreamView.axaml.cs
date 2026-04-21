@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -57,6 +58,50 @@ public partial class MessageStreamView : BaseUserControl
         {
             vm.ToggleDisplayMode();
             e.Handled = true;
+        }
+    }
+
+    private void OnOpenSessionDetailClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.OpenSessionDetail(vm.ActiveSession);
+        }
+    }
+
+    private void OnToggleRightDockClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.ToggleRightToolDock();
+        }
+    }
+
+    private void OnToggleMetricsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ToggleMetricsBar();
+        }
+    }
+
+    private void OnExportMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            _ = vm.ExportAsync();
+        }
+    }
+
+    private void OnClearMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.ClearMessages();
         }
     }
 }
