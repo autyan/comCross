@@ -51,6 +51,23 @@ public interface IPluginUiStateEventSource
 }
 
 /// <summary>
+/// Event raised by a plugin when an active session has ended independently of a host disconnect request.
+/// </summary>
+public sealed record PluginSessionClosedEvent(
+    string SessionId,
+    string? Reason = null,
+    bool RemoteInitiated = false,
+    string? Error = null);
+
+/// <summary>
+/// Optional event source for plugins that can detect transport-level session closure.
+/// </summary>
+public interface IPluginSessionLifecycleEventSource
+{
+    event EventHandler<PluginSessionClosedEvent>? SessionClosed;
+}
+
+/// <summary>
 /// Optional interface for plugins that want the main process to render
 /// richer UI driven by plugin-maintained state (ports list, defaults, etc.).
 /// </summary>

@@ -9,16 +9,23 @@
              x:DataType="vm:RightToolDockViewModel">
     
     <Grid>
-        <Border Background="{StaticResource Bg2Brush}" Padding="16">
+        <Border Background="{StaticResource Bg2Brush}" Padding="0">
             <ScrollViewer>
-                <StackPanel Spacing="16">
+                <StackPanel Spacing="0">
                     <!-- Send Tool -->
-                    <StackPanel Spacing="14" IsVisible="{Binding IsSendTabActive}">
-                        <TextBlock Text="发送消息"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource Text1Brush}" />
-                        <TextBox x:Name="SendMessageBox"
+                    <StackPanel IsVisible="{Binding IsSendTabActive}">
+                        <Border Background="{StaticResource Bg2Brush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="16,14">
+                            <TextBlock Text="发送消息"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text1Brush}" />
+                        </Border>
+
+                        <StackPanel Spacing="12" Margin="12">
+                            <TextBox x:Name="SendMessageBox"
                                  Text="{Binding MessageInput, Mode=TwoWay}"
                                  Watermark="输入消息... (Ctrl+Enter 发送)"
                                  Height="116"
@@ -26,8 +33,45 @@
                                  KeyDown="OnSendMessageBoxKeyDown"
                                  IsEnabled="{Binding IsConnected}" />
 
-                        <Grid ColumnDefinitions="*,36">
-                            <Button Grid.Column="0"
+                            <Grid ColumnDefinitions="64,*,*">
+                                <Border Grid.Column="0"
+                                    Height="34"
+                                    Width="64"
+                                    CornerRadius="{StaticResource RadiusSm}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    Background="{StaticResource Bg0Brush}"
+                                    Padding="10,6"
+                                    Cursor="Hand"
+                                    PointerPressed="OnToggleSendMode">
+                                <TextBlock Text="{Binding SendModeLabel}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource Text0Brush}" />
+                                </Border>
+                                <CheckBox Grid.Column="1"
+                                      x:Name="ClearAfterSendCheckBox"
+                                      Classes="prototype-check"
+                                      Content="{Binding L[tool.send.clearAfterSend]}"
+                                      Margin="10,0,0,0"
+                                      IsChecked="{Binding ClearAfterSend}" />
+                                <CheckBox Grid.Column="2"
+                                      x:Name="AddCrCheckBox"
+                                      Classes="prototype-check"
+                                      Content="{Binding L[tool.send.addcr]}"
+                                      Margin="8,0,0,0"
+                                      IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
+                            </Grid>
+
+                            <CheckBox x:Name="AddLfCheckBox"
+                                  Classes="prototype-check"
+                                  Content="{Binding L[tool.send.addlf]}"
+                                  IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
+
+                            <Grid ColumnDefinitions="*,36">
+                                <Button Grid.Column="0"
                                     Classes="prototype-plain"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding CanSend}"
@@ -60,7 +104,7 @@
                                 </Border>
                             </Button>
 
-                            <Button Grid.Column="1"
+                                <Button Grid.Column="1"
                                     Classes="prototype-plain"
                                     Width="36"
                                     Height="40"
@@ -83,84 +127,9 @@
                                           VerticalAlignment="Center" />
                                 </Border>
                             </Button>
-                        </Grid>
+                            </Grid>
 
-                        <Button Classes="prototype-plain"
-                                HorizontalAlignment="Stretch"
-                                Click="OnToggleAdvancedOptionsClick">
-                            <Border Height="36"
-                                    CornerRadius="6"
-                                    Background="{StaticResource Bg1Brush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                    BorderThickness="1"
-                                    Padding="12,0">
-                                <Grid ColumnDefinitions="16,*"
-                                      VerticalAlignment="Center">
-                                    <PathIcon Data="{Binding AdvancedOptionsChevronIcon}"
-                                              Width="14"
-                                              Height="14"
-                                              Foreground="{StaticResource Text2Brush}"
-                                              VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1"
-                                               Margin="6,0,0,0"
-                                               Text="高级选项"
-                                               FontSize="11"
-                                               Foreground="{StaticResource Text2Brush}"
-                                               VerticalAlignment="Center" />
-                                </Grid>
-                            </Border>
-                        </Button>
-
-                        <Border ClipToBounds="True"
-                                IsVisible="{Binding IsAdvancedOptionsOpen}">
-                            <Border Classes="prototype-panel"
-                                    Background="{StaticResource Bg1Brush}"
-                                    Padding="12">
-                                <StackPanel Spacing="12">
-                                    <Grid ColumnDefinitions="*,*">
-                                        <Border Grid.Column="0"
-                                                CornerRadius="{StaticResource RadiusSm}"
-                                                BorderBrush="{StaticResource BorderSubtleBrush}"
-                                                BorderThickness="1"
-                                                Background="{StaticResource Bg0Brush}"
-                                                Padding="10,6"
-                                                Margin="0,0,4,0"
-                                                Cursor="Hand"
-                                                PointerPressed="OnToggleSendMode">
-                                            <TextBlock Text="{Binding SendModeLabel}"
-                                                       FontSize="11"
-                                                       FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{StaticResource Text0Brush}" />
-                                        </Border>
-                                        <CheckBox Grid.Column="1"
-                                                  x:Name="ClearAfterSendCheckBox"
-                                                  Classes="prototype-check"
-                                                  Content="{Binding L[tool.send.clearAfterSend]}"
-                                                  Margin="4,0,0,0"
-                                                  IsChecked="{Binding ClearAfterSend}" />
-                                    </Grid>
-
-                                    <Grid ColumnDefinitions="*,*">
-                                        <CheckBox Grid.Column="0"
-                                                  x:Name="AddCrCheckBox"
-                                                  Classes="prototype-check"
-                                                  Content="{Binding L[tool.send.addcr]}"
-                                                  Margin="0,0,4,0"
-                                                  IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
-                                        <CheckBox Grid.Column="1"
-                                                  x:Name="AddLfCheckBox"
-                                                  Classes="prototype-check"
-                                                  Content="{Binding L[tool.send.addlf]}"
-                                                  Margin="4,0,0,0"
-                                                  IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-                        </Border>
-
-                        <StackPanel Spacing="10" Margin="0,8,0,0">
+                        <StackPanel Spacing="10" Margin="0,6,0,0">
                             <TextBlock Text="快捷命令"
                                        FontSize="11"
                                        FontWeight="SemiBold"
@@ -198,6 +167,7 @@
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding CanOpenCommandEditor}"
                                     Click="OnOpenAllCommandsClick" />
+                        </StackPanel>
                         </StackPanel>
                     </StackPanel>
 

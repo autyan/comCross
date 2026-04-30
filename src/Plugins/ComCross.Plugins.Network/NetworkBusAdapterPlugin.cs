@@ -11,6 +11,7 @@ public sealed class NetworkBusAdapterPlugin :
     IPluginActionHandler,
     IPluginUiStateProvider,
     IPluginUiStateEventSource,
+    IPluginSessionLifecycleEventSource,
     IMultiSessionDevicePlugin
 {
     private const string PendingResourceKind = "pending";
@@ -56,6 +57,7 @@ public sealed class NetworkBusAdapterPlugin :
     };
 
     public event EventHandler<PluginUiStateInvalidatedEvent>? UiStateInvalidated;
+    public event EventHandler<PluginSessionClosedEvent>? SessionClosed;
 
     public IReadOnlyList<PluginCapabilityDescriptor> GetCapabilities()
     {
@@ -66,7 +68,7 @@ public sealed class NetworkBusAdapterPlugin :
                 Id = "tcp",
                 Name = "TCP (Client)",
                 Description = "TCP client connection to a remote host",
-                Icon = "🌐",
+                Icon = "NetworkIcon",
                 JsonSchema = ReadEmbeddedResource(TcpParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(TcpConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
@@ -78,7 +80,7 @@ public sealed class NetworkBusAdapterPlugin :
                 Id = "udp",
                 Name = "UDP (Socket)",
                 Description = "UDP socket bound locally and connected to a remote endpoint",
-                Icon = "🌐",
+                Icon = "NetworkIcon",
                 JsonSchema = ReadEmbeddedResource(UdpParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(UdpConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
@@ -90,7 +92,7 @@ public sealed class NetworkBusAdapterPlugin :
                 Id = "tcp.server",
                 Name = "TCP (Server)",
                 Description = "TCP server listener; each accepted client becomes a session",
-                Icon = "🌐",
+                Icon = "ServerIcon",
                 JsonSchema = ReadEmbeddedResource(TcpServerParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(TcpServerConnectUiSchemaResource),
                 DefaultParametersJson = "{\"mode\":\"listen\"}",
@@ -104,7 +106,7 @@ public sealed class NetworkBusAdapterPlugin :
                 Id = "udp.listen",
                 Name = "UDP (Listen)",
                 Description = "UDP listener; each peer becomes a session",
-                Icon = "🌐",
+                Icon = "ServerIcon",
                 JsonSchema = ReadEmbeddedResource(UdpListenParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(UdpListenConnectUiSchemaResource),
                 DefaultParametersJson = "{\"mode\":\"listen\"}",
@@ -124,8 +126,8 @@ public sealed class NetworkBusAdapterPlugin :
             {
                 defaultParameters = new
                 {
-                    tcp = new { host = "127.0.0.1", port = 502, connectTimeoutMs = 3000 },
-                    udp = new { remoteHost = "127.0.0.1", remotePort = 5020, localPort = 0 },
+                    tcp = new { remoteHost = "127.0.0.1", remotePort = 502, localHost = "", localPort = 0, connectTimeoutMs = 3000 },
+                    udp = new { remoteHost = "127.0.0.1", remotePort = 5020, localHost = "", localPort = 0 },
                     tcpServer = new { listenHost = "0.0.0.0", listenPort = 502, backlog = 128 },
                     udpListen = new { listenHost = "0.0.0.0", listenPort = 5020 }
                 }
@@ -206,7 +208,7 @@ public sealed class NetworkBusAdapterPlugin :
     {
         if (!string.IsNullOrWhiteSpace(command.SessionId))
         {
-            CleanupSession(command.SessionId);
+            CleanupSession(command.SessionId, command.Reason ?? "local-disconnect", remoteInitiated: false);
         }
 
         return Task.FromResult(new PluginCommandResult(true));
@@ -334,20 +336,33 @@ public sealed class NetworkBusAdapterPlugin :
             return await Task.FromResult(BindTcpAcceptedConnection(command));
         }
 
-        var host = TryReadString(command.Parameters, "host");
+        var host = TryReadString(command.Parameters, "remoteHost");
         if (string.IsNullOrWhiteSpace(host))
         {
-            return new PluginConnectResult(false, "Missing required parameter: host");
+            host = TryReadString(command.Parameters, "host");
         }
 
-        if (!TryReadInt(command.Parameters, "port", out var port))
+        if (string.IsNullOrWhiteSpace(host))
         {
-            return new PluginConnectResult(false, "Missing required parameter: port");
+            return new PluginConnectResult(false, "Missing required parameter: remoteHost");
+        }
+
+        if (!TryReadInt(command.Parameters, "remotePort", out var port) &&
+            !TryReadInt(command.Parameters, "port", out port))
+        {
+            return new PluginConnectResult(false, "Missing required parameter: remotePort");
         }
 
         if (port is < 1 or > 65535)
         {
-            return new PluginConnectResult(false, "Invalid port (expected 1..65535)." );
+            return new PluginConnectResult(false, "Invalid remotePort (expected 1..65535)." );
+        }
+
+        var localHost = TryReadString(command.Parameters, "localHost");
+        var localPort = 0;
+        if (TryReadInt(command.Parameters, "localPort", out var lp) && lp >= 0 && lp <= 65535)
+        {
+            localPort = lp;
         }
 
         var timeoutMs = 3000;
@@ -358,16 +373,34 @@ public sealed class NetworkBusAdapterPlugin :
 
         try
         {
-            var client = new TcpClient();
+            var client = CreateTcpClient(localHost, localPort);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, cancellationToken);
             linked.CancelAfter(TimeSpan.FromMilliseconds(timeoutMs));
 
             await client.ConnectAsync(host, port, linked.Token);
 
             var stream = client.GetStream();
+            var local = client.Client.LocalEndPoint as IPEndPoint;
+            var remote = client.Client.RemoteEndPoint as IPEndPoint;
+            var subtitle = FormatEndpointPair(local, remote);
+            var committed = JsonSerializer.SerializeToElement(new
+            {
+                host = FormatAddress(remote?.Address) ?? host,
+                port = remote?.Port ?? port,
+                remoteHost = FormatAddress(remote?.Address) ?? host,
+                remotePort = remote?.Port ?? port,
+                localHost = FormatAddress(local?.Address),
+                localPort = local?.Port,
+                actualLocalHost = FormatAddress(local?.Address),
+                actualLocalPort = local?.Port,
+                requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim(),
+                requestedLocalPort = local?.Port ?? localPort,
+                endpoint = subtitle,
+                connectTimeoutMs = timeoutMs
+            });
 
             var rxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-            var state = new TcpConnectionSession(command.SessionId, client, stream, rxCts);
+            var state = new TcpConnectionSession(command.SessionId, client, stream, rxCts, listenerSessionId: null);
 
             lock (_lock)
             {
@@ -383,16 +416,22 @@ public sealed class NetworkBusAdapterPlugin :
             state.RxLoop = Task.Run(() => TcpReadLoopAsync(command.SessionId, stream, rxCts.Token));
 
             UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("tcp", SessionId: null, ViewKind: "connect-dialog", Reason: "connected"));
-            return new PluginConnectResult(true, SessionId: command.SessionId);
+            return new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                CommittedParameters: committed,
+                DisplayTitle: "TCP Client",
+                DisplaySubtitle: subtitle,
+                SessionKind: "connection");
         }
         catch (OperationCanceledException)
         {
-            CleanupSession(command.SessionId);
+            CleanupSession(command.SessionId, "connect-timeout", remoteInitiated: false);
             return new PluginConnectResult(false, "Timeout.");
         }
         catch (Exception ex)
         {
-            CleanupSession(command.SessionId);
+            CleanupSession(command.SessionId, "connect-failed", remoteInitiated: false, error: ex.Message);
             return new PluginConnectResult(false, ex.Message);
         }
     }
@@ -421,6 +460,7 @@ public sealed class NetworkBusAdapterPlugin :
             return new PluginConnectResult(false, "Invalid remotePort (expected 1..65535)." );
         }
 
+        var localHost = TryReadString(command.Parameters, "localHost");
         var localPort = 0;
         if (TryReadInt(command.Parameters, "localPort", out var lp) && lp >= 0 && lp <= 65535)
         {
@@ -429,11 +469,27 @@ public sealed class NetworkBusAdapterPlugin :
 
         try
         {
-            UdpClient udp = localPort > 0
-                ? new UdpClient(new IPEndPoint(IPAddress.Any, localPort))
+            var localAddress = ResolveLocalBindAddress(localHost);
+            UdpClient udp = localPort > 0 || localAddress is not null
+                ? new UdpClient(new IPEndPoint(localAddress ?? IPAddress.Any, localPort))
                 : new UdpClient();
 
             udp.Connect(remoteHost, remotePort);
+            var local = udp.Client.LocalEndPoint as IPEndPoint;
+            var remote = udp.Client.RemoteEndPoint as IPEndPoint;
+            var subtitle = FormatEndpointPair(local, remote);
+            var committed = JsonSerializer.SerializeToElement(new
+            {
+                remoteHost = FormatAddress(remote?.Address) ?? remoteHost,
+                remotePort = remote?.Port ?? remotePort,
+                localHost = FormatAddress(local?.Address),
+                localPort = local?.Port ?? localPort,
+                actualLocalHost = FormatAddress(local?.Address),
+                actualLocalPort = local?.Port,
+                requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim(),
+                requestedLocalPort = local?.Port ?? localPort,
+                endpoint = subtitle
+            });
 
             var rxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
             var state = new UdpConnectionSession(command.SessionId, udp, remote: null, listenerSessionId: null);
@@ -453,11 +509,17 @@ public sealed class NetworkBusAdapterPlugin :
 
             UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("udp", SessionId: null, ViewKind: "connect-dialog", Reason: "connected"));
             await Task.CompletedTask;
-            return new PluginConnectResult(true, SessionId: command.SessionId);
+            return new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                CommittedParameters: committed,
+                DisplayTitle: "UDP Socket",
+                DisplaySubtitle: subtitle,
+                SessionKind: "connection");
         }
         catch (Exception ex)
         {
-            CleanupSession(command.SessionId);
+            CleanupSession(command.SessionId, "connect-failed", remoteInitiated: false, error: ex.Message);
             return new PluginConnectResult(false, ex.Message);
         }
     }
@@ -514,6 +576,16 @@ public sealed class NetworkBusAdapterPlugin :
         {
             var listener = new TcpListener(new IPEndPoint(ip, port));
             listener.Start(backlog);
+            var local = listener.LocalEndpoint as IPEndPoint;
+            var subtitle = FormatEndpoint(local);
+            var committed = JsonSerializer.SerializeToElement(new
+            {
+                mode = "listen",
+                listenHost = FormatAddress(local?.Address) ?? listenHost,
+                listenPort = local?.Port ?? port,
+                backlog,
+                endpoint = subtitle
+            });
 
             var acceptCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
             var state = new TcpListenerSession(command.SessionId, "tcp.server", listener, acceptCts);
@@ -525,7 +597,13 @@ public sealed class NetworkBusAdapterPlugin :
 
             state.AcceptLoop = Task.Run(() => TcpAcceptLoopAsync(state, acceptCts.Token));
             NotifyListenerInvalidated(state.CapabilityId, state.SessionId, "listening");
-            return new PluginConnectResult(true, SessionId: command.SessionId);
+            return new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                CommittedParameters: committed,
+                DisplayTitle: "TCP Listener",
+                DisplaySubtitle: subtitle,
+                SessionKind: "listener");
         }
         catch (Exception ex)
         {
@@ -602,8 +680,24 @@ public sealed class NetworkBusAdapterPlugin :
         try
         {
             var stream = pending.Client.GetStream();
+            var local = pending.Client.Client.LocalEndPoint as IPEndPoint;
+            var remote = pending.Client.Client.RemoteEndPoint as IPEndPoint;
+            var subtitle = FormatEndpointPair(remote, local);
+            var committed = JsonSerializer.SerializeToElement(new
+            {
+                mode = "bind",
+                listenerSessionId,
+                pendingId,
+                host = FormatAddress(remote?.Address),
+                port = remote?.Port,
+                remoteHost = FormatAddress(remote?.Address),
+                remotePort = remote?.Port,
+                localHost = FormatAddress(local?.Address),
+                localPort = local?.Port,
+                endpoint = subtitle
+            });
             var rxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-            var state = new TcpConnectionSession(command.SessionId, pending.Client, stream, rxCts);
+            var state = new TcpConnectionSession(command.SessionId, pending.Client, stream, rxCts, listenerSessionId);
 
             lock (_lock)
             {
@@ -612,7 +706,14 @@ public sealed class NetworkBusAdapterPlugin :
 
             state.RxLoop = Task.Run(() => TcpReadLoopAsync(command.SessionId, stream, rxCts.Token));
             NotifyListenerInvalidated(listener!.CapabilityId, listener!.SessionId, "accepted-bound");
-            return new PluginConnectResult(true, SessionId: command.SessionId);
+            return new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                CommittedParameters: committed,
+                DisplayTitle: "Inbound TCP",
+                DisplaySubtitle: subtitle,
+                SessionKind: "connection",
+                ParentSessionId: listenerSessionId);
         }
         catch (Exception ex)
         {
@@ -730,6 +831,10 @@ public sealed class NetworkBusAdapterPlugin :
     {
         var buffer = new byte[4096];
 
+        var reason = "transport-closed";
+        string? error = null;
+        var remoteInitiated = false;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             int read;
@@ -741,13 +846,17 @@ public sealed class NetworkBusAdapterPlugin :
             {
                 break;
             }
-            catch
+            catch (Exception ex)
             {
+                reason = "transport-error";
+                error = ex.Message;
                 break;
             }
 
             if (read <= 0)
             {
+                reason = "remote-eof";
+                remoteInitiated = true;
                 break;
             }
 
@@ -761,7 +870,7 @@ public sealed class NetworkBusAdapterPlugin :
             TryWriteFrame(sessionId, payload);
         }
 
-        CleanupSession(sessionId);
+        CleanupSession(sessionId, reason, remoteInitiated, error);
     }
 
     private async Task UdpReadLoopAsync(string sessionId, UdpClient udp, CancellationToken cancellationToken)
@@ -793,10 +902,10 @@ public sealed class NetworkBusAdapterPlugin :
             }
         }
 
-        CleanupSession(sessionId);
+        CleanupSession(sessionId, "transport-closed", remoteInitiated: false);
     }
 
-    private void CleanupSession(string sessionId)
+    private void CleanupSession(string sessionId, string? reason = null, bool remoteInitiated = false, string? error = null)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -807,6 +916,8 @@ public sealed class NetworkBusAdapterPlugin :
         UdpConnectionSession? udp;
         TcpListenerSession? tcpListener;
         UdpListenerSession? udpListener;
+        List<string> childSessionIds = new();
+        var removed = false;
 
         lock (_lock)
         {
@@ -818,22 +929,46 @@ public sealed class NetworkBusAdapterPlugin :
             _writersBySession.Remove(sessionId);
 
             _tcpConnections.TryGetValue(sessionId, out tcp);
-            _tcpConnections.Remove(sessionId);
+            removed |= _tcpConnections.Remove(sessionId);
 
             _udpConnections.TryGetValue(sessionId, out udp);
-            _udpConnections.Remove(sessionId);
+            removed |= _udpConnections.Remove(sessionId);
 
             _tcpListeners.TryGetValue(sessionId, out tcpListener);
-            _tcpListeners.Remove(sessionId);
+            removed |= _tcpListeners.Remove(sessionId);
 
             _udpListeners.TryGetValue(sessionId, out udpListener);
-            _udpListeners.Remove(sessionId);
+            removed |= _udpListeners.Remove(sessionId);
+
+            if (tcpListener is not null || udpListener is not null)
+            {
+                childSessionIds.AddRange(_tcpConnections.Values
+                    .Where(s => string.Equals(s.ListenerSessionId, sessionId, StringComparison.Ordinal))
+                    .Select(s => s.SessionId));
+                childSessionIds.AddRange(_udpConnections.Values
+                    .Where(s => string.Equals(s.ListenerSessionId, sessionId, StringComparison.Ordinal))
+                    .Select(s => s.SessionId));
+            }
         }
 
         tcp?.Dispose();
         udp?.Dispose();
         tcpListener?.Dispose();
         udpListener?.Dispose();
+
+        foreach (var childSessionId in childSessionIds.Distinct(StringComparer.Ordinal))
+        {
+            CleanupSession(childSessionId, "listener-closed", remoteInitiated: false);
+        }
+
+        if (removed)
+        {
+            SessionClosed?.Invoke(this, new PluginSessionClosedEvent(
+                sessionId,
+                reason ?? "closed",
+                remoteInitiated,
+                error));
+        }
 
         UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("network", SessionId: null, ViewKind: "connect-dialog", Reason: "disconnected"));
     }
@@ -898,6 +1033,59 @@ public sealed class NetworkBusAdapterPlugin :
         return (
             TryReadString(command.Parameters, "listenerSessionId"),
             TryReadString(command.Parameters, "pendingId"));
+    }
+
+    private static string? FormatAddress(IPAddress? address)
+        => address is null
+            ? null
+            : address.IsIPv4MappedToIPv6
+                ? address.MapToIPv4().ToString()
+                : address.ToString();
+
+    private static IPAddress? ResolveLocalBindAddress(string? localHost)
+    {
+        if (string.IsNullOrWhiteSpace(localHost))
+        {
+            return null;
+        }
+
+        if (IPAddress.TryParse(localHost.Trim(), out var address))
+        {
+            return address;
+        }
+
+        return null;
+    }
+
+    private static TcpClient CreateTcpClient(string? localHost, int localPort)
+    {
+        var localAddress = ResolveLocalBindAddress(localHost);
+        if (localAddress is null && localPort <= 0)
+        {
+            return new TcpClient();
+        }
+
+        return new TcpClient(new IPEndPoint(localAddress ?? IPAddress.Any, localPort));
+    }
+
+    private static string FormatEndpoint(IPEndPoint? endpoint)
+        => endpoint is null ? string.Empty : $"{FormatAddress(endpoint.Address)}:{endpoint.Port}";
+
+    private static string FormatEndpointPair(IPEndPoint? left, IPEndPoint? right)
+    {
+        var l = FormatEndpoint(left);
+        var r = FormatEndpoint(right);
+        if (string.IsNullOrWhiteSpace(l))
+        {
+            return r;
+        }
+
+        if (string.IsNullOrWhiteSpace(r))
+        {
+            return l;
+        }
+
+        return $"{l} -> {r}";
     }
 
     private static bool IsPendingResourceTarget(PluginConnectCommand command)
@@ -1012,18 +1200,25 @@ public sealed class NetworkBusAdapterPlugin :
 
     private sealed class TcpConnectionSession : IDisposable
     {
-        public TcpConnectionSession(string sessionId, TcpClient client, NetworkStream stream, CancellationTokenSource rxCts)
+        public TcpConnectionSession(
+            string sessionId,
+            TcpClient client,
+            NetworkStream stream,
+            CancellationTokenSource rxCts,
+            string? listenerSessionId)
         {
             SessionId = sessionId;
             Client = client;
             Stream = stream;
             RxCts = rxCts;
+            ListenerSessionId = listenerSessionId;
         }
 
         public string SessionId { get; }
         public TcpClient Client { get; }
         public NetworkStream Stream { get; }
         public CancellationTokenSource RxCts { get; }
+        public string? ListenerSessionId { get; }
         public Task? RxLoop { get; set; }
 
         public void Dispose()

@@ -138,7 +138,13 @@ public class MainWindowViewModel : BaseViewModel
     public bool IsSessionReconnectEditorOpen
     {
         get => _isSessionReconnectEditorOpen;
-        set => SetProperty(ref _isSessionReconnectEditorOpen, value);
+        set
+        {
+            if (SetProperty(ref _isSessionReconnectEditorOpen, value) && value && SessionDetailSession is not null)
+            {
+                LeftSidebar.ReconnectEditorSelectorViewModel.PrepareReconnect(SessionDetailSession);
+            }
+        }
     }
 
     public bool IsRightToolDockVisible
@@ -309,9 +315,13 @@ public class MainWindowViewModel : BaseViewModel
         {
             MessageStream.SetActiveSession(session);
             RightToolDock.SetActiveSession(session);
-            if (SessionDetailSession is null || ReferenceEquals(SessionDetailSession, session))
+            if (session is null || SessionDetailSession is null || ReferenceEquals(SessionDetailSession, session))
             {
                 SessionDetailSession = session;
+                if (session is null)
+                {
+                    CloseSessionDetail();
+                }
             }
             OnPropertyChanged(nameof(ActiveSession));
             OnPropertyChanged(nameof(IsConnected));

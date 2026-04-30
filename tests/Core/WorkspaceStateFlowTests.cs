@@ -1,5 +1,7 @@
 using ComCross.Core.Extensions;
 using ComCross.Core.Services;
+using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -90,6 +92,169 @@ public sealed class WorkspaceStateFlowTests
     }
 
     [Fact]
+    public async Task SaveCurrentStateAsync_MergesSessionDescriptorsWithoutDroppingHiddenWorkloadSessions()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+
+        await workspaceService.SaveStateAsync(new WorkspaceState
+        {
+            SessionDescriptors =
+            {
+                CreateDescriptor("hidden-session", parametersJson: """{"port":"COM9","baudRate":9600}""")
+            }
+        });
+
+        deviceService.RestoreSession(CreateDescriptor("visible-session", parametersJson: """{"port":"COM1","baudRate":115200}"""));
+
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+
+        var hidden = Assert.Single(persistedState!.SessionDescriptors, d => d.Id == "hidden-session");
+        var visible = Assert.Single(persistedState.SessionDescriptors, d => d.Id == "visible-session");
+        Assert.Equal("""{"port":"COM9","baudRate":9600}""", hidden.ParametersJson);
+        Assert.Equal("""{"port":"COM1","baudRate":115200}""", visible.ParametersJson);
+    }
+
+    [Fact]
+    public async Task SaveCurrentStateAsync_PreservesRuntimeSessionOrder()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+
+        var sessionB = CreateDescriptor("session-b");
+        sessionB.Name = "B";
+        var sessionA = CreateDescriptor("session-a");
+        sessionA.Name = "A";
+        var sessionC = CreateDescriptor("session-c");
+        sessionC.Name = "C";
+
+        deviceService.RestoreSession(sessionB);
+        deviceService.RestoreSession(sessionA);
+        deviceService.RestoreSession(sessionC);
+
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+        Assert.Equal(
+            new[] { "session-b", "session-a", "session-c" },
+            persistedState!.SessionDescriptors.Select(d => d.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task LoadStateAsync_RestoresSessionsInPersistedDescriptorOrder()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+
+        await workspaceService.SaveStateAsync(new WorkspaceState
+        {
+            SessionDescriptors =
+            {
+                CreateDescriptor("session-third"),
+                CreateDescriptor("session-first"),
+                CreateDescriptor("session-second")
+            }
+        });
+
+        await workspaceService.LoadStateAsync();
+
+        Assert.Equal(
+            new[] { "session-third", "session-first", "session-second" },
+            deviceService.GetAllSessions().Select(s => s.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task SessionDescriptorPersistence_FlushAsync_PersistsImmediately()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var persistence = harness.Services.GetRequiredService<SessionDescriptorPersistenceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        deviceService.RestoreSession(CreateDescriptor("flush-session", parametersJson: """{"port":"COM7","baudRate":57600}"""));
+
+        await persistence.FlushAsync();
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+
+        var descriptor = Assert.Single(persistedState!.SessionDescriptors, d => d.Id == "flush-session");
+        Assert.Equal("""{"port":"COM7","baudRate":57600}""", descriptor.ParametersJson);
+    }
+
+    [Fact]
+    public async Task SessionDisplayMetadata_RoundTripsThroughWorkspaceState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+
+        await workspaceService.LoadStateAsync();
+
+        var descriptor = CreateDescriptor(
+            "display-session",
+            parametersJson: """{"host":"127.0.0.1","port":5020}""");
+        descriptor.DisplayTitle = "TCP Client";
+        descriptor.DisplaySubtitle = "127.0.0.1:58004 -> 127.0.0.1:5020";
+
+        deviceService.RestoreSession(descriptor);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("display-session"));
+
+        var state = await workspaceService.LoadStateAsync();
+        var persisted = Assert.Single(state.SessionDescriptors, d => d.Id == "display-session");
+        Assert.Equal("TCP Client", persisted.DisplayTitle);
+        Assert.Equal("127.0.0.1:58004 -> 127.0.0.1:5020", persisted.DisplaySubtitle);
+    }
+
+    [Fact]
+    public async Task WorkloadMembershipChanges_PublishRefreshEvents()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var eventBus = harness.Services.GetRequiredService<IEventBus>();
+
+        var events = new List<WorkloadSessionMembershipChangedEvent>();
+        using var subscription = eventBus.Subscribe<WorkloadSessionMembershipChangedEvent>(events.Add);
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+
+        await workloadService.AddSessionToActiveWorkloadIfMissingAsync("session-membership");
+        await workloadService.RemoveSessionFromAllWorkloadsAsync("session-membership");
+
+        Assert.Contains(events, e =>
+            e.WorkloadId == activeWorkloadId
+            && e.SessionId == "session-membership"
+            && e.IsMember);
+        Assert.Contains(events, e =>
+            e.WorkloadId == activeWorkloadId
+            && e.SessionId == "session-membership"
+            && !e.IsMember);
+    }
+
+    [Fact]
     public async Task DeleteListenerSessionAsync_RemovesChildSessionsFromRuntimeAndPersistedState()
     {
         await using var harness = await TestHarness.CreateAsync();
@@ -124,7 +289,11 @@ public sealed class WorkspaceStateFlowTests
         Assert.DoesNotContain(persistedState.SessionDescriptors, descriptor => descriptor.Id == "child-1");
     }
 
-    private static SessionDescriptor CreateDescriptor(string sessionId, SessionKind kind = SessionKind.Connection, string? parentSessionId = null)
+    private static SessionDescriptor CreateDescriptor(
+        string sessionId,
+        SessionKind kind = SessionKind.Connection,
+        string? parentSessionId = null,
+        string parametersJson = """{"port":"COM1","baudRate":115200}""")
     {
         return new SessionDescriptor
         {
@@ -133,7 +302,7 @@ public sealed class WorkspaceStateFlowTests
             AdapterId = "plugin:serial.adapter:serial",
             PluginId = "serial.adapter",
             CapabilityId = "serial",
-            ParametersJson = """{"port":"COM1","baudRate":115200}""",
+            ParametersJson = parametersJson,
             Kind = kind,
             ParentSessionId = parentSessionId
         };

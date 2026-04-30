@@ -44,8 +44,8 @@
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-        <Setter Property="Height" Value="{StaticResource ControlHeightSm}" />
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
     </Style>
 
     <Style Selector="TextBox.prototype-search-input">
@@ -53,10 +53,10 @@
         <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="0" />
-        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="0,4" />
+        <Setter Property="MinHeight" Value="30" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
     </Style>
 
     <Style Selector="TextBox.prototype-search-input:focus">

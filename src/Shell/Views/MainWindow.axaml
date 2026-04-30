@@ -119,17 +119,45 @@
 
         <!-- Notifications Overlay -->
         <Border Grid.RowSpan="3" Classes="prototype-overlay" IsVisible="{Binding IsNotificationsOpen}">
-            <Grid HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="420" Margin="0,0,24,0">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                 <Button Classes="prototype-plain"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch"
                         Command="{Binding CloseNotificationsCommand}" />
-                <Border Classes="prototype-card">
+                <Border HorizontalAlignment="Right"
+                        Width="420"
+                        Background="{StaticResource Bg2Brush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,0">
                     <Grid RowDefinitions="Auto,*">
-                        <Border Background="{StaticResource Bg2Brush}" Padding="16,12">
+                        <Border Background="{StaticResource Bg2Brush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="16,14">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding L[notifications.title]}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Text0Brush}" />
-                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Command="{Binding CloseNotificationsCommand}" />
+                                <TextBlock Text="{Binding L[notifications.title]}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text0Brush}" />
+                                <Button Grid.Column="1"
+                                        Classes="prototype-plain"
+                                        Width="32"
+                                        Height="32"
+                                        Padding="0"
+                                        Command="{Binding CloseNotificationsCommand}">
+                                    <Border Width="32"
+                                            Height="32"
+                                            CornerRadius="6"
+                                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                                            BorderThickness="1"
+                                            Background="Transparent">
+                                        <TextBlock Text="×"
+                                                   FontSize="16"
+                                                   Foreground="{StaticResource Text1Brush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                </Button>
                             </Grid>
                         </Border>
                         <views:NotificationCenterView Grid.Row="1" DataContext="{Binding NotificationCenter}" />
@@ -230,33 +258,6 @@
                                         </Grid>
                                     </StackPanel>
                                 </Border>
-
-                                <StackPanel Spacing="12"
-                                            Margin="0,4,0,0">
-                                <Button Command="{Binding DirectReconnectCommand}"
-                                        IsVisible="{Binding LeftSidebar.CanReconnectActiveSession}"
-                                        HorizontalAlignment="Stretch"
-                                        Classes="prototype-action-button primary">
-                                    <Grid ColumnDefinitions="16,Auto"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center">
-                                        <Path Classes="prototype-icon"
-                                              Data="{StaticResource RotateCwIcon}"
-                                              Width="16"
-                                              Height="16"
-                                              Stroke="{StaticResource WhiteBrush}"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="1"
-                                                   Margin="8,0,0,0"
-                                                   Text="重新连接"
-                                                   FontSize="13"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{StaticResource WhiteBrush}"
-                                                   VerticalAlignment="Center" />
-                                    </Grid>
-                                </Button>
-                                </StackPanel>
 
                                 <Border Classes="prototype-card"
                                         Padding="12"

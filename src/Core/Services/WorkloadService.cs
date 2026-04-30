@@ -241,6 +241,8 @@ public sealed class WorkloadService
         
         _logger.LogInformation("Added session {SessionId} to workload {WorkloadName} ({WorkloadId})", 
             sessionId, result.WorkloadName, workloadId);
+
+        _eventBus.Publish(new WorkloadSessionMembershipChangedEvent(workloadId, sessionId, IsMember: true));
         
         return true;
     }
@@ -271,6 +273,8 @@ public sealed class WorkloadService
 
         _logger.LogInformation("Removed session {SessionId} from workload {WorkloadName} ({WorkloadId})", 
             sessionId, result.WorkloadName, workloadId);
+
+        _eventBus.Publish(new WorkloadSessionMembershipChangedEvent(workloadId, sessionId, IsMember: false));
 
         return true;
     }
@@ -433,6 +437,11 @@ public sealed class WorkloadService
         {
             _logger.LogInformation("Added session {SessionId} to active workload {WorkloadName} ({WorkloadId})",
                 sessionId, result.WorkloadName, result.WorkloadId);
+
+            if (!string.IsNullOrWhiteSpace(result.WorkloadId))
+            {
+                _eventBus.Publish(new WorkloadSessionMembershipChangedEvent(result.WorkloadId, sessionId, IsMember: true));
+            }
         }
 
         return result.Added;
@@ -443,23 +452,30 @@ public sealed class WorkloadService
         var result = await _workspaceStateStore.UpdateAsync(state =>
         {
             var removed = 0;
+            var workloadIds = new List<string>();
             foreach (var workload in state.Workloads)
             {
                 if (workload.RemoveSession(sessionId))
                 {
                     removed++;
+                    workloadIds.Add(workload.Id);
                 }
             }
 
-            return removed;
+            return (Removed: removed, WorkloadIds: workloadIds);
         });
 
-        if (result > 0)
+        if (result.Removed > 0)
         {
-            _logger.LogInformation("Removed session {SessionId} from {Count} workload(s)", sessionId, result);
+            _logger.LogInformation("Removed session {SessionId} from {Count} workload(s)", sessionId, result.Removed);
+
+            foreach (var workloadId in result.WorkloadIds)
+            {
+                _eventBus.Publish(new WorkloadSessionMembershipChangedEvent(workloadId, sessionId, IsMember: false));
+            }
         }
 
-        return result;
+        return result.Removed;
     }
 
     private static Workload CloneWorkload(Workload workload)

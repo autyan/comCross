@@ -11,9 +11,11 @@
     <StreamGeometry x:Key="DownloadIcon">M12 4v10M8 10l4 4l4-4M5 19h14</StreamGeometry>
     <StreamGeometry x:Key="Maximize2Icon">M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5M4 9l6-6M20 9l-6-6M4 15l6 6M20 15l-6 6</StreamGeometry>
     <StreamGeometry x:Key="Trash2Icon">M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12M10 10v6M14 10v6</StreamGeometry>
+    <StreamGeometry x:Key="PencilIcon">M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25zM19.71 7.04a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.05 1.05l2.75 2.75l1.05-1.05z</StreamGeometry>
     <StreamGeometry x:Key="ZapIcon">M13 2L4 13h6l-1 9l9-11h-6l1-9z</StreamGeometry>
     <StreamGeometry x:Key="SendIcon">M21 3L9 15M21 3l-7 18l-5-6l-6-5z</StreamGeometry>
     <StreamGeometry x:Key="ServerIcon">M5 5h14v5H5zM5 14h14v5H5zM8 7.5h.01M8 16.5h.01</StreamGeometry>
     <StreamGeometry x:Key="NetworkIcon">M12 4v4M6 10h12M7 20h4v-6H7zM13 20h4v-6h-4zM10 10v4M14 10v4</StreamGeometry>
     <StreamGeometry x:Key="CableIcon">M8 4v8a2 2 0 0 0 2 2h4a2 2 0 0 1 2 2v4M6 2h4v4H6zM14 2h4v4h-4zM6 18h4v4H6zM14 18h4v4h-4z</StreamGeometry>
+    <StreamGeometry x:Key="PluginIcon">M9 3h6v4h2a4 4 0 0 1 4 4v2h-4v-2a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H3v-2a4 4 0 0 1 4-4h2zM5 15h4v6H5zM15 15h4v6h-4zM10 17h4v2h-4z</StreamGeometry>
 </ResourceDictionary>

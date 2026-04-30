@@ -64,12 +64,13 @@ public sealed class WorkspaceService
         string? resourceId = null,
         CancellationToken cancellationToken = default)
     {
-        var sessionId = $"session-{Guid.NewGuid()}";
+        var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
+        var sessionId = FindReusableSessionId(pluginId, capabilityId, parameters, scopeSessionId)
+            ?? $"session-{Guid.NewGuid()}";
         var name = string.IsNullOrWhiteSpace(sessionName) ? null : sessionName;
 
         try
         {
-            var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
             var session = await _deviceService.ConnectAsync(
                 pluginId,
                 capabilityId,
@@ -82,12 +83,43 @@ public sealed class WorkspaceService
                 cancellationToken);
             await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
             _logStorageService.StartSession(session);
+
+            // DeviceService publishes SessionCreatedEvent before workspace membership is updated.
+            // Publish a second upsert after membership so filtered session lists can include it immediately.
+            _eventBus.Publish(new SessionCreatedEvent(session));
             return session;
         }
         catch (Exception)
         {
             throw;
         }
+    }
+
+    private string? FindReusableSessionId(
+        string pluginId,
+        string capabilityId,
+        JsonElement parameters,
+        string? scopeSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(scopeSessionId))
+        {
+            return null;
+        }
+
+        var desiredEndpoint = TryReadEndpointIdentity(parameters);
+        if (desiredEndpoint is null)
+        {
+            return null;
+        }
+
+        return _deviceService.GetAllSessions()
+            .FirstOrDefault(session =>
+                session.Status != SessionStatus.Connected
+                && string.Equals(session.PluginId, pluginId, StringComparison.Ordinal)
+                && string.Equals(session.CapabilityId, capabilityId, StringComparison.Ordinal)
+                && string.Equals(session.ParentSessionId, scopeSessionId, StringComparison.Ordinal)
+                && string.Equals(TryReadEndpointIdentity(session.ParametersJson), desiredEndpoint, StringComparison.OrdinalIgnoreCase))
+            ?.Id;
     }
 
     /// <summary>
@@ -312,27 +344,85 @@ public sealed class WorkspaceService
     }
 
     /// <summary>
+    /// Rename a session and persist the descriptor name.
+    /// </summary>
+    public async Task RenameSessionAsync(string sessionId, string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        var trimmedName = name.Trim();
+        if (string.Equals(session.Name, trimmedName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        session.Name = trimmedName;
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var descriptor = state.SessionDescriptors.FirstOrDefault(d => string.Equals(d.Id, sessionId, StringComparison.Ordinal));
+            if (descriptor is not null)
+            {
+                descriptor.Name = trimmedName;
+            }
+        }, cancellationToken);
+
+        _eventBus.Publish(new SessionRenamedEvent(sessionId, trimmedName));
+    }
+
+    /// <summary>
     /// Build workspace state from current sessions and workloads.
     /// In v0.4+, includes Workload information with session associations.
     /// </summary>
     private Task BuildWorkspaceStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll, CancellationToken cancellationToken)
     {
-        var descriptors = sessions.Select(s => new SessionDescriptor
-        {
-            Id = s.Id,
-            Name = s.Name,
-            AdapterId = s.AdapterId,
-            PluginId = s.PluginId,
-            CapabilityId = s.CapabilityId,
-            ParametersJson = s.ParametersJson,
-            EnableDatabaseStorage = s.EnableDatabaseStorage,
-            Kind = s.Kind,
-            ParentSessionId = s.ParentSessionId
-        }).ToList();
+        var sessionDescriptors = sessions
+            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+            .Select(s => new SessionDescriptor
+            {
+                Id = s.Id,
+                Name = s.Name,
+                AdapterId = s.AdapterId,
+                PluginId = s.PluginId,
+                CapabilityId = s.CapabilityId,
+                ParametersJson = s.ParametersJson,
+                DisplayTitle = s.DisplayTitle,
+                DisplaySubtitle = s.DisplaySubtitle,
+                EnableDatabaseStorage = s.EnableDatabaseStorage,
+                Kind = s.Kind,
+                ParentSessionId = s.ParentSessionId
+            })
+            .ToList();
 
         return _workspaceStateStore.UpdateAsync(state =>
         {
-            state.SessionDescriptors = descriptors;
+            var runtimeIds = sessionDescriptors.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var merged = new List<SessionDescriptor>(sessionDescriptors.Count + state.SessionDescriptors.Count);
+
+            // The caller-provided session sequence is the current UI/runtime order and is authoritative.
+            merged.AddRange(sessionDescriptors);
+
+            // Preserve descriptors that are not currently materialized in DeviceService, without letting
+            // hidden workload sessions disturb the visible session order.
+            foreach (var existing in state.SessionDescriptors)
+            {
+                if (!string.IsNullOrWhiteSpace(existing.Id) && !runtimeIds.Contains(existing.Id))
+                {
+                    merged.Add(existing);
+                }
+            }
+
+            state.SessionDescriptors = merged;
+
             state.UiState ??= new UiState();
             state.UiState.ActiveSessionId = activeSession?.Id;
             state.UiState.AutoScroll = autoScroll;
@@ -362,5 +452,71 @@ public sealed class WorkspaceService
 
         Visit(rootSessionId);
         return ordered;
+    }
+
+    private static string? TryReadEndpointIdentity(string? parametersJson)
+    {
+        if (string.IsNullOrWhiteSpace(parametersJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(parametersJson);
+            return TryReadEndpointIdentity(doc.RootElement);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryReadEndpointIdentity(JsonElement parameters)
+    {
+        if (parameters.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var host = TryReadString(parameters, "remoteHost") ?? TryReadString(parameters, "host");
+        var port = TryReadInt(parameters, "remotePort") ?? TryReadInt(parameters, "port");
+        if (!string.IsNullOrWhiteSpace(host) && port is > 0)
+        {
+            return $"{NormalizeHost(host)}:{port.Value}";
+        }
+
+        var endpoint = TryReadString(parameters, "endpoint");
+        return string.IsNullOrWhiteSpace(endpoint) ? null : endpoint.Trim();
+    }
+
+    private static string NormalizeHost(string host)
+        => string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            ? "127.0.0.1"
+            : host.Trim();
+
+    private static string? TryReadString(JsonElement obj, string propertyName)
+    {
+        if (!obj.TryGetProperty(propertyName, out var prop))
+        {
+            return null;
+        }
+
+        return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
+    }
+
+    private static int? TryReadInt(JsonElement obj, string propertyName)
+    {
+        if (!obj.TryGetProperty(propertyName, out var prop))
+        {
+            return null;
+        }
+
+        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value))
+        {
+            return value;
+        }
+
+        return int.TryParse(prop.ToString(), out var parsed) ? parsed : null;
     }
 }

@@ -34,14 +34,45 @@ public sealed class ConfigService
         ArgumentNullException.ThrowIfNull(state);
 
         var filePath = Path.Combine(_configDirectory, "workspace-state.json");
+        var tempPath = filePath + ".tmp";
+        var backupPath = filePath + ".bak";
         var json = JsonSerializer.Serialize(state, _jsonOptions);
-        await File.WriteAllTextAsync(filePath, json, cancellationToken);
+        await File.WriteAllTextAsync(tempPath, json, cancellationToken);
+
+        if (File.Exists(filePath))
+        {
+            try
+            {
+                File.Copy(filePath, backupPath, overwrite: true);
+            }
+            catch
+            {
+                // Backup is best-effort; the temp file remains the source of truth for this write.
+            }
+        }
+
+        File.Move(tempPath, filePath, overwrite: true);
     }
 
     public async Task<WorkspaceState?> LoadWorkspaceStateAsync(CancellationToken cancellationToken = default)
     {
         var filePath = Path.Combine(_configDirectory, "workspace-state.json");
+        var tempPath = filePath + ".tmp";
+        var backupPath = filePath + ".bak";
 
+        if (!File.Exists(filePath))
+        {
+            return await TryLoadWorkspaceStateFileAsync(tempPath, cancellationToken)
+                ?? await TryLoadWorkspaceStateFileAsync(backupPath, cancellationToken);
+        }
+
+        return await TryLoadWorkspaceStateFileAsync(filePath, cancellationToken)
+            ?? await TryLoadWorkspaceStateFileAsync(tempPath, cancellationToken)
+            ?? await TryLoadWorkspaceStateFileAsync(backupPath, cancellationToken);
+    }
+
+    private async Task<WorkspaceState?> TryLoadWorkspaceStateFileAsync(string filePath, CancellationToken cancellationToken)
+    {
         if (!File.Exists(filePath))
         {
             return null;
@@ -54,7 +85,7 @@ public sealed class ConfigService
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"ConfigService: Failed to load workspace state: {ex.Message}");
+            Console.Error.WriteLine($"ConfigService: Failed to load workspace state from {filePath}: {ex.Message}");
             return null;
         }
     }

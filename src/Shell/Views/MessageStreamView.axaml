@@ -101,10 +101,10 @@
         </Border>
 
         <!-- Search Bar -->
-        <Border Grid.Row="1" Background="{StaticResource Bg1Brush}" Padding="16" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto">
-                <Border Width="580"
-                        HorizontalAlignment="Left"
+        <Border Grid.Row="1" Background="{StaticResource Bg1Brush}" Padding="16,12" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,70,Auto">
+                <Border Grid.Column="0"
+                        HorizontalAlignment="Stretch"
                         Classes="prototype-search-shell">
                     <Grid ColumnDefinitions="16,*" VerticalAlignment="Center">
                         <Path Classes="prototype-icon"
@@ -121,10 +121,29 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Column="1"
+                <Border Grid.Column="1"
+                        Margin="12,0,0,0"
+                        CornerRadius="{StaticResource RadiusSm}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        Background="{StaticResource Bg0Brush}"
+                        Width="58"
+                        Height="40"
+                        Padding="0"
+                        Cursor="Hand"
+                        PointerPressed="OnToggleDisplayMode">
+                    <TextBlock Text="{Binding DisplayModeLabel}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource Text0Brush}" />
+                </Border>
+
+                <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             Spacing="8"
-                            Margin="20,0,0,0"
+                            Margin="12,0,0,0"
                             VerticalAlignment="Center">
                     <CheckBox IsChecked="{Binding ActiveSession.EnableDatabaseStorage}"
                               Content="{Binding L[session.database.enable]}"
@@ -168,21 +187,6 @@
                         <TextBlock Text="{Binding MessageItems.Count}" FontSize="12" Foreground="{StaticResource Text0Brush}" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <!-- Core display mode toggle (STR/HEX) -->
-                    <Border CornerRadius="{StaticResource RadiusSm}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
-                            BorderThickness="1"
-                            Background="{StaticResource Bg0Brush}"
-                            Padding="10,6"
-                            Cursor="Hand"
-                            PointerPressed="OnToggleDisplayMode">
-                        <TextBlock Text="{Binding DisplayModeLabel}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="{StaticResource Text0Brush}" />
-                    </Border>
             </StackPanel>
         </Border>
 

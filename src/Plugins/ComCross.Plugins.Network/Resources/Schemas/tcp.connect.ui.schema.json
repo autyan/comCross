@@ -3,21 +3,36 @@
   "titleKey": "network.adapter.connect.tcp.title",
   "fields": [
     {
-      "key": "host",
+      "key": "remoteHost",
       "control": "text",
-      "labelKey": "network.adapter.connect.host",
-      "defaultStatePath": "defaultParameters.tcp.host",
+      "labelKey": "network.adapter.connect.remoteHost",
+      "defaultStatePath": "defaultParameters.tcp.remoteHost",
       "required": true
     },
     {
-      "key": "port",
+      "key": "remotePort",
       "control": "number",
-      "labelKey": "network.adapter.connect.port",
-      "defaultStatePath": "defaultParameters.tcp.port",
+      "labelKey": "network.adapter.connect.remotePort",
+      "defaultStatePath": "defaultParameters.tcp.remotePort",
       "defaultValue": 502,
       "min": 1,
       "max": 65535,
       "required": true
+    },
+    {
+      "key": "localHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.localHost",
+      "defaultStatePath": "defaultParameters.tcp.localHost"
+    },
+    {
+      "key": "localPort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.localPort",
+      "defaultStatePath": "defaultParameters.tcp.localPort",
+      "defaultValue": 0,
+      "min": 0,
+      "max": 65535
     },
     {
       "key": "connectTimeoutMs",
@@ -39,8 +54,10 @@
     "orientation": "vertical",
     "spacing": 12,
     "children": [
-      { "kind": "field", "key": "host" },
-      { "kind": "field", "key": "port" },
+      { "kind": "field", "key": "remoteHost" },
+      { "kind": "field", "key": "remotePort" },
+      { "kind": "field", "key": "localHost" },
+      { "kind": "field", "key": "localPort" },
       { "kind": "field", "key": "connectTimeoutMs" },
       { "kind": "field", "key": "sessionName" }
     ]

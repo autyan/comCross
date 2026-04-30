@@ -96,6 +96,65 @@ public partial class LeftSidebar : BaseUserControl
         }
     }
 
+    private async void OnRenameSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        await ShowRenameDialogAsync(session, vm);
+    }
+
+    private async void OnDeleteSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var messageKey = session.Kind == SessionKind.Listener
+            ? "dialog.deleteSession.listener.message"
+            : "dialog.deleteSession.message";
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            vm.L["dialog.deleteSession.title"],
+            string.Format(vm.L[messageKey], session.Name));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        if (DataContext is LeftSidebarViewModel sidebarVm)
+        {
+            await sidebarVm.DeleteSessionAsync(session.Id);
+        }
+    }
+
+    private static Session? GetSessionFromSender(object? sender)
+    {
+        if (sender is not Control control)
+        {
+            return null;
+        }
+
+        return control.DataContext switch
+        {
+            Session s => s,
+            SessionListItemViewModel itemVm => itemVm.Session,
+            _ => null
+        };
+    }
+
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
@@ -115,7 +174,10 @@ public partial class LeftSidebar : BaseUserControl
             vm.L["dialog.renameSession.cancel"]);
         if (!string.IsNullOrWhiteSpace(result))
         {
-            session.Name = result;
+            if (DataContext is LeftSidebarViewModel sidebarVm)
+            {
+                await sidebarVm.RenameSessionAsync(session.Id, result);
+            }
         }
     }
 }

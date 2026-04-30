@@ -8,16 +8,18 @@ namespace ComCross.Core.Services;
 /// Persists committed session definitions (including last successful ParametersJson)
 /// into workspace-state.json so sessions can be restored as disconnected on restart.
 /// </summary>
-public sealed class SessionDescriptorPersistenceService : IDisposable
+public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDisposable
 {
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly DeviceService _deviceService;
     private readonly ILogger<SessionDescriptorPersistenceService> _logger;
 
     private readonly IDisposable _sessionUpsertSubscription;
+    private readonly IDisposable _sessionRenamedSubscription;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _debounceCts;
+    private Task? _pendingSaveTask;
 
     public SessionDescriptorPersistenceService(
         WorkspaceStateStore workspaceStateStore,
@@ -30,6 +32,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
         _logger = logger;
 
         _sessionUpsertSubscription = eventBus.Subscribe<SessionCreatedEvent>(_ => DebouncedSave());
+        _sessionRenamedSubscription = eventBus.Subscribe<SessionRenamedEvent>(_ => DebouncedSave());
     }
 
     private void DebouncedSave()
@@ -43,7 +46,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
             cts = _debounceCts;
         }
 
-        _ = Task.Run(async () =>
+        var saveTask = Task.Run(async () =>
         {
             try
             {
@@ -58,6 +61,37 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
                 _logger.LogDebug(ex, "Failed to persist session descriptors");
             }
         });
+
+        lock (_gate)
+        {
+            _pendingSaveTask = saveTask;
+        }
+    }
+
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        Task? pending;
+        lock (_gate)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = null;
+            pending = _pendingSaveTask;
+        }
+
+        if (pending is not null)
+        {
+            try
+            {
+                await pending.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+            catch
+            {
+                // A canceled debounce is expected; the explicit save below is authoritative.
+            }
+        }
+
+        await SaveAsync(cancellationToken);
     }
 
     private async Task SaveAsync(CancellationToken cancellationToken)
@@ -72,28 +106,49 @@ public sealed class SessionDescriptorPersistenceService : IDisposable
                 PluginId = s.PluginId,
                 CapabilityId = s.CapabilityId,
                 ParametersJson = s.ParametersJson,
+                DisplayTitle = s.DisplayTitle,
+                DisplaySubtitle = s.DisplaySubtitle,
                 EnableDatabaseStorage = s.EnableDatabaseStorage,
                 Kind = s.Kind,
                 ParentSessionId = s.ParentSessionId
             })
-            .OrderBy(s => s.Name, StringComparer.Ordinal)
             .ToList();
 
         await _workspaceStateStore.UpdateAsync(state =>
         {
-            state.SessionDescriptors = descriptors;
+            var runtimeIds = descriptors.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var merged = new List<SessionDescriptor>(descriptors.Count + state.SessionDescriptors.Count);
+            merged.AddRange(descriptors);
+
+            foreach (var existing in state.SessionDescriptors)
+            {
+                if (!string.IsNullOrWhiteSpace(existing.Id) && !runtimeIds.Contains(existing.Id))
+                {
+                    merged.Add(existing);
+                }
+            }
+
+            state.SessionDescriptors = merged;
         }, cancellationToken);
     }
 
     public void Dispose()
     {
         _sessionUpsertSubscription.Dispose();
+        _sessionRenamedSubscription.Dispose();
 
         lock (_gate)
         {
             _debounceCts?.Cancel();
             _debounceCts?.Dispose();
             _debounceCts = null;
+            _pendingSaveTask = null;
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Task.CompletedTask;
+        Dispose();
     }
 }

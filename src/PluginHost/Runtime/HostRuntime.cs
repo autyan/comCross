@@ -10,6 +10,7 @@ internal sealed class HostRuntime
     private readonly SessionManager _sessions;
     private readonly SharedMemoryWriterManager _writers;
     private readonly UiStateEventBridge _uiBridge;
+    private readonly SessionLifecycleEventBridge _sessionLifecycleBridge;
 
     private Action<string, string>? _sessionRegisteredSink;
 
@@ -19,6 +20,7 @@ internal sealed class HostRuntime
         _sessions = new SessionManager(fixedSessionId);
         _writers = new SharedMemoryWriterManager();
         _uiBridge = new UiStateEventBridge(_ => { });
+        _sessionLifecycleBridge = new SessionLifecycleEventBridge(_ => { });
     }
 
     public object? Instance => _lifecycle.Instance;
@@ -64,12 +66,23 @@ internal sealed class HostRuntime
         _uiBridge.BindTo(Instance);
     }
 
+    public void SetSessionLifecycleEventSink(Action<PluginSessionClosedEvent> sink)
+    {
+        _sessionLifecycleBridge.SetSink(evt =>
+        {
+            EndSession(evt.SessionId);
+            sink(evt);
+        });
+        _sessionLifecycleBridge.BindTo(Instance);
+    }
+
     public void TryLoadPlugin()
     {
         _lifecycle.LoadPlugin();
         _sessions.SupportsMultiSession = Instance is IMultiSessionDevicePlugin;
         _writers.Reset(Instance);
         _uiBridge.BindTo(Instance);
+        _sessionLifecycleBridge.BindTo(Instance);
     }
 
     public bool TryRestart()
@@ -78,6 +91,7 @@ internal sealed class HostRuntime
         var ok = _lifecycle.Restart();
         _sessions.SupportsMultiSession = Instance is IMultiSessionDevicePlugin;
         _uiBridge.BindTo(Instance);
+        _sessionLifecycleBridge.BindTo(Instance);
         return ok;
     }
 

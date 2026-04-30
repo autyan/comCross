@@ -25,6 +25,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
     private readonly SharedMemorySessionService _shmSessionService;
     private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
+    private readonly object _sessionOrderGate = new();
+    private readonly List<string> _sessionOrder = new();
     private Task? _disposeTask;
     private int _disposeStarted;
 
@@ -60,6 +62,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
                 state.Session.TxBytes += e.BytesSent;
             }
         });
+
+        _eventBus.Subscribe<PluginHostSessionClosedCoreEvent>(e => _ = MarkSessionClosedFromHostAsync(e));
     }
 
     public async Task<Session> ConnectAsync(
@@ -78,7 +82,16 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
         var finalName = !string.IsNullOrWhiteSpace(name)
             ? name!
-            : GenerateDefaultSessionName(runtime, pluginId, capabilityId);
+            : _sessions.TryGetValue(sessionId, out var existingNameState) && !string.IsNullOrWhiteSpace(existingNameState.Session.Name)
+                ? existingNameState.Session.Name
+                : GenerateDefaultSessionName(runtime, pluginId, capabilityId);
+
+        if (_sessions.TryGetValue(sessionId, out var existingState)
+            && (!string.Equals(existingState.Session.PluginId, pluginId, StringComparison.Ordinal)
+                || !string.Equals(existingState.Session.CapabilityId, capabilityId, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("Cannot reconnect an existing session with a different plugin capability.");
+        }
 
         // Sessions are host-level entries. ParametersJson is committed only on successful connect.
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
@@ -137,6 +150,11 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
                 throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
             }
 
+            if (response.Payload is { ValueKind: JsonValueKind.Object } resultPayload)
+            {
+                ApplyConnectResultMetadata(session, resultPayload);
+            }
+
             // 4. Apply segment to Session Host (requires active session in plugin host)
             var applyResponse = await sessionHost.Client.SendAsync(
                 new PluginHostRequest(
@@ -178,8 +196,11 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         session.Status = SessionStatus.Connected;
         session.StartTime = DateTime.UtcNow;
 
-        // Commit last successful connection parameters.
-        session.ParametersJson = parameters.GetRawText();
+        // Commit last successful connection parameters. Plugins may replace this with enriched parameters.
+        if (string.IsNullOrWhiteSpace(session.ParametersJson))
+        {
+            session.ParametersJson = parameters.GetRawText();
+        }
 
         _sessions[sessionId] = new SessionState(session);
         
@@ -195,6 +216,13 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
     {
         if (_sessions.TryGetValue(sessionId, out var state))
         {
+            var oldStatus = state.Session.Status;
+            if (oldStatus == SessionStatus.Connected || oldStatus == SessionStatus.Connecting)
+            {
+                state.Session.Status = SessionStatus.Closing;
+                _eventBus.Publish(new ConnectionStatusChangedEvent(sessionId, oldStatus, SessionStatus.Closing));
+            }
+
             var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
             if (sessionHost is not null)
             {
@@ -218,9 +246,58 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             }
 
             await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            oldStatus = state.Session.Status;
             state.Session.Status = SessionStatus.Disconnected;
+            if (oldStatus != SessionStatus.Disconnected)
+            {
+                _eventBus.Publish(new ConnectionStatusChangedEvent(sessionId, oldStatus, SessionStatus.Disconnected));
+            }
+
             _eventBus.Publish(new SessionClosedEvent(sessionId, reason));
         }
+    }
+
+    private async Task MarkSessionClosedFromHostAsync(PluginHostSessionClosedCoreEvent evt)
+    {
+        if (!_sessions.TryGetValue(evt.SessionId, out var state))
+        {
+            return;
+        }
+
+        var oldStatus = state.Session.Status;
+        if (oldStatus == SessionStatus.Disconnected)
+        {
+            return;
+        }
+
+        state.Session.Status = SessionStatus.Disconnected;
+        _eventBus.Publish(new ConnectionStatusChangedEvent(evt.SessionId, oldStatus, SessionStatus.Disconnected));
+
+        try
+        {
+            await _shmSessionService.ReleaseSegmentAsync(evt.SessionId);
+        }
+        catch
+        {
+            // best-effort after transport-initiated close
+        }
+
+        try
+        {
+            await _sessionHostRuntimeService.StopAsync(evt.SessionId, TimeSpan.FromSeconds(1), reason: evt.Reason ?? "host-session-closed");
+        }
+        catch
+        {
+            // best-effort after transport-initiated close
+        }
+
+        var reason = evt.Reason;
+        if (!string.IsNullOrWhiteSpace(evt.Error))
+        {
+            reason = string.IsNullOrWhiteSpace(reason) ? evt.Error : $"{reason}: {evt.Error}";
+        }
+
+        _eventBus.Publish(new SessionClosedEvent(evt.SessionId, reason));
     }
 
     public async Task<int> SendAsync(string sessionId, byte[] data, MessageFormat format = MessageFormat.Text, CancellationToken cancellationToken = default)
@@ -266,7 +343,32 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
     public Session? GetSession(string sessionId) => _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;
 
-    public IReadOnlyList<Session> GetAllSessions() => _sessions.Values.Select(s => s.Session).ToList();
+    public IReadOnlyList<Session> GetAllSessions()
+    {
+        lock (_sessionOrderGate)
+        {
+            var ordered = new List<Session>(_sessionOrder.Count);
+            var orderedIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var sessionId in _sessionOrder)
+            {
+                if (_sessions.TryGetValue(sessionId, out var state))
+                {
+                    ordered.Add(state.Session);
+                    orderedIds.Add(sessionId);
+                }
+            }
+
+            foreach (var state in _sessions.Values)
+            {
+                if (orderedIds.Add(state.Session.Id))
+                {
+                    ordered.Add(state.Session);
+                }
+            }
+
+            return ordered;
+        }
+    }
 
     public void RestoreSession(SessionDescriptor descriptor)
     {
@@ -283,6 +385,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             PluginId = descriptor.PluginId,
             CapabilityId = descriptor.CapabilityId,
             ParametersJson = descriptor.ParametersJson,
+            DisplayTitle = descriptor.DisplayTitle,
+            DisplaySubtitle = descriptor.DisplaySubtitle,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
             Kind = descriptor.Kind,
             ParentSessionId = descriptor.ParentSessionId,
@@ -307,7 +411,17 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             }
         }
 
-        var state = _sessions.GetOrAdd(descriptor.Id, _ => new SessionState(session));
+        var added = false;
+        var state = _sessions.GetOrAdd(descriptor.Id, _ =>
+        {
+            added = true;
+            return new SessionState(session);
+        });
+        if (added)
+        {
+            TrackSessionOrder(descriptor.Id);
+        }
+
         // If it already existed, keep instance but update fields.
         if (!ReferenceEquals(state.Session, session))
         {
@@ -316,6 +430,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.PluginId = session.PluginId;
             state.Session.CapabilityId = session.CapabilityId;
             state.Session.ParametersJson = session.ParametersJson;
+            state.Session.DisplayTitle = session.DisplayTitle;
+            state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
             state.Session.Kind = session.Kind;
             state.Session.ParentSessionId = session.ParentSessionId;
@@ -340,6 +456,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             return false;
         }
 
+        UntrackSessionOrder(sessionId);
         _frameStore.Clear(sessionId);
         return true;
     }
@@ -357,6 +474,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
 
         _sessions.Clear();
+        lock (_sessionOrderGate)
+        {
+            _sessionOrder.Clear();
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -389,6 +510,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
 
         _sessions.Clear();
+        lock (_sessionOrderGate)
+        {
+            _sessionOrder.Clear();
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -427,7 +552,63 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         };
 
         _sessions[sessionId] = new SessionState(session);
+        TrackSessionOrder(sessionId);
         return session;
+    }
+
+    private void TrackSessionOrder(string sessionId)
+    {
+        lock (_sessionOrderGate)
+        {
+            if (!_sessionOrder.Contains(sessionId, StringComparer.Ordinal))
+            {
+                _sessionOrder.Add(sessionId);
+            }
+        }
+    }
+
+    private void UntrackSessionOrder(string sessionId)
+    {
+        lock (_sessionOrderGate)
+        {
+            _sessionOrder.RemoveAll(id => string.Equals(id, sessionId, StringComparison.Ordinal));
+        }
+    }
+
+    private static void ApplyConnectResultMetadata(Session session, JsonElement payload)
+    {
+        try
+        {
+            var result = payload.Deserialize<PluginConnectResult>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (result is null)
+            {
+                return;
+            }
+
+            if (result.CommittedParameters is { ValueKind: JsonValueKind.Object } committed)
+            {
+                session.ParametersJson = committed.GetRawText();
+            }
+
+            session.DisplayTitle = result.DisplayTitle;
+            session.DisplaySubtitle = result.DisplaySubtitle;
+
+            if (!string.IsNullOrWhiteSpace(result.SessionKind))
+            {
+                session.Kind = string.Equals(result.SessionKind, "listener", StringComparison.OrdinalIgnoreCase)
+                    ? SessionKind.Listener
+                    : SessionKind.Connection;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.ParentSessionId))
+            {
+                session.ParentSessionId = result.ParentSessionId;
+            }
+        }
+        catch
+        {
+            // Optional plugin metadata must not turn a successful connect into a failure.
+        }
     }
 
     private string GenerateDefaultSessionName(PluginRuntime runtime, string pluginId, string capabilityId)

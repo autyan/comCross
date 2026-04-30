@@ -49,6 +49,7 @@ internal static class Program
         // Allow both UI host and session host to publish UI-state invalidation.
         // This is required for listener-style session plugins that discover peers in the session host.
         state.SetUiStateEventSink(eventSink.PublishUiStateInvalidated);
+        state.SetSessionLifecycleEventSink(eventSink.PublishSessionClosed);
 
         state.SetSessionRegisteredSink(eventSink.PublishSessionRegistered);
         eventSink.PublishHostRegistered(options.HostToken);

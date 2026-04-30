@@ -36,6 +36,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly WorkloadService _workloadService;
     private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly PluginManagerViewModel _pluginManager;
+    private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private readonly BusAdapterSelectorViewModel _busAdapterSelectorViewModel;
     private readonly IObjectFactory _objectFactory;
     private readonly IItemVmFactory<SessionListItemViewModel, Session> _sessionItemFactory;
@@ -43,6 +44,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly IDisposable _sessionCreatedSubscription;
     private readonly IDisposable _sessionClosedSubscription;
     private readonly IDisposable _sessionDeletedSubscription;
+    private readonly IDisposable _workloadSessionMembershipChangedSubscription;
     private readonly IDisposable _activeWorkloadChangedSubscription;
     private readonly EventHandler _pluginsReloadedHandler;
 
@@ -70,6 +72,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         WorkloadService workloadService,
         PluginUiStateManager pluginUiStateManager,
         PluginManagerViewModel pluginManager,
+        IWorkspaceCoordinator workspaceCoordinator,
         BusAdapterSelectorViewModel busAdapterSelectorViewModel,
         IObjectFactory objectFactory,
         IItemVmFactory<SessionListItemViewModel, Session> sessionItemFactory)
@@ -79,6 +82,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         _workloadService = workloadService;
         _pluginUiStateManager = pluginUiStateManager;
         _pluginManager = pluginManager;
+        _workspaceCoordinator = workspaceCoordinator;
         _busAdapterSelectorViewModel = busAdapterSelectorViewModel;
         _objectFactory = objectFactory;
         _sessionItemFactory = sessionItemFactory;
@@ -86,6 +90,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
         _sessionClosedSubscription = _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
         _sessionDeletedSubscription = _eventBus.Subscribe<SessionDeletedEvent>(OnSessionDeleted);
+        _workloadSessionMembershipChangedSubscription = _eventBus.Subscribe<WorkloadSessionMembershipChangedEvent>(OnWorkloadSessionMembershipChanged);
         _activeWorkloadChangedSubscription = _eventBus.Subscribe<ActiveWorkloadChangedEvent>(OnActiveWorkloadChanged);
         SessionItems = new ItemVmCollection<SessionListItemViewModel, Session>(_sessionItemFactory);
         QuickCreateSelectorViewModel = _objectFactory.Create<BusAdapterSelectorViewModel>(
@@ -110,32 +115,43 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
         _activeSessionPropertyChangedHandler = (_, args) =>
         {
-            if (args.PropertyName == nameof(Session.Status) || string.IsNullOrEmpty(args.PropertyName))
+            if (!Dispatcher.UIThread.CheckAccess())
             {
-                IsConnected = _activeSession?.Status == SessionStatus.Connected;
-                SyncReconnectSurface();
+                Dispatcher.UIThread.Post(() => HandleActiveSessionPropertyChanged(args.PropertyName));
+                return;
             }
 
-            if (args.PropertyName is nameof(Session.Name) or "" or null)
-            {
-                OnPropertyChanged(nameof(CurrentSessionName));
-            }
-
-            if (args.PropertyName is nameof(Session.Endpoint) or "" or null)
-            {
-                OnPropertyChanged(nameof(CurrentSessionEndpoint));
-            }
-
-            if (args.PropertyName is nameof(Session.RxBytes) or "" or null)
-            {
-                OnPropertyChanged(nameof(CurrentSessionRxBytes));
-            }
-
-            if (args.PropertyName is nameof(Session.TxBytes) or "" or null)
-            {
-                OnPropertyChanged(nameof(CurrentSessionTxBytes));
-            }
+            HandleActiveSessionPropertyChanged(args.PropertyName);
         };
+    }
+
+    private void HandleActiveSessionPropertyChanged(string? propertyName)
+    {
+        if (propertyName == nameof(Session.Status) || string.IsNullOrEmpty(propertyName))
+        {
+            IsConnected = _activeSession?.Status == SessionStatus.Connected;
+            SyncReconnectSurface();
+        }
+
+        if (propertyName is nameof(Session.Name) or nameof(Session.DisplayTitle) or "" or null)
+        {
+            OnPropertyChanged(nameof(CurrentSessionName));
+        }
+
+        if (propertyName is nameof(Session.Endpoint) or nameof(Session.DisplaySubtitle) or "" or null)
+        {
+            OnPropertyChanged(nameof(CurrentSessionEndpoint));
+        }
+
+        if (propertyName is nameof(Session.RxBytes) or "" or null)
+        {
+            OnPropertyChanged(nameof(CurrentSessionRxBytes));
+        }
+
+        if (propertyName is nameof(Session.TxBytes) or "" or null)
+        {
+            OnPropertyChanged(nameof(CurrentSessionTxBytes));
+        }
     }
 
     public BusAdapterSelectorViewModel BusAdapterSelectorViewModel => _busAdapterSelectorViewModel;
@@ -225,7 +241,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public string BackToStatusLabel => L["sidebar.reconnect.back"];
 
-    public string CurrentSessionName => _activeSession?.Name ?? string.Empty;
+    public string CurrentSessionName => ResolveSessionDisplayName(_activeSession);
 
     public string CurrentSessionEndpoint => _activeSession?.Endpoint ?? string.Empty;
 
@@ -334,15 +350,14 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     private void SyncReconnectSurface()
     {
-        var reconnectableSession = _activeSession is not null
-            && _activeSession.Status != SessionStatus.Connected
+        var editableSession = _activeSession is not null
             && !string.IsNullOrWhiteSpace(_activeSession.AdapterId)
             ? _activeSession
             : null;
 
-        ReconnectEditorSelectorViewModel.PrepareReconnect(reconnectableSession);
+        ReconnectEditorSelectorViewModel.PrepareReconnect(editableSession);
 
-        if (reconnectableSession is null)
+        if (editableSession is null)
         {
             SessionSurfaceMode = LeftSidebarSessionSurfaceMode.Status;
         }
@@ -397,6 +412,12 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         TryApplyPreferredActiveSession();
     }
 
+    public Task RenameSessionAsync(string sessionId, string name)
+        => _workspaceCoordinator.RenameSessionAsync(sessionId, name);
+
+    public Task DeleteSessionAsync(string sessionId)
+        => _workspaceCoordinator.DeleteSessionAsync(sessionId);
+
     private void TryApplyPreferredActiveSession()
     {
         if (string.IsNullOrWhiteSpace(_preferredActiveSessionId))
@@ -418,6 +439,11 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     }
 
     private void OnActiveWorkloadChanged(ActiveWorkloadChangedEvent e)
+    {
+        _ = RefreshVisibleSessionsForCurrentWorkloadAsync();
+    }
+
+    private void OnWorkloadSessionMembershipChanged(WorkloadSessionMembershipChangedEvent e)
     {
         _ = RefreshVisibleSessionsForCurrentWorkloadAsync();
     }
@@ -498,6 +524,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         target.PluginId = source.PluginId;
         target.CapabilityId = source.CapabilityId;
         target.ParametersJson = source.ParametersJson;
+        target.DisplayTitle = source.DisplayTitle;
+        target.DisplaySubtitle = source.DisplaySubtitle;
         target.EnableDatabaseStorage = source.EnableDatabaseStorage;
         target.Kind = source.Kind;
         target.ParentSessionId = source.ParentSessionId;
@@ -606,11 +634,13 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             {
                 var topItem = SessionItems.Add(top);
                 topItem.IndentLevel = 0;
-                topItem.OverrideName = (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "tcp.server")
+                topItem.OverrideName = IsDefaultNetworkListenerName(top)
+                    ? (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "tcp.server")
                     ? "TCP Listener"
                     : (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "udp.listen")
                         ? "UDP Listener"
-                        : null;
+                        : null
+                    : null;
                 topItem.ListenerChildCount = visibleSessions.Count(s =>
                     string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal));
 
@@ -644,7 +674,9 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
                     var childItem = SessionItems.Add(child);
                     childItem.IndentLevel = 1;
-                    childItem.OverrideName = idx > 0 ? $"Conn #{idx}" : "Conn";
+                    childItem.OverrideName = IsDefaultInboundConnectionName(child)
+                        ? idx > 0 ? $"Conn #{idx}" : "Conn"
+                        : null;
                 }
             }
 
@@ -668,6 +700,39 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             _syncingSelection = false;
         }
     }
+
+    private static bool IsDefaultNetworkListenerName(Session session)
+        => string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal)
+           && session.CapabilityId is "tcp.server" or "udp.listen"
+           && session.Name.StartsWith($"{session.CapabilityId} #", StringComparison.Ordinal);
+
+    private static string ResolveSessionDisplayName(Session? session)
+    {
+        if (session is null)
+        {
+            return string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(session.DisplayTitle))
+        {
+            return session.Name;
+        }
+
+        if (string.IsNullOrWhiteSpace(session.Name)
+            || string.Equals(session.Name, session.Endpoint, StringComparison.Ordinal)
+            || (!string.IsNullOrWhiteSpace(session.CapabilityId)
+                && session.Name.StartsWith($"{session.CapabilityId} #", StringComparison.Ordinal)))
+        {
+            return session.DisplayTitle!;
+        }
+
+        return session.Name;
+    }
+
+    private static bool IsDefaultInboundConnectionName(Session session)
+        => !string.IsNullOrWhiteSpace(InferEffectiveParentSessionId(session))
+           && (string.IsNullOrWhiteSpace(session.Name)
+               || string.Equals(session.Name, session.Endpoint, StringComparison.Ordinal));
 
     private void OnSessionClosed(SessionClosedEvent e)
     {
@@ -731,6 +796,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             _sessionCreatedSubscription.Dispose();
             _sessionClosedSubscription.Dispose();
             _sessionDeletedSubscription.Dispose();
+            _workloadSessionMembershipChangedSubscription.Dispose();
             _activeWorkloadChangedSubscription.Dispose();
             QuickCreateSelectorViewModel.Dispose();
             ReconnectEditorSelectorViewModel.Dispose();

@@ -67,7 +67,9 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
 
     public string Name => Session.Name;
 
-    public string DisplayName => OverrideName ?? Name;
+    public string DisplayName => OverrideName ?? ResolveDisplayName();
+    public string? Subtitle => string.IsNullOrWhiteSpace(Session.DisplaySubtitle) ? null : Session.DisplaySubtitle;
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
     public bool IsListener => Session.Kind == SessionKind.Listener;
     public bool IsConnection => !IsListener;
@@ -142,13 +144,37 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     public string TxLabel => L["status.tx"];
     public string RxLabel => L["status.rx"];
 
+    private string ResolveDisplayName()
+    {
+        if (string.IsNullOrWhiteSpace(Session.DisplayTitle))
+        {
+            return Name;
+        }
+
+        if (string.IsNullOrWhiteSpace(Name)
+            || string.Equals(Name, Session.Endpoint, StringComparison.Ordinal)
+            || (!string.IsNullOrWhiteSpace(Session.CapabilityId)
+                && Name.StartsWith($"{Session.CapabilityId} #", StringComparison.Ordinal)))
+        {
+            return Session.DisplayTitle!;
+        }
+
+        return Name;
+    }
+
     private void OnSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
             case nameof(Session.Name):
+            case nameof(Session.DisplayTitle):
                 OnPropertyChanged(nameof(Name));
                 OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(Endpoint));
+                break;
+            case nameof(Session.DisplaySubtitle):
+                OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(HasSubtitle));
                 OnPropertyChanged(nameof(Endpoint));
                 break;
             case nameof(Session.Kind):

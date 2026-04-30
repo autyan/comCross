@@ -107,20 +107,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         {
             if (args.PropertyName == nameof(Session.Status) || string.IsNullOrEmpty(args.PropertyName))
             {
-                OnPropertyChanged(nameof(IsConnected));
-                OnPropertyChanged(nameof(CanEditConfiguration));
-                OnPropertyChanged(nameof(CanConnect));
-                OnPropertyChanged(nameof(CanDisconnect));
-                OnPropertyChanged(nameof(CanDeleteActiveSession));
-                OnPropertyChanged(nameof(CanAcceptAllPending));
-                OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
-                OnPropertyChanged(nameof(CanRejectAllPending));
-                ConnectCommand.RaiseCanExecuteChanged();
-                DisconnectCommand.RaiseCanExecuteChanged();
-                DeleteActiveSessionCommand.RaiseCanExecuteChanged();
-                AcceptAllPendingCommand.RaiseCanExecuteChanged();
-                DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
-                RejectAllPendingCommand.RaiseCanExecuteChanged();
+                RefreshConnectionCommandState();
             }
         };
         
@@ -301,7 +288,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 {
                     Id = $"{PluginAdapterPrefix}{option.PluginId}:{option.CapabilityId}",
                     Name = Localization.GetString("busAdapter.adapter.nameFormat", pluginName, capName),
-                    Icon = "🧩",
+                    Icon = string.IsNullOrWhiteSpace(option.Icon) ? "PluginIcon" : option.Icon,
                     Description = capDesc,
                     IsEnabled = true,
                     ConfigPanelType = null,
@@ -360,9 +347,16 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public void PrepareReconnect(Session? session)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => PrepareReconnect(session));
+            return;
+        }
+
         _forceCreateMode = session is not null;
         _reconnectTargetSessionId = session?.Id;
         SetActiveSession(session);
+        _ = LoadConfigPanelAsync();
     }
 
     public Task ExecuteConnectAsync() => ConnectAsync();
@@ -444,6 +438,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public void SetActiveSession(Session? session)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => SetActiveSession(session));
+            return;
+        }
+
         var previousSessionId = _activeSessionId;
 
         if (_activeSession != null)
@@ -466,18 +466,11 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             _activeSession.PropertyChanged += _activeSessionPropertyChangedHandler;
         }
 
-        OnPropertyChanged(nameof(IsConnected));
+        RefreshConnectionCommandState();
         OnPropertyChanged(nameof(IsNetworkSelectionMode));
         OnPropertyChanged(nameof(IsCreateMode));
         OnPropertyChanged(nameof(IsListenerManagerMode));
         OnPropertyChanged(nameof(IsConnectionDetailMode));
-        OnPropertyChanged(nameof(CanEditConfiguration));
-        OnPropertyChanged(nameof(CanConnect));
-        OnPropertyChanged(nameof(CanDisconnect));
-        OnPropertyChanged(nameof(CanDeleteActiveSession));
-        OnPropertyChanged(nameof(CanAcceptAllPending));
-        OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
-        OnPropertyChanged(nameof(CanRejectAllPending));
         OnPropertyChanged(nameof(NetworkSelectionTitle));
         OnPropertyChanged(nameof(NetworkSelectionEndpoint));
         OnPropertyChanged(nameof(NetworkSelectionStatus));
@@ -487,12 +480,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         OnPropertyChanged(nameof(ListenerPendingSummary));
         OnPropertyChanged(nameof(PendingBulkActionLabel));
         OnPropertyChanged(nameof(PendingRejectAllLabel));
-        ConnectCommand.RaiseCanExecuteChanged();
-        DisconnectCommand.RaiseCanExecuteChanged();
-        DeleteActiveSessionCommand.RaiseCanExecuteChanged();
-        AcceptAllPendingCommand.RaiseCanExecuteChanged();
-        DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
-        RejectAllPendingCommand.RaiseCanExecuteChanged();
         
         if (IsNetworkSelectionMode)
         {
@@ -513,6 +500,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 var committed = TryDeserializeObject(session.ParametersJson);
                 if (committed is not null)
                 {
+                    NormalizeReconnectParameters(session, committed);
                     _stateManager.SetStateSnapshot(viewScope, session.Id, committed);
                 }
 
@@ -545,6 +533,30 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
             _stateManager.SwitchContext(viewScope, _activeSessionId);
         }
+    }
+
+    private void RefreshConnectionCommandState()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(RefreshConnectionCommandState);
+            return;
+        }
+
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(CanEditConfiguration));
+        OnPropertyChanged(nameof(CanConnect));
+        OnPropertyChanged(nameof(CanDisconnect));
+        OnPropertyChanged(nameof(CanDeleteActiveSession));
+        OnPropertyChanged(nameof(CanAcceptAllPending));
+        OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
+        OnPropertyChanged(nameof(CanRejectAllPending));
+        ConnectCommand.RaiseCanExecuteChanged();
+        DisconnectCommand.RaiseCanExecuteChanged();
+        DeleteActiveSessionCommand.RaiseCanExecuteChanged();
+        AcceptAllPendingCommand.RaiseCanExecuteChanged();
+        DisconnectAllManagedSessionsCommand.RaiseCanExecuteChanged();
+        RejectAllPendingCommand.RaiseCanExecuteChanged();
     }
 
     private async Task RefreshNetworkSelectionContextAsync()
@@ -932,12 +944,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
         }
 
-        // If we have a disconnected session selected, reconnect it (reuse its id);
-        // otherwise always create a new session.
-        var targetSessionId = _reconnectTargetSessionId
-            ?? ((_activeSession is not null && _activeSession.Status != SessionStatus.Connected)
-            ? _activeSession.Id
-            : null);
+        // Only explicit reconnect reuses a session id. Plain connect always creates a new session.
+        var targetSessionId = _reconnectTargetSessionId;
 
         // Resource contention rule (UI-host policy): only force disconnect if the *same resource* is already occupied.
         // For Serial, the resource key is the port path/name.
@@ -988,6 +996,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         try
         {
             await _dispatcher.DispatchAsync(pluginId, targetSessionId, ComCross.Shared.Models.PluginHostMessageTypes.Connect, payload);
+            await RefreshActiveSessionFromWorkspaceAsync(targetSessionId);
+            RefreshConnectionCommandState();
         }
         catch (Exception ex)
         {
@@ -1050,6 +1060,71 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
     }
 
+    private static void NormalizeReconnectParameters(Session session, IDictionary<string, object> committed)
+    {
+        if (!string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal)
+            || session.CapabilityId is not ("tcp" or "udp"))
+        {
+            return;
+        }
+
+        // Reconnect should reuse the last actual local endpoint. Older committed parameters only
+        // had localPort/localHost; newer payloads also mirror that endpoint into requestedLocal*.
+        if (!committed.ContainsKey("requestedLocalPort")
+            && committed.TryGetValue("actualLocalPort", out var actualLocalPortValue)
+            && TryGetObjectInt(actualLocalPortValue) is { } actualLocalPort)
+        {
+            committed["localPort"] = actualLocalPort;
+        }
+        else if (committed.TryGetValue("requestedLocalPort", out var requestedLocalPortValue)
+                 && TryGetObjectInt(requestedLocalPortValue) is { } requestedLocalPort)
+        {
+            committed["localPort"] = requestedLocalPort;
+        }
+
+        if (!committed.ContainsKey("requestedLocalHost")
+            && committed.TryGetValue("actualLocalHost", out var actualLocalHost)
+            && actualLocalHost is not null)
+        {
+            committed["localHost"] = actualLocalHost;
+        }
+        else if (committed.TryGetValue("requestedLocalHost", out var requestedLocalHostValue)
+                 && requestedLocalHostValue is not null)
+        {
+            committed["localHost"] = requestedLocalHostValue;
+        }
+    }
+
+    private static int? TryGetObjectInt(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is int i)
+        {
+            return i;
+        }
+
+        if (value is long l && l >= int.MinValue && l <= int.MaxValue)
+        {
+            return (int)l;
+        }
+
+        if (value is System.Text.Json.JsonElement je)
+        {
+            if (je.ValueKind == System.Text.Json.JsonValueKind.Number && je.TryGetInt32(out var parsed))
+            {
+                return parsed;
+            }
+
+            return int.TryParse(je.ToString(), out parsed) ? parsed : null;
+        }
+
+        return int.TryParse(value.ToString(), out var result) ? result : null;
+    }
+
     private static string? TryGetCommittedParameterString(string? json, string key)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -1092,6 +1167,58 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         await _dispatcher.DispatchAsync(pluginId, sessionId, ComCross.Shared.Models.PluginHostMessageTypes.Disconnect, null);
+        await RefreshActiveSessionFromWorkspaceAsync(sessionId);
+        RefreshConnectionCommandState();
+    }
+
+    private async Task RefreshActiveSessionFromWorkspaceAsync(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        try
+        {
+            var sessions = await _workspaceCoordinator.GetActiveSessionsAsync();
+            var session = sessions.FirstOrDefault(s => string.Equals(s.Id, sessionId, StringComparison.Ordinal));
+            if (session is null)
+            {
+                return;
+            }
+
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                ApplyActiveSessionSnapshot(session);
+            }
+            else
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => ApplyActiveSessionSnapshot(session));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Failed to refresh active session snapshot after lifecycle action: session={SessionId}", sessionId);
+        }
+    }
+
+    private void ApplyActiveSessionSnapshot(Session session)
+    {
+        if (!string.Equals(_activeSessionId, session.Id, StringComparison.Ordinal)
+            && !string.Equals(_reconnectTargetSessionId, session.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_activeSession, session))
+        {
+            SetActiveSession(session);
+            return;
+        }
+
+        RefreshConnectionCommandState();
+        OnPropertyChanged(nameof(NetworkSelectionStatus));
+        OnPropertyChanged(nameof(NetworkSelectionEndpoint));
     }
 
     private async Task DeleteActiveSessionAsync()
@@ -1492,6 +1619,13 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     private void OnSessionCreated(SessionCreatedEvent evt)
     {
+        if (string.Equals(evt.Session.Id, _activeSessionId, StringComparison.Ordinal)
+            || string.Equals(evt.Session.Id, _reconnectTargetSessionId, StringComparison.Ordinal))
+        {
+            Dispatcher.UIThread.Post(() => ApplyActiveSessionSnapshot(evt.Session));
+            return;
+        }
+
         if (!IsNetworkSelectionMode || _activeSession is null)
         {
             return;

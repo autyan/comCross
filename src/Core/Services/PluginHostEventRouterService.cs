@@ -53,6 +53,12 @@ public sealed class PluginHostEventRouterService
         if (string.Equals(evt.Type, PluginHostEventTypes.ExtensionActionRequested, StringComparison.Ordinal))
         {
             await HandleExtensionActionRequestedAsync(runtime, evt.Payload.Value, cancellationToken);
+            return;
+        }
+
+        if (string.Equals(evt.Type, PluginHostEventTypes.SessionClosed, StringComparison.Ordinal))
+        {
+            HandleSessionClosed(runtime, evt.Payload.Value);
         }
     }
 
@@ -153,5 +159,31 @@ public sealed class PluginHostEventRouterService
         }
 
         await _extensionActionExecutor.ExecuteAsync(runtime, request, cancellationToken);
+    }
+
+    private void HandleSessionClosed(PluginRuntime runtime, JsonElement payload)
+    {
+        PluginHostSessionClosedEvent? closed;
+        try
+        {
+            closed = payload.Deserialize<PluginHostSessionClosedEvent>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse SessionClosed from {PluginId}", runtime.Info.Manifest.Id);
+            return;
+        }
+
+        if (closed is null || string.IsNullOrWhiteSpace(closed.SessionId))
+        {
+            return;
+        }
+
+        _eventBus.Publish(new PluginHostSessionClosedCoreEvent(
+            runtime.Info.Manifest.Id,
+            closed.SessionId,
+            closed.Reason,
+            closed.RemoteInitiated,
+            closed.Error));
     }
 }
