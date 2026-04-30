@@ -143,6 +143,12 @@ public class AppHost : IAppHost
                 return;
             }
 
+            var descriptorPersistence = _serviceProvider.GetService<SessionDescriptorPersistenceService>();
+            if (descriptorPersistence is not null)
+            {
+                await descriptorPersistence.FlushAsync();
+            }
+
             var deviceService = _serviceProvider.GetRequiredService<DeviceService>();
             await deviceService.DisposeAsync();
 

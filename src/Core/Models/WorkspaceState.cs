@@ -88,6 +88,8 @@ public sealed class SessionDescriptor
     public string? PluginId { get; set; }
     public string? CapabilityId { get; set; }
     public string? ParametersJson { get; set; }
+    public string? DisplayTitle { get; set; }
+    public string? DisplaySubtitle { get; set; }
     public bool EnableDatabaseStorage { get; set; }
 
     // v0.4+: topology hints for hierarchical UI (listener -> connection sessions)

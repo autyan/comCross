@@ -61,10 +61,29 @@ public sealed record SessionClosedEvent(
 ) : SystemEvent;
 
 /// <summary>
+/// PluginHost reported that a session ended at the transport/plugin layer.
+/// </summary>
+public sealed record PluginHostSessionClosedCoreEvent(
+    string PluginId,
+    string SessionId,
+    string? Reason = null,
+    bool RemoteInitiated = false,
+    string? Error = null
+) : SystemEvent;
+
+/// <summary>
 /// Session was removed from workspace state and in-memory session navigation.
 /// </summary>
 public sealed record SessionDeletedEvent(
     string SessionId
+) : SystemEvent;
+
+/// <summary>
+/// Session display name was changed.
+/// </summary>
+public sealed record SessionRenamedEvent(
+    string SessionId,
+    string Name
 ) : SystemEvent;
 /// <summary>
 /// Data received event

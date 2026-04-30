@@ -12,32 +12,37 @@
         KeyDown="OnKeyDown"
         Width="1440" Height="900"
         MinWidth="1280" MinHeight="720"
-        Background="#0F1417">
+        Background="{StaticResource Bg0Brush}">
 
     <Grid RowDefinitions="Auto,*,Auto">
         <!-- Workload Tabs (Top Bar) -->
         <views:WorkloadTabs Grid.Row="0" DataContext="{Binding WorkloadTabsViewModel}" />
 
         <!-- Main Content: 3-Column Layout -->
-        <Grid Grid.Row="1" ColumnDefinitions="320,*,350">
+        <Grid Grid.Row="1" ColumnDefinitions="320,*,Auto">
             <!-- Left Sidebar -->
-            <Border Grid.Column="0" Background="#1B242A" BorderBrush="#25303A" BorderThickness="0,0,1,0">
+            <Border Grid.Column="0" Background="{StaticResource Bg2Brush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
                 <views:LeftSidebar DataContext="{Binding LeftSidebar}" />
             </Border>
 
             <!-- Center Workspace: Message Stream -->
-            <Border Grid.Column="1" Background="#0F1417">
+            <Border Grid.Column="1" Background="{StaticResource Bg0Brush}">
                 <views:MessageStreamView DataContext="{Binding MessageStream}" />
             </Border>
 
             <!-- Right Tool Dock -->
-            <Border Grid.Column="2" Background="#1B242A" BorderBrush="#25303A" BorderThickness="1,0,0,0">
+            <Border Grid.Column="2"
+                    Width="350"
+                    IsVisible="{Binding IsRightToolDockVisible}"
+                    Background="{StaticResource Bg2Brush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1,0,0,0">
                 <views:RightToolDock DataContext="{Binding RightToolDock}" />
             </Border>
         </Grid>
 
         <!-- Bottom Status Bar -->
-        <Border Grid.Row="2" Background="#141B1F" BorderBrush="#25303A" BorderThickness="0,1,0,0" Padding="16,8">
+        <Border Grid.Row="2" Background="{StaticResource Bg1Brush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="16,8">
             <Grid ColumnDefinitions="*,Auto,Auto">
                 <!-- Left: Status and Metrics -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
@@ -92,13 +97,17 @@
         </Border>
 
         <!-- Settings Overlay -->
-        <Border Grid.RowSpan="3" Background="#00000080" IsVisible="{Binding IsSettingsOpen}">
+        <Border Grid.RowSpan="3" Classes="prototype-overlay" IsVisible="{Binding IsSettingsOpen}">
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="900" Height="720">
-                <Border Background="#141B1F" BorderBrush="#25303A" BorderThickness="1" CornerRadius="8">
+                <Button Classes="prototype-plain"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Command="{Binding CloseSettingsCommand}" />
+                <Border Classes="prototype-card">
                     <Grid RowDefinitions="Auto,*">
-                        <Border Background="#1B242A" Padding="16,12">
+                        <Border Background="{StaticResource Bg2Brush}" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding L[settings.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
+                                <TextBlock Text="{Binding L[settings.title]}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Text0Brush}" />
                                 <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Command="{Binding CloseSettingsCommand}" />
                             </Grid>
                         </Border>
@@ -109,17 +118,154 @@
         </Border>
 
         <!-- Notifications Overlay -->
-        <Border Grid.RowSpan="3" Background="#00000080" IsVisible="{Binding IsNotificationsOpen}">
-            <Grid HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="420" Margin="0,0,24,0">
-                <Border Background="#141B1F" BorderBrush="#25303A" BorderThickness="1" CornerRadius="8">
+        <Border Grid.RowSpan="3" Classes="prototype-overlay" IsVisible="{Binding IsNotificationsOpen}">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Button Classes="prototype-plain"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Command="{Binding CloseNotificationsCommand}" />
+                <Border HorizontalAlignment="Right"
+                        Width="420"
+                        Background="{StaticResource Bg2Brush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,0">
                     <Grid RowDefinitions="Auto,*">
-                        <Border Background="#1B242A" Padding="16,12">
+                        <Border Background="{StaticResource Bg2Brush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="16,14">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding L[notifications.title]}" FontSize="14" FontWeight="Bold" Foreground="#E6EDF3" />
-                                <Button Grid.Column="1" Content="{Binding L[settings.actions.close]}" Command="{Binding CloseNotificationsCommand}" />
+                                <TextBlock Text="{Binding L[notifications.title]}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text0Brush}" />
+                                <Button Grid.Column="1"
+                                        Classes="prototype-plain"
+                                        Width="32"
+                                        Height="32"
+                                        Padding="0"
+                                        Command="{Binding CloseNotificationsCommand}">
+                                    <Border Width="32"
+                                            Height="32"
+                                            CornerRadius="6"
+                                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                                            BorderThickness="1"
+                                            Background="Transparent">
+                                        <TextBlock Text="×"
+                                                   FontSize="16"
+                                                   Foreground="{StaticResource Text1Brush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                </Button>
                             </Grid>
                         </Border>
                         <views:NotificationCenterView Grid.Row="1" DataContext="{Binding NotificationCenter}" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Session Detail Drawer -->
+        <Border Grid.RowSpan="3" Classes="prototype-overlay" IsVisible="{Binding IsSessionDetailOpen}">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Button Classes="prototype-plain"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Command="{Binding CloseSessionDetailCommand}" />
+                <Border HorizontalAlignment="Right"
+                        Width="420"
+                        Background="{StaticResource Bg2Brush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1,0,0,0">
+                    <Grid RowDefinitions="Auto,*">
+                        <Border Background="{StaticResource Bg2Brush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="16,14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding SessionDetailTitle}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text0Brush}" />
+                                <Button Grid.Column="1"
+                                        Classes="prototype-plain"
+                                        Width="32"
+                                        Height="32"
+                                        Padding="0"
+                                        Command="{Binding CloseSessionDetailCommand}">
+                                    <Border Width="32"
+                                            Height="32"
+                                            CornerRadius="6"
+                                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                                            BorderThickness="1"
+                                            Background="Transparent">
+                                        <TextBlock Text="×"
+                                                   FontSize="16"
+                                                   Foreground="{StaticResource Text1Brush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1">
+                            <StackPanel Margin="16" Spacing="16">
+                                <Grid ColumnDefinitions="*,*"
+                                      RowDefinitions="Auto,Auto">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,14">
+                                        <TextBlock Text="会话名称" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding SessionDetailName}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text0Brush}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,14">
+                                        <TextBlock Text="类型" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding SessionDetailType}" FontSize="13" Foreground="{StaticResource Text0Brush}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="4">
+                                        <TextBlock Text="端点" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding SessionDetailEndpoint}" FontSize="13" Foreground="{StaticResource Text0Brush}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Classes="prototype-card" Padding="14">
+                                    <StackPanel Spacing="12">
+                                        <Grid ColumnDefinitions="10,*"
+                                              VerticalAlignment="Center">
+                                            <Ellipse Width="10"
+                                                     Height="10"
+                                                     Fill="{Binding SessionDetailStatusBrush}"
+                                                     VerticalAlignment="Center"
+                                                     HorizontalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="8,0,0,0"
+                                                       Text="{Binding SessionDetailStatusLabel}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Text0Brush}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="*,*">
+                                            <StackPanel Spacing="4" Margin="0,0,12,0">
+                                                <TextBlock Text="接收" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                                <TextBlock Text="{Binding SessionDetailRxBytes}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentCyanBrush}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="4" Margin="12,0,0,0">
+                                                <TextBlock Text="发送" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                                <TextBlock Text="{Binding SessionDetailTxBytes}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Classes="prototype-card"
+                                        Padding="12"
+                                        IsVisible="{Binding IsSessionReconnectEditorOpen}">
+                                    <views:BusAdapterSelector DataContext="{Binding LeftSidebar.ReconnectEditorSelectorViewModel}" />
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Grid>
                 </Border>
             </Grid>

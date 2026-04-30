@@ -146,6 +146,37 @@ public sealed class PluginHostEventRouterServiceTests
         Assert.Equal(ExtensionActionNames.PublishNotification, executor.LastRequest.Action);
     }
 
+    [Fact]
+    public async Task RouteAsync_ForSessionClosed_PublishesCoreLifecycleEvent()
+    {
+        var eventBus = new EventBus();
+        var stateManager = new PluginUiStateManager();
+        var fetcher = new FakePluginUiStateFetcher(null);
+        var service = new PluginHostEventRouterService(
+            eventBus,
+            stateManager,
+            fetcher,
+            new FakeExtensionActionExecutor(),
+            NullLogger<PluginHostEventRouterService>.Instance);
+
+        PluginHostSessionClosedCoreEvent? published = null;
+        using var subscription = eventBus.Subscribe<PluginHostSessionClosedCoreEvent>(evt => published = evt);
+
+        var runtime = CreateRuntime("network.adapter", PluginType.BusAdapter);
+        var payload = JsonSerializer.SerializeToElement(new PluginHostSessionClosedEvent(
+            "tcp-session-1",
+            "remote-eof",
+            RemoteInitiated: true));
+
+        await service.RouteAsync(runtime, new PluginHostEvent(PluginHostEventTypes.SessionClosed, payload));
+
+        Assert.NotNull(published);
+        Assert.Equal("network.adapter", published!.PluginId);
+        Assert.Equal("tcp-session-1", published.SessionId);
+        Assert.Equal("remote-eof", published.Reason);
+        Assert.True(published.RemoteInitiated);
+    }
+
     private static PluginRuntime CreateRuntime(string pluginId, PluginType pluginType)
     {
         var info = new PluginInfo

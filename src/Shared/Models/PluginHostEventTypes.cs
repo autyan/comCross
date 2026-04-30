@@ -10,4 +10,6 @@ public static class PluginHostEventTypes
 
     // ADR-010 MVP: per-session binding handshake
     public const string SessionRegistered = "session-registered";
+
+    public const string SessionClosed = "session-closed";
 }

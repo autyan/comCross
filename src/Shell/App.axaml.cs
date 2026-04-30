@@ -148,10 +148,15 @@ public partial class App : Application
         {
             try
             {
+                var isHeadlessRegressionShutdown =
+                    string.Equals(Environment.GetEnvironmentVariable("COMCROSS_SHELL_AUTO_EXIT_AFTER_SCREENSHOT"), "1", StringComparison.Ordinal);
+
                 // 1. UI Cleanup
                 if (_viewModel != null)
                 {
-                    var cleanupTask = _viewModel.CleanupWithProgressAsync();
+                    var cleanupTask = isHeadlessRegressionShutdown
+                        ? _viewModel.CleanupAsync(showProgress: false)
+                        : _viewModel.CleanupWithProgressAsync();
                     var timeoutTask = Task.Delay(2000);
                     await Task.WhenAny(cleanupTask, timeoutTask);
                 }

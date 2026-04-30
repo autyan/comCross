@@ -21,4 +21,9 @@ public sealed record PluginCommandResult(
 public sealed record PluginConnectResult(
     bool Ok,
     string? Error = null,
-    string? SessionId = null);
+    string? SessionId = null,
+    JsonElement? CommittedParameters = null,
+    string? DisplayTitle = null,
+    string? DisplaySubtitle = null,
+    string? SessionKind = null,
+    string? ParentSessionId = null);

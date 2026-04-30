@@ -35,6 +35,10 @@ public class MainWindowViewModel : BaseViewModel
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private bool _isSettingsOpen;
     private bool _isNotificationsOpen;
+    private bool _isSessionDetailOpen;
+    private bool _isSessionReconnectEditorOpen;
+    private bool _isRightToolDockVisible = true;
+    private Session? _sessionDetailSession;
 
     public LeftSidebarViewModel LeftSidebar { get; }
     public MessageStreamViewModel MessageStream { get; }
@@ -119,6 +123,106 @@ public class MainWindowViewModel : BaseViewModel
         }
     }
 
+    public bool IsSessionDetailOpen
+    {
+        get => _isSessionDetailOpen;
+        set
+        {
+            if (SetProperty(ref _isSessionDetailOpen, value) && !value)
+            {
+                IsSessionReconnectEditorOpen = false;
+            }
+        }
+    }
+
+    public bool IsSessionReconnectEditorOpen
+    {
+        get => _isSessionReconnectEditorOpen;
+        set
+        {
+            if (SetProperty(ref _isSessionReconnectEditorOpen, value) && value && SessionDetailSession is not null)
+            {
+                LeftSidebar.ReconnectEditorSelectorViewModel.PrepareReconnect(SessionDetailSession);
+            }
+        }
+    }
+
+    public bool IsRightToolDockVisible
+    {
+        get => _isRightToolDockVisible;
+        set => SetProperty(ref _isRightToolDockVisible, value);
+    }
+
+    public Session? SessionDetailSession
+    {
+        get => _sessionDetailSession;
+        private set
+        {
+            if (SetProperty(ref _sessionDetailSession, value))
+            {
+                OnPropertyChanged(nameof(HasSessionDetailSession));
+                OnPropertyChanged(nameof(SessionDetailTitle));
+                OnPropertyChanged(nameof(SessionDetailName));
+                OnPropertyChanged(nameof(SessionDetailType));
+                OnPropertyChanged(nameof(SessionDetailEndpoint));
+                OnPropertyChanged(nameof(SessionDetailStatusLabel));
+                OnPropertyChanged(nameof(SessionDetailStatusBrush));
+                OnPropertyChanged(nameof(SessionDetailRxBytes));
+                OnPropertyChanged(nameof(SessionDetailTxBytes));
+            }
+        }
+    }
+
+    public bool HasSessionDetailSession => SessionDetailSession is not null;
+
+    public string SessionDetailTitle
+        => SessionDetailSession?.CapabilityId is "tcp.server" or "udp.listen"
+                ? "监听器详情"
+                : "会话详情";
+
+    public string SessionDetailName => SessionDetailSession?.Name ?? L["stream.session.none"];
+
+    public string SessionDetailType
+    {
+        get
+        {
+            var session = SessionDetailSession;
+            if (session is null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(session.ParentSessionId))
+            {
+                return L["network.session.connection.inbound"];
+            }
+
+            return session.CapabilityId switch
+            {
+                "tcp.server" => L["network.session.listener.tcp"],
+                "udp.listen" => L["network.session.listener.udp"],
+                "tcp" => L["network.session.client.tcp"],
+                "udp" => L["network.session.client.udp"],
+                "serial" => L["stream.session.serial"],
+                _ => L["stream.session.generic"]
+            };
+        }
+    }
+
+    public string SessionDetailEndpoint => SessionDetailSession?.Endpoint ?? L["stream.session.endpointPlaceholder"];
+
+    public string SessionDetailStatusLabel => SessionDetailSession?.Status == SessionStatus.Connected
+        ? L["status.connected"]
+        : L["status.disconnected"];
+
+    public Avalonia.Media.IBrush SessionDetailStatusBrush => SessionDetailSession?.Status == SessionStatus.Connected
+        ? (Avalonia.Media.IBrush)Application.Current?.FindResource("AccentCyanBrush")!
+        : (Avalonia.Media.IBrush)Application.Current?.FindResource("Text1Brush")!;
+
+    public string SessionDetailRxBytes => $"{SessionDetailSession?.RxBytes ?? 0:N0} B";
+
+    public string SessionDetailTxBytes => $"{SessionDetailSession?.TxBytes ?? 0:N0} B";
+
     public ToolDockTab SelectedToolTab
     {
         get => RightToolDock.SelectedToolTab;
@@ -162,6 +266,10 @@ public class MainWindowViewModel : BaseViewModel
     public ICommand ExportMessagesCommand { get; }
     public ICommand CloseSettingsCommand { get; }
     public ICommand CloseNotificationsCommand { get; }
+    public ICommand CloseSessionDetailCommand { get; }
+    public ICommand OpenSessionDetailCommand { get; }
+    public ICommand ToggleSessionReconnectEditorCommand { get; }
+    public ICommand DirectReconnectCommand { get; }
 
     public MainWindowViewModel(
         ILocalizationService localization,
@@ -207,8 +315,22 @@ public class MainWindowViewModel : BaseViewModel
         {
             MessageStream.SetActiveSession(session);
             RightToolDock.SetActiveSession(session);
+            if (session is null || SessionDetailSession is null || ReferenceEquals(SessionDetailSession, session))
+            {
+                SessionDetailSession = session;
+                if (session is null)
+                {
+                    CloseSessionDetail();
+                }
+            }
             OnPropertyChanged(nameof(ActiveSession));
             OnPropertyChanged(nameof(IsConnected));
+            OnPropertyChanged(nameof(SessionDetailStatusLabel));
+            OnPropertyChanged(nameof(SessionDetailStatusBrush));
+            OnPropertyChanged(nameof(SessionDetailRxBytes));
+            OnPropertyChanged(nameof(SessionDetailTxBytes));
+            (ToggleSessionReconnectEditorCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (DirectReconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         };
 
         // 子 ViewModel 会通过自己的构造函数或订阅机制处理数据加载
@@ -223,6 +345,19 @@ public class MainWindowViewModel : BaseViewModel
         ExportMessagesCommand = new AsyncRelayCommand(() => RightToolDock.ExportAsync());
         CloseSettingsCommand = new RelayCommand(() => IsSettingsOpen = false);
         CloseNotificationsCommand = new RelayCommand(() => IsNotificationsOpen = false);
+        CloseSessionDetailCommand = new RelayCommand(CloseSessionDetail);
+        OpenSessionDetailCommand = new RelayCommand(() => OpenSessionDetail(LeftSidebar.ActiveSession));
+        ToggleSessionReconnectEditorCommand = new RelayCommand(
+            () => IsSessionReconnectEditorOpen = !IsSessionReconnectEditorOpen,
+            () => SessionDetailSession is not null);
+        DirectReconnectCommand = new AsyncRelayCommand(
+            async () =>
+            {
+                LeftSidebar.DirectReconnectCommand.Execute(null);
+                await Task.CompletedTask;
+                OnPropertyChanged(nameof(SessionDetailStatusLabel));
+            },
+            () => LeftSidebar.CanReconnectActiveSession);
         
         // 订阅语言变更事件（用于通知 Core/Plugins），UI 文本刷新由 BaseViewModel 统一处理。
         Localization.LanguageChanged += OnLanguageChanged;
@@ -283,7 +418,10 @@ public class MainWindowViewModel : BaseViewModel
 
     // Back-compat helpers (used by some code-behind):
     public Task SendAsync(string message, bool hex, bool addCr, bool addLf)
-        => RightToolDock.SendAsync(message, hex, addCr, addLf);
+    {
+        RightToolDock.MessageInput = message;
+        return RightToolDock.SendAsync(hex, addCr, addLf);
+    }
 
     public void ClearMessages() => RightToolDock.ClearMessages();
 
@@ -295,6 +433,7 @@ public class MainWindowViewModel : BaseViewModel
         if (IsSettingsOpen)
         {
             IsNotificationsOpen = false;
+            CloseSessionDetail();
         }
     }
 
@@ -304,7 +443,53 @@ public class MainWindowViewModel : BaseViewModel
         if (IsNotificationsOpen)
         {
             IsSettingsOpen = false;
+            CloseSessionDetail();
         }
+    }
+
+    public void OpenSettings()
+    {
+        IsSettingsOpen = true;
+        IsNotificationsOpen = false;
+        CloseSessionDetail();
+    }
+
+    public void OpenNotifications()
+    {
+        IsNotificationsOpen = true;
+        IsSettingsOpen = false;
+        CloseSessionDetail();
+    }
+
+    public void OpenSessionDetail(Session? session)
+        => OpenSessionDetail(session, false);
+
+    public void OpenSessionDetail(Session? session, bool openReconnectEditor)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        IsSettingsOpen = false;
+        IsNotificationsOpen = false;
+        ActiveSession = session;
+        SessionDetailSession = session;
+        IsSessionReconnectEditorOpen = openReconnectEditor;
+        IsSessionDetailOpen = true;
+        (ToggleSessionReconnectEditorCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (DirectReconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    public void CloseSessionDetail()
+    {
+        IsSessionDetailOpen = false;
+        IsSessionReconnectEditorOpen = false;
+    }
+
+    public void ToggleRightToolDock()
+    {
+        IsRightToolDockVisible = !IsRightToolDockVisible;
     }
 
     private async void OnLanguageChanged(object? sender, string cultureCode)
@@ -340,19 +525,27 @@ public class MainWindowViewModel : BaseViewModel
     /// <summary>
     /// Cleanup with progress dialog - runs on background thread
     /// </summary>
-    public async Task CleanupWithProgressAsync()
+    public Task CleanupWithProgressAsync()
+        => CleanupAsync(showProgress: true);
+
+    public async Task CleanupAsync(bool showProgress)
     {
-        var progressDialog = _progressDialogFactory.CreateViewModel();
-        var progressWindow = await _progressDialogFactory.ShowAsync(progressDialog);
+        ProgressDialogViewModel? progressDialog = null;
+        Window? progressWindow = null;
 
         try
         {
             _appLogService.Info("Starting application cleanup with progress...");
-            
-            progressDialog.UpdateStatus(L["shutdown.disconnecting"]);
+
+            if (showProgress)
+            {
+                progressDialog = _progressDialogFactory.CreateViewModel();
+                progressWindow = await _progressDialogFactory.ShowAsync(progressDialog);
+                progressDialog.UpdateStatus(L["shutdown.disconnecting"]);
+            }
 
             // Save workspace state
-            progressDialog.UpdateStatus(L["shutdown.savingState"]);
+            progressDialog?.UpdateStatus(L["shutdown.savingState"]);
             await Task.Run(async () =>
             {
                 try
@@ -366,14 +559,17 @@ public class MainWindowViewModel : BaseViewModel
             });
             
             // Dispose UI resources
-            progressDialog.UpdateStatus(L["shutdown.cleaningUp"]);
+            progressDialog?.UpdateStatus(L["shutdown.cleaningUp"]);
             await Task.Run(() =>
             {
                 MessageStream.SetActiveSession(null);
             });
             
-            progressDialog.UpdateStatus(L["shutdown.complete"]);
-            await Task.Delay(300); // Brief delay to show completion
+            progressDialog?.UpdateStatus(L["shutdown.complete"]);
+            if (showProgress)
+            {
+                await Task.Delay(300);
+            }
             
             _appLogService.Info("Application cleanup completed.");
         }

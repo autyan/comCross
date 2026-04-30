@@ -20,6 +20,12 @@
       "required": true
     },
     {
+      "key": "localHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.localHost",
+      "defaultStatePath": "defaultParameters.udp.localHost"
+    },
+    {
       "key": "localPort",
       "control": "number",
       "labelKey": "network.adapter.connect.localPort",
@@ -41,6 +47,7 @@
     "children": [
       { "kind": "field", "key": "remoteHost" },
       { "kind": "field", "key": "remotePort" },
+      { "kind": "field", "key": "localHost" },
       { "kind": "field", "key": "localPort" },
       { "kind": "field", "key": "sessionName" }
     ]

@@ -6,28 +6,34 @@
              mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="700"
              x:Class="ComCross.Shell.Views.NotificationCenterView"
              x:DataType="vm:NotificationCenterViewModel">
-    <Border Padding="16">
-    <Grid RowDefinitions="Auto,*">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{Binding L[notifications.markAllRead]}" Click="OnMarkAllReadClick" />
-            <Button Content="{Binding L[notifications.clearAll]}" Click="OnClearAllClick" Classes="secondary" />
-        </StackPanel>
+    <Grid RowDefinitions="Auto,*" Background="{StaticResource Bg2Brush}">
+        <Border BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="{Binding L[notifications.markAllRead]}" Click="OnMarkAllReadClick" />
+                <Button Content="{Binding L[notifications.clearAll]}" Click="OnClearAllClick" Classes="secondary" />
+            </StackPanel>
+        </Border>
 
-        <Border Grid.Row="1" Background="#0F1417" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Margin="0,12,0,0">
+        <Border Grid.Row="1"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0">
             <Grid>
-                <TextBlock Text="{Binding L[notifications.empty]}" Foreground="#87909B" 
+                <TextBlock Text="{Binding L[notifications.empty]}" Foreground="{StaticResource Text2Brush}" 
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            IsVisible="{Binding IsEmpty}" />
-                <ListBox ItemsSource="{Binding Items}" Background="#0F1417" BorderThickness="0"
+                <ListBox ItemsSource="{Binding Items}" Background="{StaticResource Bg0Brush}" BorderThickness="0"
                          IsVisible="{Binding HasNotifications}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Padding="12" BorderBrush="#25303A" BorderThickness="0,0,0,1">
+                            <Border Padding="12" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel Grid.Column="0" Spacing="6">
-                                        <TextBlock Text="{Binding Message}" FontSize="12" Foreground="#E6EDF3" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Message}" FontSize="12" Foreground="{StaticResource Text0Brush}" TextWrapping="Wrap" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="#87909B" />
+                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                         </StackPanel>
                                     </StackPanel>
                                     <Button Grid.Column="1" 
@@ -35,7 +41,7 @@
                                             FontSize="12" 
                                             Padding="6" 
                                             Background="Transparent" 
-                                            Foreground="#87909B"
+                                            Foreground="{StaticResource Text2Brush}"
                                             BorderThickness="0"
                                             Cursor="Hand"
                                             ToolTip.Tip="Delete"
@@ -50,5 +56,4 @@
             </Grid>
         </Border>
     </Grid>
-    </Border>
 </UserControl>

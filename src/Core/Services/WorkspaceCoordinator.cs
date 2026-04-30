@@ -36,6 +36,7 @@ public interface IWorkspaceCoordinator
         string? scopeSessionId = null,
         string? resourceKind = null,
         string? resourceId = null);
+    Task RenameSessionAsync(string sessionId, string name);
     Task DeleteSessionAsync(string sessionId);
     Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf);
     Task SendDataAsync(string sessionId, byte[] data);
@@ -87,6 +88,7 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
         // Statistics calculation (can be moved to a BackgroundService if needed, but for now just aggregate)
         _eventBus.Subscribe<ActiveWorkloadChangedEvent>(_ => UpdateStatistics());
+        _eventBus.Subscribe<WorkloadSessionMembershipChangedEvent>(_ => UpdateStatistics());
         _eventBus.Subscribe<SessionCreatedEvent>(_ => UpdateStatistics());
         _eventBus.Subscribe<SessionClosedEvent>(_ => UpdateStatistics());
     }
@@ -174,6 +176,8 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
     }
 
     public Task DeleteSessionAsync(string sessionId) => _workspaceService.DeleteSessionAsync(sessionId);
+
+    public Task RenameSessionAsync(string sessionId, string name) => _workspaceService.RenameSessionAsync(sessionId, name);
 
     public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf)
         => _workspaceService.SendMessageAsync(sessionId, message, format, addCr, addLf);

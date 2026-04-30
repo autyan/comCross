@@ -130,6 +130,7 @@ public sealed class ExtensionActionExecutorTests
             string? scopeSessionId = null,
             string? resourceKind = null,
             string? resourceId = null) => throw new NotSupportedException();
+        public Task RenameSessionAsync(string sessionId, string name) => Task.CompletedTask;
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
         public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf) => Task.CompletedTask;
 

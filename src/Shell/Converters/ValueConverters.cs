@@ -17,6 +17,7 @@ public class StatusColorConverter : IValueConverter
             {
                 SessionStatus.Connected => new SolidColorBrush(Color.Parse("#2CB5A9")),
                 SessionStatus.Connecting => new SolidColorBrush(Color.Parse("#F5A524")),
+                SessionStatus.Closing => new SolidColorBrush(Color.Parse("#F5A524")),
                 SessionStatus.Error => new SolidColorBrush(Color.Parse("#E5534B")),
                 _ => new SolidColorBrush(Color.Parse("#87909B"))
             };

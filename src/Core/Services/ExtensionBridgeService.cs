@@ -30,9 +30,11 @@ public sealed class ExtensionBridgeService : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly IDisposable _sessionCreatedSubscription;
     private readonly IDisposable _sessionClosedSubscription;
+    private readonly IDisposable _sessionRenamedSubscription;
     private readonly IDisposable _workloadCreatedSubscription;
     private readonly IDisposable _workloadDeletedSubscription;
     private readonly IDisposable _workloadRenamedSubscription;
+    private readonly IDisposable _workloadSessionMembershipChangedSubscription;
     private readonly IDisposable _activeWorkloadChangedSubscription;
     private Task? _loop;
     private int _started;
@@ -61,9 +63,11 @@ public sealed class ExtensionBridgeService : IDisposable
 
         _sessionCreatedSubscription = eventBus.Subscribe<SessionCreatedEvent>(_ => EnqueueContextSync());
         _sessionClosedSubscription = eventBus.Subscribe<SessionClosedEvent>(_ => EnqueueContextSync());
+        _sessionRenamedSubscription = eventBus.Subscribe<SessionRenamedEvent>(_ => EnqueueContextSync());
         _workloadCreatedSubscription = eventBus.Subscribe<WorkloadCreatedEvent>(_ => EnqueueContextSync());
         _workloadDeletedSubscription = eventBus.Subscribe<WorkloadDeletedEvent>(_ => EnqueueContextSync());
         _workloadRenamedSubscription = eventBus.Subscribe<WorkloadRenamedEvent>(_ => EnqueueContextSync());
+        _workloadSessionMembershipChangedSubscription = eventBus.Subscribe<WorkloadSessionMembershipChangedEvent>(_ => EnqueueContextSync());
         _activeWorkloadChangedSubscription = eventBus.Subscribe<ActiveWorkloadChangedEvent>(_ => EnqueueContextSync());
 
         Start();
@@ -226,12 +230,14 @@ public sealed class ExtensionBridgeService : IDisposable
         _settingsService.SettingsChanged -= OnSettingsChanged;
         _localization.LanguageChanged -= OnLanguageChanged;
 
-        _sessionCreatedSubscription.Dispose();
-        _sessionClosedSubscription.Dispose();
+            _sessionCreatedSubscription.Dispose();
+            _sessionClosedSubscription.Dispose();
+            _sessionRenamedSubscription.Dispose();
         _workloadCreatedSubscription.Dispose();
-        _workloadDeletedSubscription.Dispose();
-        _workloadRenamedSubscription.Dispose();
-        _activeWorkloadChangedSubscription.Dispose();
+            _workloadDeletedSubscription.Dispose();
+            _workloadRenamedSubscription.Dispose();
+            _workloadSessionMembershipChangedSubscription.Dispose();
+            _activeWorkloadChangedSubscription.Dispose();
 
         try { _cts.Cancel(); } catch { }
         try { _loop?.Wait(TimeSpan.FromSeconds(2)); } catch { }

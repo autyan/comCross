@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="app-icon.ico" />
+    <AvaloniaResource Include="Styles\**" />
+    <AvaloniaResource Include="Assets\Icons\IconResources.axaml" />
   </ItemGroup>
 
   <ItemGroup>

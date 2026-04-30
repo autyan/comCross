@@ -129,6 +129,33 @@ internal sealed class HostEventSink : IDisposable
         }
     }
 
+    public void PublishSessionClosed(PluginSessionClosedEvent evt)
+    {
+        if (_pipeName is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(evt.SessionId))
+        {
+            return;
+        }
+
+        try
+        {
+            var payload = new PluginHostSessionClosedEvent(evt.SessionId, evt.Reason, evt.RemoteInitiated, evt.Error);
+            var payloadJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            var payloadElement = JsonDocument.Parse(payloadJson).RootElement.Clone();
+            var envelope = new PluginHostEvent(PluginHostEventTypes.SessionClosed, payloadElement);
+            var line = JsonSerializer.Serialize(envelope, _jsonOptions);
+            _queue.Writer.TryWrite(line);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     public void Dispose()
     {
         try

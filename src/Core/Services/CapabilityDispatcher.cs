@@ -106,6 +106,17 @@ public class CapabilityDispatcher : ICapabilityDispatcher
                 }
             }
 
+            if (sessionAlreadyExists)
+            {
+                var existing = _deviceService.GetSession(targetSessionId);
+                if (existing is not null
+                    && (!string.Equals(existing.PluginId, pluginId, StringComparison.Ordinal)
+                        || !string.Equals(existing.CapabilityId, capabilityId, StringComparison.Ordinal)))
+                {
+                    throw new InvalidOperationException("Reconnect target does not match the selected adapter capability.");
+                }
+            }
+
             // Extract nested Parameters payload (ConnectDialog sends a wrapper)
             IDictionary<string, object> finalParams = uiParams;
             if (TryGetValueIgnoreCase(uiParams, "parameters", out var nested) && nested is not null)

@@ -42,6 +42,16 @@ public partial class LeftSidebar : BaseUserControl
 
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
+        OpenSessionDetailFromSender(sender, openReconnectEditor: false);
+    }
+
+    private void OnSessionConnectionParametersClick(object? sender, RoutedEventArgs e)
+    {
+        OpenSessionDetailFromSender(sender, openReconnectEditor: true);
+    }
+
+    private void OpenSessionDetailFromSender(object? sender, bool openReconnectEditor)
+    {
         if (sender is not Button button)
         {
             return;
@@ -51,6 +61,7 @@ public partial class LeftSidebar : BaseUserControl
         {
             Session s => s,
             SessionListItemViewModel itemVm => itemVm.Session,
+            LeftSidebarViewModel sidebarVm => sidebarVm.ActiveSession,
             _ => null
         };
 
@@ -63,25 +74,7 @@ public partial class LeftSidebar : BaseUserControl
         {
             return;
         }
-
-        var flyout = new MenuFlyout();
-
-        var renameItem = new MenuItem { Header = vm.L["session.menu.rename"] };
-        renameItem.Click += async (_, _) => await ShowRenameDialogAsync(session, vm);
-
-        var deleteItem = new MenuItem { Header = vm.L["session.menu.delete"] };
-        deleteItem.Click += async (_, _) =>
-        {
-            var newActive = await vm.SessionsVm.DeleteSessionAsync(vm.Sessions, vm.ActiveSession, session.Id);
-            vm.LeftSidebar.RefreshSessionItems();
-            vm.ActiveSession = newActive;
-        };
-
-        flyout.Items.Add(renameItem);
-        flyout.Items.Add(new Separator());
-        flyout.Items.Add(deleteItem);
-
-        flyout.ShowAt(button);
+        vm.OpenSessionDetail(session, openReconnectEditor);
     }
 
     private void OnToggleListenerCollapseClick(object? sender, RoutedEventArgs e)
@@ -103,6 +96,65 @@ public partial class LeftSidebar : BaseUserControl
         }
     }
 
+    private async void OnRenameSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        await ShowRenameDialogAsync(session, vm);
+    }
+
+    private async void OnDeleteSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var messageKey = session.Kind == SessionKind.Listener
+            ? "dialog.deleteSession.listener.message"
+            : "dialog.deleteSession.message";
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            vm.L["dialog.deleteSession.title"],
+            string.Format(vm.L[messageKey], session.Name));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        if (DataContext is LeftSidebarViewModel sidebarVm)
+        {
+            await sidebarVm.DeleteSessionAsync(session.Id);
+        }
+    }
+
+    private static Session? GetSessionFromSender(object? sender)
+    {
+        if (sender is not Control control)
+        {
+            return null;
+        }
+
+        return control.DataContext switch
+        {
+            Session s => s,
+            SessionListItemViewModel itemVm => itemVm.Session,
+            _ => null
+        };
+    }
+
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
@@ -122,7 +174,10 @@ public partial class LeftSidebar : BaseUserControl
             vm.L["dialog.renameSession.cancel"]);
         if (!string.IsNullOrWhiteSpace(result))
         {
-            session.Name = result;
+            if (DataContext is LeftSidebarViewModel sidebarVm)
+            {
+                await sidebarVm.RenameSessionAsync(session.Id, result);
+            }
         }
     }
 }

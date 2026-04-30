@@ -3,7 +3,13 @@
   "properties": {
     "remoteHost": { "type": "string" },
     "remotePort": { "type": "integer" },
+    "localHost": { "type": "string" },
     "localPort": { "type": "integer" },
+    "actualLocalHost": { "type": "string" },
+    "actualLocalPort": { "type": "integer" },
+    "requestedLocalHost": { "type": "string" },
+    "requestedLocalPort": { "type": "integer" },
+    "endpoint": { "type": "string" },
     "sessionName": { "type": "string" }
   },
   "required": ["remoteHost", "remotePort"]

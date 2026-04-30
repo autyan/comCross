@@ -1,6 +1,7 @@
 using ComCross.Core.Extensions;
 using ComCross.Core.Models;
 using ComCross.Core.Services;
+using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,45 @@ public sealed class DeviceServiceLifecycleTests
         var window = frameStore.GetWindowInfo(sessionId);
         Assert.Equal(0, window.LastFrameId);
         Assert.Equal(0, window.DroppedFrames);
+    }
+
+    [Fact]
+    public async Task PluginHostSessionClosedEvent_MarksSessionDisconnected()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var eventBus = harness.Services.GetRequiredService<IEventBus>();
+        const string sessionId = "remote-closed-session";
+
+        deviceService.RestoreSession(CreateDescriptor(sessionId));
+        var session = deviceService.GetSession(sessionId);
+        Assert.NotNull(session);
+        session!.Status = SessionStatus.Connected;
+
+        SessionClosedEvent? closed = null;
+        using var subscription = eventBus.Subscribe<SessionClosedEvent>(evt =>
+        {
+            if (string.Equals(evt.SessionId, sessionId, StringComparison.Ordinal))
+            {
+                closed = evt;
+            }
+        });
+
+        eventBus.Publish(new PluginHostSessionClosedCoreEvent(
+            "serial.adapter",
+            sessionId,
+            Reason: "remote-eof",
+            RemoteInitiated: true));
+
+        for (var i = 0; i < 50 && closed is null; i++)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.NotNull(closed);
+        Assert.Equal(SessionStatus.Disconnected, session.Status);
+        Assert.Equal("remote-eof", closed!.Reason);
     }
 
     private static SessionDescriptor CreateDescriptor(string sessionId)

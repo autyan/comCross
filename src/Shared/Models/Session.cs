@@ -13,6 +13,8 @@ public sealed class Session : INotifyPropertyChanged
     private string? _pluginId;
     private string? _capabilityId;
     private string? _parametersJson;
+    private string? _displayTitle;
+    private string? _displaySubtitle;
     private SessionStatus _status;
     private DateTime? _startTime;
     private long _rxBytes;
@@ -75,6 +77,24 @@ public sealed class Session : INotifyPropertyChanged
         }
     }
 
+    public string? DisplayTitle
+    {
+        get => _displayTitle;
+        set => SetField(ref _displayTitle, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+
+    public string? DisplaySubtitle
+    {
+        get => _displaySubtitle;
+        set
+        {
+            if (SetField(ref _displaySubtitle, string.IsNullOrWhiteSpace(value) ? null : value))
+            {
+                OnPropertyChanged(nameof(Endpoint));
+            }
+        }
+    }
+
     /// <summary>
     /// Session topology kind.
     /// Listener sessions are control-plane entries (e.g., TCP server listener).
@@ -106,7 +126,12 @@ public sealed class Session : INotifyPropertyChanged
         {
             if (string.IsNullOrWhiteSpace(_parametersJson))
             {
-                return string.Empty;
+                return _displaySubtitle ?? string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_displaySubtitle))
+            {
+                return _displaySubtitle;
             }
 
             try
@@ -262,6 +287,7 @@ public enum SessionStatus
 {
     Disconnected,
     Connecting,
+    Closing,
     Connected,
     Error
 }

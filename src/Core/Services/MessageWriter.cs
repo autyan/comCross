@@ -154,12 +154,15 @@ public sealed class MessageWriter : IDisposable, IAsyncDisposable
 
     public void Dispose()
     {
-        _cts.Cancel();
         _messageChannel.Writer.Complete();
         
         try
         {
-            _writerTask.Wait(TimeSpan.FromSeconds(5));
+            if (!_writerTask.Wait(TimeSpan.FromSeconds(5)))
+            {
+                _cts.Cancel();
+                _writerTask.Wait(TimeSpan.FromSeconds(1));
+            }
         }
         catch
         {
@@ -171,7 +174,6 @@ public sealed class MessageWriter : IDisposable, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cts.Cancel();
         _messageChannel.Writer.Complete();
 
         try
@@ -180,7 +182,15 @@ public sealed class MessageWriter : IDisposable, IAsyncDisposable
         }
         catch
         {
-            // Ignore timeout during shutdown
+            try
+            {
+                _cts.Cancel();
+                await _writerTask.WaitAsync(TimeSpan.FromSeconds(1));
+            }
+            catch
+            {
+                // Ignore timeout during shutdown
+            }
         }
 
         _cts.Dispose();

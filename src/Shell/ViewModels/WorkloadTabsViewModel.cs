@@ -61,6 +61,7 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
         _workloadRenamedSubscription = _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
         _workloadDeletedSubscription = _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
         _activeWorkloadChangedSubscription = _eventBus.Subscribe<ActiveWorkloadChangedEvent>(OnActiveWorkloadChanged);
+        _notificationCenter.PropertyChanged += OnNotificationCenterPropertyChanged;
     }
 
     /// <summary>
@@ -98,6 +99,8 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
     public ICommand CopyWorkloadCommand { get; }
 
     public NotificationCenterViewModel NotificationCenter => _notificationCenter;
+
+    public bool HasUnreadNotifications => _notificationCenter.UnreadCount > 0;
 
     /// <summary>
     /// Load all workloads and populate tabs
@@ -177,6 +180,14 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
                 ActiveTab = tab;
             }
         });
+    }
+
+    private void OnNotificationCenterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(NotificationCenterViewModel.UnreadCount), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(HasUnreadNotifications));
+        }
     }
 
     /// <summary>
@@ -322,11 +333,12 @@ public sealed class WorkloadTabsViewModel : BaseViewModel
     {
         if (disposing)
         {
+            _notificationCenter.PropertyChanged -= OnNotificationCenterPropertyChanged;
+            Tabs.Dispose();
             _workloadCreatedSubscription.Dispose();
             _workloadRenamedSubscription.Dispose();
             _workloadDeletedSubscription.Dispose();
             _activeWorkloadChangedSubscription.Dispose();
-            Tabs.Dispose();
         }
 
         base.Dispose(disposing);

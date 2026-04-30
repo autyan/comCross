@@ -353,6 +353,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 c.Id,
                 LocalizeOrFallback($"{r.Info.Manifest.Id}.capability.{c.Id}.name", c.Name),
                 LocalizeOrFallbackNullable($"{r.Info.Manifest.Id}.capability.{c.Id}.description", c.Description),
+                c.Icon,
                 c.DefaultParametersJson,
                 c.JsonSchema,
                 c.UiSchema)))
@@ -725,6 +726,7 @@ public sealed record PluginCapabilityLaunchOption(
     string CapabilityId,
     string CapabilityName,
     string? CapabilityDescription,
+    string? Icon,
     string? DefaultParametersJson,
     string? JsonSchema,
     string? UiSchema);

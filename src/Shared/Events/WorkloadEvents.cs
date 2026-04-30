@@ -27,3 +27,11 @@ public record WorkloadRenamedEvent(string WorkloadId, string OldName, string New
 /// </summary>
 /// <param name="WorkloadId">ID of the activated workload</param>
 public record ActiveWorkloadChangedEvent(string WorkloadId);
+
+/// <summary>
+/// Event raised when a session is added to or removed from a workload.
+/// </summary>
+/// <param name="WorkloadId">ID of the workload whose membership changed</param>
+/// <param name="SessionId">ID of the session whose membership changed</param>
+/// <param name="IsMember">True when added, false when removed</param>
+public record WorkloadSessionMembershipChangedEvent(string WorkloadId, string SessionId, bool IsMember);

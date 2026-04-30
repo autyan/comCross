@@ -1,0 +1,308 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="FontFamily" Value="IBM Plex Sans, Inter, Segoe UI, Arial" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="JetBrains Mono, Cascadia Mono, Consolas, Courier New, monospace" />
+    </Style>
+
+    <Style Selector="PathIcon.prototype-icon">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
+    </Style>
+
+    <Style Selector="Path.prototype-icon">
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="StrokeThickness" Value="1.7" />
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="Stroke" Value="{StaticResource Text1Brush}" />
+        <Setter Property="StrokeLineCap" Value="Round" />
+        <Setter Property="StrokeJoin" Value="Round" />
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+    </Style>
+
+    <Style Selector="Path.prototype-stroke-icon">
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="Stroke" Value="{StaticResource Text1Brush}" />
+        <Setter Property="StrokeLineCap" Value="Round" />
+        <Setter Property="StrokeJoin" Value="Round" />
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+    </Style>
+
+    <Style Selector="Border.prototype-search-shell">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-search-input">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0,4" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-search-input:focus">
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.prototype-panel">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    </Style>
+
+    <Style Selector="Border.prototype-card">
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    </Style>
+
+    <Style Selector="Border.prototype-overlay">
+        <Setter Property="Background" Value="{StaticResource BgOverlayBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-plain">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.prototype-plain:pointerover">
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+
+    <Style Selector="Button.prototype-plain:pressed">
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Opacity" Value="0.94" />
+    </Style>
+
+    <Style Selector="Button.prototype-plain:disabled">
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <Style Selector="Button.prototype-lift">
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.prototype-lift:pointerover:not(.active)">
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+
+    <Style Selector="Button.prototype-lift:pressed:not(.active)">
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Opacity" Value="0.94" />
+    </Style>
+
+    <Style Selector="Button.prototype-icon-button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Width" Value="22" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.prototype-icon-button:pointerover">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+
+    <Style Selector="Button.prototype-icon-button:pressed">
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Opacity" Value="0.94" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
+        <Setter Property="Height" Value="54" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.prototype-action-button:pointerover:not(.active)">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button:pressed:not(.active)">
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Opacity" Value="0.94" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.primary">
+        <Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WhiteBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.primary:pointerover:not(.active)">
+        <Setter Property="Background" Value="{StaticResource AccentBlueBrightBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrightBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.outline-accent">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.compact">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="Padding" Value="14,0" />
+    </Style>
+
+    <Style Selector="Border.prototype-interactive-surface">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="BackgroundSizing" Value="InnerBorderEdge" />
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.prototype-interactive-surface.interactive:pointerover:not(.selected)">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+        <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+
+    <Style Selector="Border.prototype-interactive-surface.selected">
+        <Setter Property="Background" Value="{StaticResource SelectionBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrightBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="RenderTransform" Value="translateY(0px)" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-search">
+        <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Padding" Value="36,0,12,0" />
+        <Setter Property="Height" Value="{StaticResource ControlHeightSm}" />
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-editor">
+        <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="FontFamily" Value="JetBrains Mono, Cascadia Mono, Consolas, Courier New, monospace" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="AcceptsReturn" Value="True" />
+    </Style>
+
+    <Style Selector="CheckBox.prototype-check">
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+</Styles>

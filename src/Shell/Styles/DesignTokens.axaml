@@ -1,0 +1,93 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <Thickness x:Key="Space2">2</Thickness>
+        <Thickness x:Key="Space4">4</Thickness>
+        <Thickness x:Key="Space6">6</Thickness>
+        <Thickness x:Key="Space8">8</Thickness>
+        <Thickness x:Key="Space10">10</Thickness>
+        <Thickness x:Key="Space12">12</Thickness>
+        <Thickness x:Key="Space16">16</Thickness>
+        <Thickness x:Key="Space20">20</Thickness>
+
+        <CornerRadius x:Key="RadiusSm">6</CornerRadius>
+        <CornerRadius x:Key="RadiusMd">8</CornerRadius>
+        <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+        <CornerRadius x:Key="RadiusXl">12</CornerRadius>
+
+        <x:Double x:Key="ControlHeightSm">32</x:Double>
+        <x:Double x:Key="ControlHeightMd">40</x:Double>
+        <x:Double x:Key="ControlHeightLg">44</x:Double>
+
+        <Color x:Key="Bg0Color">#0F1417</Color>
+        <Color x:Key="Bg1Color">#141B1F</Color>
+        <Color x:Key="Bg2Color">#1B242A</Color>
+        <Color x:Key="Bg3Color">#182127</Color>
+        <Color x:Key="BgCardColor">#162026</Color>
+        <Color x:Key="BgOverlayColor">#D9101417</Color>
+        <Color x:Key="BgHighlightColor">#20303A</Color>
+        <Color x:Key="BgHighlightEndColor">#243844</Color>
+        <Color x:Key="BgInteractiveHoverColor">#1A232B</Color>
+        <Color x:Key="Text0Color">#E6EDF3</Color>
+        <Color x:Key="Text1Color">#B7C1CC</Color>
+        <Color x:Key="Text2Color">#87909B</Color>
+        <Color x:Key="TextMutedColor">#6B7780</Color>
+        <Color x:Key="AccentBlueColor">#3AA0FF</Color>
+        <Color x:Key="AccentBlueBrightColor">#58B8FF</Color>
+        <Color x:Key="AccentCyanColor">#2CB5A9</Color>
+        <Color x:Key="WarnColor">#F5A524</Color>
+        <Color x:Key="ErrorColor">#E5534B</Color>
+        <Color x:Key="BorderColor">#25303A</Color>
+        <Color x:Key="BorderStrongColor">#31414E</Color>
+        <Color x:Key="RailActiveColor">#1E3A4A</Color>
+        <Color x:Key="RailActiveEndColor">#234554</Color>
+
+        <SolidColorBrush x:Key="Bg0Brush" Color="{StaticResource Bg0Color}" />
+        <SolidColorBrush x:Key="Bg1Brush" Color="{StaticResource Bg1Color}" />
+        <SolidColorBrush x:Key="Bg2Brush" Color="{StaticResource Bg2Color}" />
+        <SolidColorBrush x:Key="Bg3Brush" Color="{StaticResource Bg3Color}" />
+        <SolidColorBrush x:Key="BgCardBrush" Color="{StaticResource BgCardColor}" />
+        <SolidColorBrush x:Key="BgOverlayBrush" Color="{StaticResource BgOverlayColor}" />
+        <SolidColorBrush x:Key="BgInteractiveHoverBrush" Color="{StaticResource BgInteractiveHoverColor}" />
+        <SolidColorBrush x:Key="Text0Brush" Color="{StaticResource Text0Color}" />
+        <SolidColorBrush x:Key="Text1Brush" Color="{StaticResource Text1Color}" />
+        <SolidColorBrush x:Key="Text2Brush" Color="{StaticResource Text2Color}" />
+        <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
+        <SolidColorBrush x:Key="AccentBlueBrush" Color="{StaticResource AccentBlueColor}" />
+        <SolidColorBrush x:Key="AccentBlueBrightBrush" Color="{StaticResource AccentBlueBrightColor}" />
+        <SolidColorBrush x:Key="AccentCyanBrush" Color="{StaticResource AccentCyanColor}" />
+        <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
+        <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+        <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderColor}" />
+        <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}" />
+        <SolidColorBrush x:Key="WhiteBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="TransparentBrush" Color="#00FFFFFF" />
+
+        <LinearGradientBrush x:Key="SelectionBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="{StaticResource BgHighlightColor}" Offset="0" />
+            <GradientStop Color="{StaticResource BgHighlightEndColor}" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="RailActiveBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="{StaticResource RailActiveColor}" Offset="0" />
+            <GradientStop Color="{StaticResource RailActiveEndColor}" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="PrimaryButtonBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="{StaticResource AccentBlueColor}" Offset="0" />
+            <GradientStop Color="#4FB0FF" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="GlowOverlayBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#203AA0FF" Offset="0" />
+            <GradientStop Color="#083AA0FF" Offset="0.45" />
+            <GradientStop Color="#003AA0FF" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="GlowEdgeBrush" StartPoint="0%,0%" EndPoint="100%,0%">
+            <GradientStop Color="#9C58B8FF" Offset="0" />
+            <GradientStop Color="#2458B8FF" Offset="0.55" />
+            <GradientStop Color="#0058B8FF" Offset="1" />
+        </LinearGradientBrush>
+    </Styles.Resources>
+</Styles>
