@@ -31,4 +31,30 @@ public sealed class SessionModelTests
 
         Assert.Equal(string.Empty, session.Endpoint);
     }
+
+    [Fact]
+    public void Endpoint_DoesNotInferSerialPortParameter()
+    {
+        var session = new Session
+        {
+            Id = "session-private-serial-params",
+            Name = "serial #1",
+            ParametersJson = """{"port":"/dev/ttyUSB0","baudRate":115200}"""
+        };
+
+        Assert.Equal(string.Empty, session.Endpoint);
+    }
+
+    [Fact]
+    public void Endpoint_DoesNotInferGenericEndpointParameter()
+    {
+        var session = new Session
+        {
+            Id = "session-private-endpoint-param",
+            Name = "custom #1",
+            ParametersJson = """{"endpoint":"owned-by-plugin"}"""
+        };
+
+        Assert.Equal(string.Empty, session.Endpoint);
+    }
 }

@@ -394,7 +394,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             DisplayTitle = descriptor.DisplayTitle,
             DisplaySubtitle = descriptor.DisplaySubtitle,
             DisplayIcon = descriptor.DisplayIcon,
-            CanReconnect = descriptor.CanReconnect ?? string.IsNullOrWhiteSpace(descriptor.ParentSessionId),
+            CanReconnect = descriptor.CanReconnect ?? true,
             InitializationState = descriptor.InitializationState,
             InitializationError = descriptor.InitializationError,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
@@ -619,7 +619,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             session.DisplayTitle = result.DisplayTitle;
             session.DisplaySubtitle = result.DisplaySubtitle;
             session.DisplayIcon = result.SessionIcon;
-            session.CanReconnect = result.CanReconnect ?? string.IsNullOrWhiteSpace(result.ParentSessionId);
+            if (result.CanReconnect is { } canReconnect)
+            {
+                session.CanReconnect = canReconnect;
+            }
             session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
 
             if (!string.IsNullOrWhiteSpace(result.ParentSessionId))

@@ -150,39 +150,7 @@ public sealed class Session : INotifyPropertyChanged
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(_displaySubtitle))
-            {
-                return _displaySubtitle;
-            }
-
-            if (string.IsNullOrWhiteSpace(_parametersJson))
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(_parametersJson);
-                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
-                {
-                    return string.Empty;
-                }
-
-                if (TryGetString(doc.RootElement, "port", out var singlePort))
-                {
-                    return singlePort;
-                }
-                if (TryGetString(doc.RootElement, "endpoint", out var endpoint))
-                {
-                    return endpoint;
-                }
-
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
+            return string.IsNullOrWhiteSpace(_displaySubtitle) ? string.Empty : _displaySubtitle;
         }
     }
 
@@ -268,31 +236,6 @@ public sealed class Session : INotifyPropertyChanged
             .ToArray();
     }
 
-    private static bool TryGetString(System.Text.Json.JsonElement obj, string key, out string value)
-    {
-        value = string.Empty;
-
-        if (!obj.TryGetProperty(key, out var prop))
-        {
-            return false;
-        }
-
-        switch (prop.ValueKind)
-        {
-            case System.Text.Json.JsonValueKind.String:
-                value = prop.GetString() ?? string.Empty;
-                return !string.IsNullOrWhiteSpace(value);
-            case System.Text.Json.JsonValueKind.Number:
-                value = prop.GetRawText();
-                return !string.IsNullOrWhiteSpace(value);
-            case System.Text.Json.JsonValueKind.True:
-            case System.Text.Json.JsonValueKind.False:
-                value = prop.GetBoolean() ? "true" : "false";
-                return true;
-            default:
-                return false;
-        }
-    }
 }
 
 public enum SessionStatus

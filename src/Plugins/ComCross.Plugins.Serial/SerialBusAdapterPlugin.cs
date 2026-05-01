@@ -11,7 +11,12 @@ using ComCross.PluginSdk;
 
 namespace ComCross.Plugins.Serial;
 
-public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITransmittableBusAdapterPlugin, IPluginUiStateProvider, IPluginUiStateEventSource
+public sealed class SerialBusAdapterPlugin :
+    IConnectableBusAdapterPlugin,
+    ITransmittableBusAdapterPlugin,
+    IPluginUiStateProvider,
+    IPluginUiStateEventSource,
+    IPluginSessionStateInitializer
 {
     private readonly CancellationTokenSource _cts = new();
 
@@ -46,6 +51,45 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITran
     };
 
     public event EventHandler<PluginUiStateInvalidatedEvent>? UiStateInvalidated;
+
+    public Task<PluginSessionStateInitializationResult> InitializeSessionStateAsync(
+        PluginSessionStateInitializationContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(context.CapabilityId, "serial", StringComparison.Ordinal))
+        {
+            return Task.FromResult(new PluginSessionStateInitializationResult(true));
+        }
+
+        if (string.IsNullOrWhiteSpace(context.ParametersJson))
+        {
+            return Task.FromResult(new PluginSessionStateInitializationResult(
+                true,
+                StoragePatch: new PluginSessionStoragePatch(SchemaVersion: 1)));
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(context.ParametersJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return Task.FromResult(new PluginSessionStateInitializationResult(
+                    true,
+                    StoragePatch: new PluginSessionStoragePatch(SchemaVersion: 1)));
+            }
+
+            var patch = BuildSessionPatch(doc.RootElement);
+            var storagePatch = new PluginSessionStoragePatch(SchemaVersion: 1);
+            return Task.FromResult(new PluginSessionStateInitializationResult(
+                true,
+                StoragePatch: storagePatch,
+                SessionPatch: patch));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new PluginSessionStateInitializationResult(false, ex.Message));
+        }
+    }
 
     public IReadOnlyList<PluginCapabilityDescriptor> GetCapabilities()
     {
@@ -210,10 +254,23 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITran
                 _rxLoop = Task.Run(() => ReadLoopAsync(command.SessionId, serial, _rxCts.Token));
             }
 
+            var committed = BuildCommittedParameters(
+                port,
+                baudRate,
+                dataBits,
+                parityText,
+                stopBitsText,
+                flowControlText,
+                TryReadString(command.Parameters, "sessionName"));
+
             return Task.FromResult(new PluginConnectResult(
                 true,
                 SessionId: command.SessionId,
-                SessionIcon: "CableIcon"));
+                CommittedParameters: committed,
+                DisplayTitle: "Serial Port",
+                DisplaySubtitle: BuildSubtitle(port),
+                SessionIcon: "CableIcon",
+                CanReconnect: true));
         }
         catch (Exception ex)
         {
@@ -441,6 +498,71 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITran
             }
         }
     }
+
+    private static PluginSessionMetadataPatch BuildSessionPatch(JsonElement parameters)
+    {
+        var port = TryReadString(parameters, "port");
+        var committed = NormalizeCommittedParameters(parameters);
+
+        return new PluginSessionMetadataPatch(
+            ParametersJson: committed is null ? null : committed.Value.GetRawText(),
+            DisplayTitle: "Serial Port",
+            DisplaySubtitle: BuildSubtitle(port),
+            DisplayIcon: "CableIcon",
+            CanReconnect: true);
+    }
+
+    private static JsonElement? NormalizeCommittedParameters(JsonElement parameters)
+    {
+        var port = TryReadString(parameters, "port");
+        if (string.IsNullOrWhiteSpace(port))
+        {
+            return null;
+        }
+
+        var baudRate = TryReadInt(parameters, "baudRate", out var baud) ? baud : 115200;
+        var dataBits = TryReadInt(parameters, "dataBits", out var bits) ? bits : 8;
+        var parity = TryReadString(parameters, "parity") ?? "None";
+        var stopBits = TryReadString(parameters, "stopBits") ?? "One";
+        var flowControl = TryReadString(parameters, "flowControl") ?? "None";
+        var sessionName = TryReadString(parameters, "sessionName");
+
+        return BuildCommittedParameters(port, baudRate, dataBits, parity, stopBits, flowControl, sessionName);
+    }
+
+    private static JsonElement BuildCommittedParameters(
+        string port,
+        int baudRate,
+        int dataBits,
+        string parity,
+        string stopBits,
+        string flowControl,
+        string? sessionName)
+    {
+        return string.IsNullOrWhiteSpace(sessionName)
+            ? JsonSerializer.SerializeToElement(new
+            {
+                port,
+                baudRate,
+                dataBits,
+                parity,
+                stopBits,
+                flowControl
+            })
+            : JsonSerializer.SerializeToElement(new
+            {
+                port,
+                baudRate,
+                dataBits,
+                parity,
+                stopBits,
+                flowControl,
+                sessionName
+            });
+    }
+
+    private static string? BuildSubtitle(string? port)
+        => string.IsNullOrWhiteSpace(port) ? null : port.Trim();
 
     private static IEnumerable<string> ScanLinuxPorts(string pattern)
     {
