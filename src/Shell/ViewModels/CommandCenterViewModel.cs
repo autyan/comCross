@@ -13,9 +13,9 @@ namespace ComCross.Shell.ViewModels;
 public sealed class CommandCenterViewModel : BaseViewModel
 {
     private readonly CommandService _commandService;
+    private readonly CommandExecutionService _commandExecutionService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
-    private readonly Core.Services.IWorkspaceCoordinator _workspaceCoordinator;
     private string? _sessionId;
     private string _sessionName = string.Empty;
     private CommandDefinition? _selectedCommand;
@@ -29,20 +29,21 @@ public sealed class CommandCenterViewModel : BaseViewModel
     private CommandScope _editorScope = CommandScope.Global;
     private string _editorHotkey = string.Empty;
     private int _editorSortOrder;
+    private bool _editorIsPinned;
     private bool _isActive;
 
     public CommandCenterViewModel(
         ILocalizationService localization,
         CommandService commandService,
+        CommandExecutionService commandExecutionService,
         SettingsService settingsService,
-        NotificationService notificationService,
-        Core.Services.IWorkspaceCoordinator workspaceCoordinator)
+        NotificationService notificationService)
         : base(localization)
     {
         _commandService = commandService;
+        _commandExecutionService = commandExecutionService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _workspaceCoordinator = workspaceCoordinator;
 
         // 构造时自动根据当前 Session 加载数据
         _ = LoadAsync();
@@ -222,6 +223,21 @@ public sealed class CommandCenterViewModel : BaseViewModel
         }
     }
 
+    public bool EditorIsPinned
+    {
+        get => _editorIsPinned;
+        set
+        {
+            if (_editorIsPinned == value)
+            {
+                return;
+            }
+
+            _editorIsPinned = value;
+            OnPropertyChanged();
+        }
+    }
+
     public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions =>
         new[]
         {
@@ -266,8 +282,6 @@ public sealed class CommandCenterViewModel : BaseViewModel
         }
     }
 
-    public event Func<CommandDefinition, Task>? SendRequested;
-
     public async Task LoadAsync()
     {
         Commands.Clear();
@@ -302,8 +316,35 @@ public sealed class CommandCenterViewModel : BaseViewModel
         command.SortOrder = EditorSortOrder > 0 ? EditorSortOrder : command.SortOrder == 0 ? Commands.Count + 1 : command.SortOrder;
         command.Hotkey = NormalizeHotkey(EditorHotkey);
 
+        if (EditorIsPinned && !command.IsPinned && Commands.Count(c => c.IsPinned) >= RightToolDockViewModel.MaxPinnedCommands)
+        {
+            await _notificationService.AddAsync(
+                NotificationCategory.System,
+                NotificationLevel.Warning,
+                "command.pinned.limit",
+                new object[] { RightToolDockViewModel.MaxPinnedCommands });
+            return;
+        }
+
+        command.IsPinned = EditorIsPinned;
+
         await _commandService.AddOrUpdateAsync(command);
         await LoadAsync();
+    }
+
+    public async Task SaveCommandAsync(CommandDefinition command)
+    {
+        await _commandService.AddOrUpdateAsync(command);
+        await LoadAsync();
+    }
+
+    public async Task NotifyPinnedLimitAsync(int maxPinnedCommands)
+    {
+        await _notificationService.AddAsync(
+            NotificationCategory.System,
+            NotificationLevel.Warning,
+            "command.pinned.limit",
+            new object[] { maxPinnedCommands });
     }
 
     public void NewCommand()
@@ -319,6 +360,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
         EditorScope = CommandScope.Global;
         EditorHotkey = string.Empty;
         EditorSortOrder = Commands.Count + 1;
+        EditorIsPinned = false;
     }
 
     public async Task DeleteSelectedAsync()
@@ -333,33 +375,18 @@ public sealed class CommandCenterViewModel : BaseViewModel
     }
 
     public async Task SendSelectedAsync()
+        => await SendCommandAsync(SelectedCommand);
+
+    public async Task SendCommandAsync(CommandDefinition? command)
     {
-        if (SelectedCommand == null || string.IsNullOrEmpty(_sessionId))
+        if (command == null || string.IsNullOrEmpty(_sessionId))
         {
             return;
         }
 
         try
         {
-            byte[] data;
-            if (SelectedCommand.Type == CommandPayloadType.Hex)
-            {
-                data = Convert.FromHexString(SelectedCommand.Payload.Replace(" ", ""));
-            }
-            else
-            {
-                var encoding = Shared.Helpers.EncodingHelper.GetEncoding(SelectedCommand.Encoding);
-                data = encoding.GetBytes(SelectedCommand.Payload);
-            }
-
-            if (SelectedCommand.AppendCr || SelectedCommand.AppendLf)
-            {
-                var suffix = (SelectedCommand.AppendCr ? "\r" : "") + (SelectedCommand.AppendLf ? "\n" : "");
-                var suffixBytes = System.Text.Encoding.UTF8.GetBytes(suffix);
-                data = data.Concat(suffixBytes).ToArray();
-            }
-
-            await _workspaceCoordinator.SendDataAsync(_sessionId, data);
+            await _commandExecutionService.ExecuteAsync(_sessionId, command);
         }
         catch (Exception ex)
         {
@@ -410,6 +437,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
         EditorScope = command.Scope;
         EditorHotkey = command.Hotkey ?? string.Empty;
         EditorSortOrder = command.SortOrder == 0 ? 1 : command.SortOrder;
+        EditorIsPinned = command.IsPinned;
         OnPropertyChanged(nameof(SelectedPayloadType));
         OnPropertyChanged(nameof(SelectedScope));
     }
@@ -425,12 +453,12 @@ public sealed class CommandCenterViewModel : BaseViewModel
         var match = Commands.FirstOrDefault(command =>
             string.Equals(NormalizeHotkey(command.Hotkey), normalized, StringComparison.OrdinalIgnoreCase));
 
-        if (match == null || SendRequested == null)
+        if (match == null)
         {
             return false;
         }
 
-        await SendRequested.Invoke(match);
+        await SendCommandAsync(match);
         return true;
     }
 

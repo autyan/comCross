@@ -88,6 +88,7 @@
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <CheckBox Content="{Binding L[tool.commands.appendCr]}" IsChecked="{Binding EditorAppendCr}" />
                 <CheckBox Content="{Binding L[tool.commands.appendLf]}" IsChecked="{Binding EditorAppendLf}" />
+                <CheckBox Content="{Binding L[tool.commands.pinned]}" IsChecked="{Binding EditorIsPinned}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">

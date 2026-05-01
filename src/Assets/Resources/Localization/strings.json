@@ -73,6 +73,10 @@
       "tool.commands.empty": "暂无命令",
       "tool.commands.viewAll": "查看所有命令...",
       "tool.commands.send": "发送",
+      "tool.commands.edit": "编辑",
+      "tool.commands.pin": "固定",
+      "tool.commands.unpin": "取消固定",
+      "tool.commands.select": "选择指令",
       "tool.commands.add": "新建",
       "tool.commands.save": "保存",
       "tool.commands.delete": "删除",
@@ -86,6 +90,9 @@
       "tool.commands.scope": "范围",
       "tool.commands.appendCr": "追加 CR",
       "tool.commands.appendLf": "追加 LF",
+      "tool.commands.pinned": "快捷",
+      "tool.commands.search": "搜索指令...",
+      "tool.commands.allGroups": "全部分组",
       "tool.commands.hotkey": "快捷键",
       "tool.commands.sortOrder": "排序",
       "tool.commands.scope.global": "全局",
@@ -329,7 +336,10 @@
       "status.rx": "接收:",
       "status.tx": "发送:",
       "status.cpu": "CPU:",
-      "status.mem": "内存:"
+      "status.mem": "内存:",
+      "dialog.cancel": "取消",
+      "command.defaults.groupName": "默认快捷指令",
+      "command.pinned.limit": "快捷栏最多固定 {0} 条指令。"
     }
   }
 }

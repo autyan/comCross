@@ -2,10 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:ComCross.Shell.Controls"
              xmlns:vm="using:ComCross.Shell.ViewModels"
              xmlns:views="using:ComCross.Shell.Views"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="800"
              x:Class="ComCross.Shell.Views.RightToolDock"
+             x:Name="Root"
              x:DataType="vm:RightToolDockViewModel">
     
     <Grid>
@@ -129,44 +131,111 @@
                             </Button>
                             </Grid>
 
-                        <StackPanel Spacing="10" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding L[tool.send.quickcommands]}"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource Text1Brush}" />
+                        <StackPanel Spacing="8" Margin="0,6,0,0">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding L[tool.send.quickcommands]}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text1Brush}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding PinnedCommandCountText}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text2Brush}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
                             <ItemsControl ItemsSource="{Binding QuickCommands}"
                                           IsVisible="{Binding HasQuickCommands}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Button Margin="0,0,0,8"
-                                                Classes="prototype-plain"
-                                                HorizontalAlignment="Stretch"
-                                                Click="OnQuickCommandClick">
-                                            <Border Height="70"
-                                                    Classes="prototype-panel"
-                                                    Background="{StaticResource Bg1Brush}"
-                                                    Padding="12,10">
-                                                <StackPanel Spacing="6"
-                                                            VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}"
-                                                               FontSize="13"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{StaticResource Text0Brush}" />
-                                                    <TextBlock Text="{Binding Payload}"
-                                                               FontSize="11"
-                                                               Foreground="{StaticResource Text2Brush}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                            </Border>
-                                        </Button>
+                                        <Border Height="42"
+                                                Margin="0,0,0,6"
+                                                Classes="prototype-interactive-surface interactive">
+                                            <Grid ColumnDefinitions="82,12,*,34,34"
+                                                  Margin="10,0,4,0"
+                                                  VerticalAlignment="Center">
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding Name}"
+                                                           ToolTip.Tip="{Binding Name}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Text0Brush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Border Grid.Column="1"
+                                                        Width="1"
+                                                        Height="20"
+                                                        Background="{StaticResource BorderSubtleBrush}"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding PayloadPreview}"
+                                                           ToolTip.Tip="{Binding PayloadPreview}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Text2Brush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Button Grid.Column="3"
+                                                        Classes="prototype-icon-button"
+                                                        Width="32"
+                                                        Height="32"
+                                                        Padding="0"
+                                                        Click="OnQuickCommandClick">
+                                                    <Path Data="{StaticResource SendIcon}"
+                                                          Width="14"
+                                                          Height="14"
+                                                          Stretch="Uniform"
+                                                          Stroke="{StaticResource PrimaryButtonBrush}"
+                                                          StrokeThickness="1.7"
+                                                          StrokeLineCap="Round"
+                                                          StrokeJoin="Round" />
+                                                </Button>
+                                                <Button Grid.Column="4"
+                                                        Classes="prototype-icon-button"
+                                                        Width="32"
+                                                        Height="32"
+                                                        Padding="0"
+                                                        Click="OnEditCommandClick">
+                                                    <Path Data="{StaticResource PencilIcon}"
+                                                          Width="14"
+                                                          Height="14"
+                                                          Stretch="Uniform"
+                                                          Stroke="{StaticResource Text1Brush}"
+                                                          StrokeThickness="1.5" />
+                                                </Button>
+                                            </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <Button Content="{Binding L[tool.commands.viewAll]}"
+                            <controls:QuickCommandPicker Margin="0,4,0,0" />
+
+                            <Button Classes="prototype-action-button primary compact"
                                     HorizontalAlignment="Stretch"
-                                    IsEnabled="{Binding CanOpenCommandEditor}"
-                                    Click="OnOpenAllCommandsClick" />
+                                    Click="OnNewCommandClick">
+                                <Grid ColumnDefinitions="16,Auto"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center">
+                                    <Path Data="{StaticResource PlusIcon}"
+                                          Width="14"
+                                          Height="14"
+                                          Stretch="Uniform"
+                                          Stroke="{StaticResource WhiteBrush}"
+                                          StrokeThickness="1.7"
+                                          StrokeLineCap="Round"
+                                          VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Margin="8,0,0,0"
+                                               Text="{Binding L[tool.commands.add]}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource WhiteBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
                         </StackPanel>
                         </StackPanel>
                     </StackPanel>
@@ -204,6 +273,95 @@
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
+        </Border>
+
+        <Border IsVisible="{Binding IsCommandEditorOpen}"
+                Background="#B0000000">
+            <Border Margin="12"
+                    Padding="12"
+                    VerticalAlignment="Top"
+                    CornerRadius="8"
+                    Background="{StaticResource Bg2Brush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,28">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding L[tool.commands]}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Text0Brush}"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1"
+                                Classes="prototype-plain"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                Click="OnCancelCommandEditorClick">
+                            <TextBlock Text="×"
+                                       FontSize="20"
+                                       Foreground="{StaticResource Text1Brush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+
+                    <TextBox Text="{Binding CommandCenter.EditorName}"
+                             Watermark="{Binding L[tool.commands.name]}" />
+                    <ComboBox ItemsSource="{Binding CommandCenter.PayloadTypeOptions}"
+                              SelectedItem="{Binding CommandCenter.SelectedPayloadType}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBox Text="{Binding CommandCenter.EditorPayload}"
+                             Watermark="{Binding L[tool.commands.payload]}"
+                             AcceptsReturn="True"
+                             Height="72" />
+                    <Grid ColumnDefinitions="*,84">
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding CommandCenter.EditorEncoding}"
+                                 Watermark="{Binding L[tool.commands.encoding]}" />
+                        <TextBox Grid.Column="1"
+                                 Margin="8,0,0,0"
+                                 Text="{Binding CommandCenter.EditorSortOrder}"
+                                 Watermark="{Binding L[tool.commands.sortOrder]}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <CheckBox Content="{Binding L[tool.commands.appendCr]}"
+                                  IsChecked="{Binding CommandCenter.EditorAppendCr}" />
+                        <CheckBox Content="{Binding L[tool.commands.appendLf]}"
+                                  IsChecked="{Binding CommandCenter.EditorAppendLf}" />
+                    </StackPanel>
+                    <TextBox Text="{Binding CommandCenter.EditorHotkey}"
+                             Watermark="{Binding L[tool.commands.hotkey]}" />
+
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                        <Button Grid.Column="0"
+                                Content="{Binding L[tool.commands.delete]}"
+                                Classes="secondary"
+                                Click="OnDeleteCommandEditorClick" />
+                        <Button Grid.Column="1"
+                                Content="{Binding L[tool.commands.unpin]}"
+                                Classes="secondary"
+                                Margin="8,0,0,0"
+                                IsEnabled="{Binding CommandCenter.EditorIsPinned}"
+                                Click="OnUnpinCommandEditorClick" />
+                        <Button Grid.Column="3"
+                                Content="{Binding L[dialog.cancel]}"
+                                Classes="secondary"
+                                Margin="8,0,0,0"
+                                Click="OnCancelCommandEditorClick" />
+                        <Button Grid.Column="4"
+                                Content="{Binding L[tool.commands.save]}"
+                                Classes="accent"
+                                Margin="8,0,0,0"
+                                Click="OnSaveCommandEditorClick" />
+                    </Grid>
+                </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </UserControl>

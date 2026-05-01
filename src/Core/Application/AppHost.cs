@@ -65,6 +65,10 @@ public class AppHost : IAppHost
                 // Best-effort; localization service already has fallback behavior.
             }
 
+            // 2.2 Seed editable default quick commands after culture is active.
+            var commandDefaults = _serviceProvider.GetRequiredService<CommandDefaultService>();
+            await commandDefaults.EnsureInitializedAsync();
+
             // 3. Start Background Services
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.InitializeAsync();

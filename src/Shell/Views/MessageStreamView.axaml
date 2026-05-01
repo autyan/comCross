@@ -115,7 +115,7 @@
                               VerticalAlignment="Center" />
                         <TextBox Grid.Column="1"
                                  Text="{Binding SearchQuery}"
-                                 Classes="prototype-search-input"
+                                 Classes="prototype-search-input prototype-embedded-input"
                                  Margin="10,0,0,0"
                                  Watermark="{Binding L[stream.search.placeholder]}" />
                     </Grid>

@@ -52,6 +52,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WorkspaceService>();
         services.AddSingleton<ExportService>();
         services.AddSingleton<CommandService>();
+        services.AddSingleton<CommandDefaultService>();
+        services.AddSingleton<CommandExecutionService>();
 
         // Persist committed session definitions (last successful connect parameters)
         services.AddSingleton<SessionDescriptorPersistenceService>();

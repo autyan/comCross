@@ -63,6 +63,41 @@
         <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
+    <Style Selector="TextBox.prototype-embedded-input">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-embedded-input:focus">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-embedded-input /template/ Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.prototype-embedded-input:focus /template/ Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.prototype-search-shell:focus-within">
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
+    </Style>
+
     <Style Selector="Border.prototype-panel">
         <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />

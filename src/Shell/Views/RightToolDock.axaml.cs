@@ -39,9 +39,57 @@ public partial class RightToolDock : BaseUserControl
 
     private async void OnQuickCommandClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is RightToolDockViewModel vm && sender is Button { DataContext: CommandDefinition command })
+        if (DataContext is RightToolDockViewModel vm && sender is Button { DataContext: CommandListItemViewModel item })
         {
-            await vm.SendCommandAsync(command);
+            await vm.SendCommandAsync(item.Command);
+        }
+    }
+
+    private void OnEditCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm && sender is Button { DataContext: CommandListItemViewModel item })
+        {
+            vm.OpenCommandEditor(item.Command);
+        }
+    }
+
+    private void OnNewCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.OpenCommandEditor();
+        }
+    }
+
+    private void OnCancelCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.CloseCommandEditor();
+        }
+    }
+
+    private async void OnSaveCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.SaveCommandEditorAsync();
+        }
+    }
+
+    private async void OnDeleteCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.DeleteCommandEditorAsync();
+        }
+    }
+
+    private async void OnUnpinCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.UnpinCommandEditorAsync();
         }
     }
 

@@ -525,6 +525,10 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["tool.commands.empty"] = "No commands",
             ["tool.commands.viewAll"] = "View all commands...",
             ["tool.commands.send"] = "Send",
+            ["tool.commands.edit"] = "Edit",
+            ["tool.commands.pin"] = "Pin",
+            ["tool.commands.unpin"] = "Unpin",
+            ["tool.commands.select"] = "Select command",
             ["tool.commands.add"] = "New",
             ["tool.commands.save"] = "Save",
             ["tool.commands.delete"] = "Delete",
@@ -538,6 +542,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["tool.commands.scope"] = "Scope",
             ["tool.commands.appendCr"] = "Append CR",
             ["tool.commands.appendLf"] = "Append LF",
+            ["tool.commands.pinned"] = "Quick",
+            ["tool.commands.search"] = "Search commands...",
+            ["tool.commands.allGroups"] = "All groups",
             ["tool.commands.hotkey"] = "Hotkey",
             ["tool.commands.sortOrder"] = "Order",
             ["tool.commands.scope.global"] = "Global",
@@ -653,6 +660,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.export.range.latest"] = "Latest",
             ["settings.export.range.count"] = "Count",
             ["settings.actions.close"] = "Close",
+            ["dialog.cancel"] = "Cancel",
 
             // Notifications
             ["notifications.title"] = "Notifications",
@@ -663,7 +671,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["notification.storage.autoDeleteApplied"] = "Auto delete removed {0} log files.",
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
             ["notification.connection.unknownReason"] = "Unknown reason",
-            ["notification.export.completed"] = "Export completed: {0}"
+            ["notification.export.completed"] = "Export completed: {0}",
+            ["command.defaults.groupName"] = "Default Quick Commands",
+            ["command.pinned.limit"] = "Quick commands support up to {0} pinned items."
         };
     }
 }

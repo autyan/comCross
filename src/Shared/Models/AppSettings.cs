@@ -106,6 +106,7 @@ public enum ExportRangeMode
 
 public sealed class CommandSettings
 {
+    public bool DefaultsInitialized { get; set; }
     public List<CommandDefinition> GlobalCommands { get; set; } = new();
     public Dictionary<string, List<CommandDefinition>> SessionCommands { get; set; } = new();
 }
