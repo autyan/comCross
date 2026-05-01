@@ -1,14 +1,13 @@
 # Technical Specifications Index
 
-> **Note**: This directory contains technical specifications for developers and contributors.
-> For internal design documents, see `/dev-docs/` (core team only, not in repository).
+This directory contains the public technical specifications for ComCross v0.4.0.
 
-## System Architecture
+## Product And Architecture
 
-- [02-MVP-Scope.md](02-MVP-Scope.md) - Minimum Viable Product scope and features
-- [03-System-Architecture.md](03-System-Architecture.md) - Overall system architecture design
-- [04-Plugin-System.md](04-Plugin-System.md) - Plugin system architecture
-- [05-Workspace-State.md](05-Workspace-State.md) - Workspace state management
+- [02-MVP-Scope.md](02-MVP-Scope.md) - v0.4 release scope and non-goals
+- [03-System-Architecture.md](03-System-Architecture.md) - Current module boundaries and runtime architecture
+- [04-Plugin-System.md](04-Plugin-System.md) - Plugin, host, IPC, UI-state, and bus capability model
+- [05-Workspace-State.md](05-Workspace-State.md) - Workspace, workload, session, and persistence semantics
 
 ## User Experience
 
@@ -19,8 +18,8 @@
 - [10-Plugin-Development-Guide.md](10-Plugin-Development-Guide.md) - Guide for developing plugins
 - [11-Packaging-Guide.md](11-Packaging-Guide.md) - Application packaging and distribution guide
 
----
+## Compatibility Note
 
-**Last Updated**: 2026-01-15
+v0.4.0 intentionally does not migrate old v0.3 session state. Users of earlier development builds should recreate sessions after upgrading.
 
-**Note**: Detailed internal design documents (roadmaps, RFCs, ADRs) are maintained in `/dev-docs/` and are not included in the public repository.
+**Last Updated**: 2026-05-02

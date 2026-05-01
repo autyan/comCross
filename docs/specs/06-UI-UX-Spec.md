@@ -1,58 +1,70 @@
-# UI/UX Specs (MVP)
+# UI/UX Specification
 
-Version: 0.1
+Version: v0.4
 
 ## 1) Product Shape
-- Workspace-first, message stream is the primary surface.
-- Tools are peripheral and modular.
+
+- Workspace-first communication tool.
+- Message stream is the primary surface.
+- Connection creation and session management are always close to the workspace.
+- The right panel supports sending and quick commands without replacing the message stream.
+- Plugin-provided facts drive bus-specific UI content.
 
 ## 2) Information Architecture
+
 Primary areas:
-1) Top Bar
-2) Left Sidebar (Devices/Sessions)
-3) Center Workspace (Message Stream)
-4) Right Tool Dock (Tools)
-5) Bottom Status Bar
+
+1. Top bar and workload tabs.
+2. Left rail for primary mode switching.
+3. Left sidebar for quick-create and session list.
+4. Center workspace for active session message stream.
+5. Right panel for send controls and quick commands.
+6. Bottom status bar.
 
 Navigation rules:
-- Workspace is always visible.
-- Tools never replace the workspace.
-- Per-session context is always visible.
 
-## 3) Layout & Grid
-- Base grid: 12 columns
-- Left Sidebar: 2-3 columns
-- Center Workspace: 7-8 columns
-- Right Tool Dock: 2-3 columns (collapsible)
-- Spacing: 4 / 8 / 12 / 16 / 24
-- Panel radius: 6px
-- Input radius: 4px
+- Workspace remains visible while sessions are active.
+- Session context is visible in the center header.
+- Plugin-specific connection details are rendered through the common connection UI path.
+- Shell does not expose plugin-private parameters as separate one-off UI flows.
 
-Breakpoints:
-- Desktop >= 1280px: full layout
-- Tablet 960-1279px: tool dock collapses by default
+## 3) Layout
+
+- Desktop layout targets 1280px and wider.
+- Left rail stays compact and icon-based.
+- Left sidebar is dense enough for repeated session switching.
+- Center workspace uses most of the horizontal space.
+- Right panel remains narrow and action-oriented.
+
+Spacing tokens:
+
+- 4 / 8 / 12 / 16 / 24
+
+Shape:
+
+- Cards and panels use restrained radius, normally 6-8px.
+- Icon buttons must have a stable hit target, not just an icon-sized content region.
 
 ## 4) Visual Style
 
 ### Typography
-- Titles/Headings: IBM Plex Sans
-- Body/Labels: IBM Plex Sans
-- Logs/Code: JetBrains Mono
+
+- Titles/headings: IBM Plex Sans or platform fallback.
+- Body/labels: IBM Plex Sans or platform fallback.
+- Message/code text: JetBrains Mono or monospace fallback.
 
 Type scale:
+
 - H1: 20
 - H2: 16
 - H3: 14
 - Body: 13
 - Caption: 12
-- Log line: 13 (mono)
-
-Line height:
-- Body: 1.35-1.4
-- Log: 1.45
+- Message line: 13 mono
 
 ### Color Tokens
-```
+
+```text
 --bg-0: #0F1417
 --bg-1: #141B1F
 --bg-2: #1B242A
@@ -68,88 +80,63 @@ Line height:
 --error: #E5534B
 
 --border: #25303A
---shadow: rgba(0,0,0,0.3)
 ```
 
 Usage:
-- Workspace background: bg-0 to bg-1 subtle gradient
-- Panels: bg-1/bg-2 with border
-- Tool dock: bg-2
-- Active state: accent-2
-- Connected: success
 
-### Elevation
-- Panels: 0 4px 12px shadow
-- Floating tools: 0 8px 20px shadow
+- Active state uses `accent-2`.
+- Connected state uses `success`.
+- Warning and error states must be visually distinct from active selection.
 
-## 5) Component Specs
-
-### Top Bar
-- App title
-- Active workspace name
-- Session status
-- Quick actions: Connect, Disconnect, Clear, Export
+## 5) Components
 
 ### Left Sidebar
-- Device list
-- Favorites
-- Session list
 
-States:
-- Active session highlighted (accent-2 bar)
-- Connected sessions show green dot
+- Quick-create view renders plugin capability schemas and plugin UI state.
+- Session list renders plugin-provided title, subtitle, icon, topology, and reconnect policy.
+- Connection parameter entry points use icon buttons with tooltips and stable hit targets.
 
 ### Center Workspace
-- Log view (monospace)
-- Search bar at top of stream
-- Filter bar under search
-- Metrics strip: RX/TX, rate, elapsed time
 
-Log styling:
-- Timestamp, source tag, content
-- Highlight: left color bar + subtle background
-- Error line: error color text + left bar
+- Header shows active session title, status, endpoint/subtitle, and session actions.
+- Search is incremental and applies to message text and searchable attributes.
+- Message stream shows direction, timestamp, content, and compact attributes.
+- The search input should be styled as one integrated control, not nested visible input frames.
 
-### Right Tool Dock
-- Tool tabs in vertical bar
-- Tool panel width 320px default
-- Tools: Send, Filter, Highlight, Export
+### Right Send Panel
 
-### Bottom Status Bar
-- Global status: CPU/memory, auto-save state
-- Notification area: alerts
+- Message input supports STR mode, CR/LF options, clear-after-send, and send-result errors.
+- Target selector appears only for sessions whose plugin declares transmit targets or requires a target.
+- Quick commands show up to 8 pinned commands; defaults initialize 3 pinned commands.
+- Quick command search opens a lightweight candidate popup only while searching.
+- Pinned command rows include send and edit actions.
+
+### Dialogs And Popups
+
+- Destructive actions use localized confirmation dialogs.
+- Popup candidate lists close on Escape, outside click, and completed selection.
+- Lightweight editors should not block unrelated workspace context unless the action is destructive.
 
 ## 6) UX Behavior
-- Connect opens new session tab.
-- Each session has independent settings.
-- Search is incremental.
-- Filters are keyword or regex.
-- Filter applies to view only.
-- Workspace auto-save on exit.
 
-## 7) Tool System UX
-- Tools share workspace context.
-- Tool switching is instant.
-- Disabled tool tab is hidden.
+- Creating a session saves a descriptor and selects it.
+- Reconnect is shown only when plugin metadata allows it.
+- Deleting a session is destructive and removes persisted session data.
+- Send failures are surfaced where the user initiated the send.
+- Plugin UI state refreshes should be visible as disabled/loading state when user action would otherwise appear ignored.
 
-## 8) Animation
-- Tool panel expand/collapse: 150-200ms ease
-- No animation for log streaming.
+## 7) Accessibility
 
-## 9) Accessibility
-- Contrast ratio > 4.5:1
-- Keyboard accessible actions
-- Focus visible with accent border
+- Contrast ratio should be at least 4.5:1 for text.
+- Keyboard focus must be visible.
+- Icon-only buttons require tooltips or accessible labels.
+- Clickable visual affordance and actual hit target must match.
 
-## 10) MVP Screens
-1) Main Workspace
-2) Session Connect Dialog
-3) Tool: Send
-4) Tool: Filter/Highlight
-5) Tool: Export
-6) Workspace Manager
+## 8) Release Screens
 
-## 11) Figma Notes
-- Build styles: Colors, Typography, Effects
-- Reusable components: Tabs, Panels, Buttons, Inputs
-- Ensure layout works at 1280x720 and 1440x900
+1. Main workspace with active session.
+2. Quick-create panel.
+3. Session list with parent/child topology.
+4. Session detail and connection parameters.
+5. Right send panel with quick commands.
+6. Settings with plugin settings pages.

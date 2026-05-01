@@ -1,26 +1,24 @@
 # Plugin Development Guide
 
-This document explains how to build a ComCross plugin that can be discovered and loaded from the `plugins/` directory.
+This document explains how to build a ComCross plugin for the v0.4 plugin architecture.
 
 ## 1) Plugin Structure
 
-Each plugin lives under its own folder:
+During development and release packaging, each plugin is placed under an isolated plugin folder:
 
-```
+```text
 plugins/
-  <tool-id>/
-    tool.dll
-    assets/
+  <plugin-id>-<stable-hash>/
+    <plugin assembly and dependencies>
 ```
 
-- `tool.dll` must embed the manifest resource.
-- `assets/` is optional for icons, docs, or samples.
+The exact release folder name is produced by packaging scripts from the plugin id and a stable hash.
 
-## 2) Manifest (Required)
+## 2) Manifest
 
-The plugin manifest is an embedded resource with the name:
+Each plugin assembly must embed:
 
-```
+```text
 ComCross.Plugin.Manifest.json
 ```
 
@@ -28,29 +26,33 @@ Example:
 
 ```json
 {
-  "id": "serial.stats",
-  "name": "Stats Panel",
-  "version": "1.0.0",
+  "id": "network.adapter",
+  "name": "Network Adapter",
+  "version": "0.3.2",
   "targetCoreVersion": "0.3",
-  "entryPoint": "ComCross.Plugins.Stats.StatsTool",
-  "toolGroup": "serial",
-  "permissions": ["workspace.read", "serial.read"]
+  "entryPoint": "ComCross.Plugins.Network.NetworkBusAdapterPlugin",
+  "pluginType": "BusAdapter",
+  "toolGroup": "network",
+  "permissions": ["network.connect", "network.send", "workspace.read"]
 }
 ```
 
-### Manifest Fields
+Manifest fields:
 
-- `id`: unique plugin id (recommended prefix by domain)
-- `name`: display name
-- `version`: plugin version
-- `targetCoreVersion`: minimum compatible core version
-- `entryPoint`: fully-qualified type name for the tool
-- `toolGroup`: category name
-- `permissions`: declared permissions for UI display
+- `id`: stable plugin id.
+- `name`: fallback display name.
+- `version`: plugin version.
+- `targetCoreVersion`: minimum compatible core version.
+- `entryPoint`: fully qualified plugin type name.
+- `pluginType`: plugin role, such as `BusAdapter` or `Extension`.
+- `toolGroup`: category for grouping.
+- `permissions`: user-facing permission declarations.
+- `settingsPages`: optional plugin settings pages rendered by Shell.
+- `i18n`: optional plugin-provided localized strings.
 
-## 3) Embedding the Manifest
+## 3) Embedding The Manifest
 
-In your plugin project file, embed the manifest file:
+In the plugin project file:
 
 ```xml
 <ItemGroup>
@@ -58,191 +60,191 @@ In your plugin project file, embed the manifest file:
 </ItemGroup>
 ```
 
-Ensure the resource name matches exactly `ComCross.Plugin.Manifest.json`.
+The embedded resource must end with `ComCross.Plugin.Manifest.json`.
 
-## 4) Discovery Rules
+## 4) Discovery And Isolation
 
-ComCross scans the `plugins/` directory on startup. Any DLL that contains
-`ComCross.Plugin.Manifest.json` will be considered a plugin.
+ComCross scans the `plugins/` directory on startup. A DLL with an embedded manifest is considered a plugin candidate.
 
 Validation includes:
+
 - manifest presence
+- entry point type
 - version compatibility
+- capability and schema shape
 
-## 5) Host Process Isolation
+Plugins run out of process through host executables. The main app does not load plugin assemblies directly.
 
-Each plugin runs in its own `PluginHost` process. The main app never loads
-plugin assemblies directly. This isolates crashes and allows per-plugin restarts.
+## 5) Producer/Consumer Boundary
 
-Plugins should not depend on UI types. Provide data and behavior via the
-notification system and any supported contracts instead.
+Bus plugins produce domain facts. Core and Shell consume those facts through public contracts.
 
-## 6) Producer/Consumer Boundary
+For bus plugins, plugin-produced facts include:
 
-Bus plugins produce domain facts. The main program consumes those facts through public contracts.
-
-For bus plugins, this means the plugin should provide:
-- session display metadata, icons, and endpoint text
+- capability schemas and UI schemas
+- plugin UI state
+- session display metadata
 - reconnect policy
 - parent/child session topology
-- managed resource lists and action descriptors
-- capability UI schema and UI state
-- startup session state patches and plugin-owned storage patches
+- managed resource descriptors and actions
+- startup session-state patches
+- transmit targets
+- message frame attributes
 
-Core and Shell should not infer those facts from plugin-private parameters. If a UI or workflow needs a bus-domain fact, expose it through a PluginSdk contract instead of relying on host-side parsing.
+Core and Shell must not infer bus-domain facts from plugin-private parameters. If a workflow needs a fact, add or use an SDK contract.
 
-## 7) Permissions
+## 6) Capabilities
 
-Permissions are declared in the manifest and are used to inform users what
-the plugin is allowed to do. These do not enforce security at runtime yet.
+Bus plugins expose capabilities through `IPluginCapabilityProvider`.
 
-## 8) Notifications (Optional)
+Capabilities can declare:
 
-Plugins can subscribe to app notifications by implementing:
+- id, name, description, and icon
+- JSON schema and UI schema
+- default parameters
+- shared-memory request
+- session host model
+- exclusive connection resource descriptor
 
+`PluginConnectionResourceDescriptor` is a generic host hint. It lets Shell/Core detect conflicts for declared resources, such as the serial `port` parameter. The plugin must still validate the final connection request.
+
+## 7) UI State And Settings
+
+Plugins can implement `IPluginUiStateProvider` to produce UI state for Shell.
+
+`PluginUiStateQuery` can include:
+
+- `CapabilityId`
+- `SessionId`
+- `ViewKind`
+- `ViewInstanceId`
+- `ResourceKind`
+- `ResourceId`
+- `Settings`
+
+Core passes a read-only settings snapshot for plugin settings pages. Snapshot keys use:
+
+```text
+{settingsPageId}.{fieldKey}
 ```
-ComCross.Shared.Services.IPluginNotificationSubscriber
-```
 
-Notifications are delivered via:
+Example: the serial plugin owns serial port scanning. It reads `serial-scan.scanPatterns` from the settings snapshot, produces a `ports` UI state, and handles the refresh action. Shell only renders that state and dispatches the action.
 
-```
-void OnNotification(PluginNotification notification)
-```
+## 8) Session Metadata
 
-Example: language change notification type `plugin.language.changed`, with data
-key `culture`. Official plugins must handle language notifications; third-party
-plugins may opt in.
+Plugins should describe created sessions through `PluginConnectResult`.
 
-Note: plugin callbacks are isolated. Exceptions are caught and the plugin will
-be restarted; failures are logged.
+Common metadata:
 
-## 9) Packaging
+- `DisplayTitle`
+- `DisplaySubtitle`
+- `SessionIcon`
+- `CanReconnect`
+- `ParentSessionId`
+- `ManagedResourceKinds`
 
-Place the compiled plugin DLL under its folder in `plugins/`:
+Core persists these fields in `SessionDescriptor`; Shell renders them directly.
 
-```
-plugins/
-  serial.stats/
-    tool.dll
-```
+Passive TCP accepted clients should set `CanReconnect` to `false` when the host cannot actively recreate them.
 
-## 10) Session-Owned Resources
+## 9) Session-Owned Resources
 
-Plugins that own transient resources under an active session can expose them through the PluginSdk resource management contract.
+Plugins that own transient resources under an active session can expose them through the resource management contract.
 
-Typical examples:
-- a TCP listener with pending clients
-
-Use `IPluginUiStateProvider.GetUiState` with `PluginUiStateQuery.ResourceKind` and `ResourceId` to return a `PluginResourceListState`. Each `PluginManagedResourceItem` can include `PluginResourceActionDescriptor` entries that describe what the host UI can do with the resource.
+Use `IPluginUiStateProvider.GetUiState` with `ResourceKind` and `ResourceId` to return resource state. Resource items can include action descriptors.
 
 Supported generic action kinds:
+
 - `connect-scoped-resource`: promote or bind a session-owned resource through the scoped connect flow.
 - `execute-action`: execute a plugin-owned action name with plugin-owned parameters.
 
-The host UI must consume the generic descriptors and should not hardcode a plugin's private action names or payload shape.
+The host UI consumes descriptors generically and must not hardcode plugin-private action names or payloads.
 
-## 11) Plugin Settings In UI State
-
-Plugins can declare settings pages in the manifest. Core persists those settings and includes a read-only settings snapshot in `PluginUiStateQuery.Settings` when requesting plugin UI state.
-
-Settings snapshot keys use the format `{settingsPageId}.{fieldKey}`. Plugins should treat this as input to their own producer behavior, not as host-owned business logic.
-
-Example: the serial adapter declares a `serial-scan.scanPatterns` setting and uses that value inside the serial plugin when producing its `ports` UI state. Shell renders the resulting state and dispatches refresh actions; it does not scan serial devices itself.
-
-## 12) Exclusive Connection Resources
-
-Capabilities can declare `PluginConnectionResourceDescriptor` when one committed parameter identifies an exclusive local resource. This lets the host offer a generic pre-connect conflict prompt without knowing plugin-private semantics.
-
-Example: the serial adapter declares `ConnectionResource.ParameterKey = "port"`. Shell may compare the selected `port` against connected serial sessions' committed parameters and ask whether to disconnect the existing session before connecting the new one.
-
-This is a host UX hint only. Plugins must still validate resource availability during `ConnectAsync` and return a clear failure when the resource cannot be opened.
-
-## 13) Message Frame Attributes
-
-Message frames support a small attribute set for searchable and displayable facts. Attribute limits are intentionally strict: at most 8 entries, key <= 32 bytes, value <= 128 bytes.
-
-Plugins may add transport facts such as `source.endpoint`, but should keep attributes concise.
-
-For multi-target sending, `PluginTransmitTarget.Attributes` carries the target's message attributes. Core copies those attributes onto the mirrored TX frame after a successful send. This lets an RX frame from `source.endpoint=127.0.0.1:9000` and a later TX frame to that same target use the same searchable/renderable attribute mechanism.
-
-## 14) Session Metadata
-
-Plugins should describe the session they created through `PluginConnectResult`.
-
-Common metadata:
-- `DisplayTitle`: user-facing title for the session.
-- `DisplaySubtitle`: user-facing endpoint or detail text.
-- `SessionIcon`: icon resource key such as `NetworkIcon`, `ServerIcon`, `CableIcon`, or a plugin-provided icon reference.
-- `CanReconnect`: whether the created session can be reconnected by the host. Omit it for the default `true`.
-- `ParentSessionId`: parent session id when the new session belongs under another session.
-- `ManagedResourceKinds`: resource kinds the session owns, such as `pending`.
-
-Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
-Passive child sessions created from an accepted resource should set `CanReconnect` to `false` when the host cannot actively recreate that session.
-
-## 15) Startup Session State Initialization
+## 10) Startup Session State Initialization
 
 Plugins can implement `IPluginSessionStateInitializer` when persisted session state needs plugin-owned validation, normalization, or migration at startup.
 
-Core restores session descriptors first, then calls the owning plugin once during startup initialization. While this is running, the session is unavailable to Shell actions. Core applies the returned session metadata patch and session-scoped storage patch as one update, publishes `SessionUpdatedEvent`, and then marks the session ready.
+Core restores descriptors first, then calls the owning plugin once during startup initialization. While initialization is running, Shell treats the session as unavailable. Core applies returned metadata and storage patches as one update, then marks the session ready or unavailable.
 
 The initializer receives:
+
 - plugin id, capability id, session id, and plugin version
-- the persisted session `ParametersJson`
-- plugin-owned session storage as a schema version plus JSON values
+- persisted `ParametersJson`
+- plugin-owned session storage schema version and JSON values
 
-The initializer returns:
-- `PluginSessionMetadataPatch` for host-visible session fields such as parameters, display metadata, reconnect policy, parent session id, and managed resource kinds
-- `PluginSessionStoragePatch` for plugin-owned session storage
-- `Ok=false` with `Error` when the session cannot be made usable
+It can return:
 
-Core owns the state transition and persistence. Plugins should not access workspace files directly for this flow. If the plugin is unavailable or the initializer fails, the session remains visible but unavailable until the user deletes it or a later startup can initialize it.
+- `PluginSessionMetadataPatch`
+- `PluginSessionStoragePatch`
+- `Ok=false` with `Error`
 
-When the user deletes a session, ComCross treats that session as permanently removed. Core removes the session descriptor and deletes the plugin-owned storage file for that session. Plugins should not depend on session storage surviving session deletion.
+Plugins do not access workspace files directly. Core owns persistence and state transitions.
 
-## 16) Notes
+Deleting a session is destructive. Core removes the descriptor and plugin-owned session storage for that session.
 
-- Keep plugins isolated from core services unless explicitly supported.
-- Do not depend on internal UI types that may change between versions.
+## 11) Message Frame Attributes
 
-## 14) Message Frame Attributes
+Bus plugins may attach small metadata attributes to message frames.
 
-Bus plugins may attach small metadata attributes to received message frames through the shared-memory writer contract.
-
-The main program validates and normalizes attributes at the contract boundary:
+Limits:
 
 - schema version: `1`
 - maximum attributes per frame: `8`
-- key: required, UTF-8 byte length up to `32`
-- key characters: lowercase ASCII letters, digits, `.`, `_`, and `-`
-- value: non-null string, UTF-8 byte length up to `128`
-- invalid attributes are dropped; values are never truncated
-- attributes are sorted by key for storage, export, display, and extension delivery
+- key: required, lowercase ASCII letters, digits, `.`, `_`, and `-`; UTF-8 byte length <= `32`
+- value: non-null string; UTF-8 byte length <= `128`
 
-Use attributes for domain facts that belong to one frame, such as a UDP datagram source endpoint. Do not use attributes as a general payload store or as a replacement for session metadata.
+Invalid attributes are dropped. Values are never truncated. Attributes are sorted by key for stable storage, display, search, export, and extension delivery.
 
-For the built-in network adapter, UDP listener sessions do not create child sessions per remote endpoint. Incoming datagrams stay on the listener session, and the sender endpoint is exposed as a message frame attribute such as `source.endpoint`. TCP listener sessions may still expose accepted connections as child sessions because TCP accepted clients are connection-oriented resources with independent lifecycles.
+Use attributes for frame-level facts, such as a UDP datagram source endpoint. Do not use attributes as payload storage or as a replacement for session metadata.
 
-## 15) Transmit Targets And Send Results
+The built-in UDP listener keeps incoming datagrams on the listener session and exposes sender endpoint as `source.endpoint`. UDP client frames do not add `source.endpoint` because the connected endpoint is already session-level metadata.
 
-Some bus sessions receive through one logical session but can send to multiple possible targets. A plugin can expose this as an optional SDK capability by implementing `IPluginTransmitTargetProvider`.
+Frame direction is not an attribute. It is represented by the frame/message direction field.
 
-Core queries transmit targets with `PluginTransmitTargetQuery(SessionId)`. The plugin returns a `PluginTransmitTargetSnapshot`:
+## 12) Transmit Targets And Send Results
 
-- `Targets`: plugin-produced target ids and labels
-- `DefaultTargetId`: optional preferred target, usually the most recently active endpoint
-- `RequireTargetForSend`: true when the session cannot send without an explicit target
-- `UpdatedAt`: snapshot timestamp
+Plugins can implement `IPluginTransmitTargetProvider` when a session can send to multiple targets.
 
-Shell only shows a target selector when the snapshot declares targets or requires a target. Core and Shell must not infer target semantics from plugin ids, capability ids, or private connection parameters.
+Core queries `PluginTransmitTargetSnapshot`, which includes:
 
-`PluginSendCommand` includes an optional `TransmitTargetId`. `PluginCommandResult` is the authoritative send result and can include:
+- `Targets`
+- `DefaultTargetId`
+- `RequireTargetForSend`
+- `UpdatedAt`
 
-- `Ok`: whether the send succeeded
-- `Error` and `ErrorCode`: structured failure details for UI display
-- `BytesWritten`: bytes accepted by the plugin transport
-- `TargetId`: target used for the send, when applicable
-- `TargetInvalidated`: true when Shell should refresh the target list
+Shell shows a target selector only when the plugin declares targets or requires one.
 
-The built-in UDP listener uses this model: incoming datagrams remain on the listener session, message frames carry `source.endpoint`, and replies can be sent to a selected recent source endpoint. TCP accepted clients remain independent scoped sessions because they have connection lifecycles.
+`PluginSendCommand` includes optional `TransmitTargetId`.
+
+`PluginCommandResult` is the authoritative send result and can include:
+
+- `Ok`
+- `Error`
+- `ErrorCode`
+- `BytesWritten`
+- `TargetId`
+- `TargetInvalidated`
+
+For multi-target sending, `PluginTransmitTarget.Attributes` carries attributes that Core copies onto the mirrored TX frame after a successful send.
+
+## 13) Notifications
+
+Plugins can subscribe to app notifications by implementing:
+
+```text
+ComCross.Shared.Services.IPluginNotificationSubscriber
+```
+
+Language change notifications use type `plugin.language.changed` and data key `culture`.
+
+Plugin callback exceptions are isolated and logged.
+
+## 14) Permissions
+
+Permissions are declared in the manifest and displayed to users. v0.4 does not yet enforce runtime permission isolation. Release security hardening is planned after v0.4.
+
+## 15) Notes
+
+- Keep plugins isolated from Core and Shell internals.
+- Do not reference Shell UI types from plugins.
+- Prefer SDK contracts over host-side special cases.
