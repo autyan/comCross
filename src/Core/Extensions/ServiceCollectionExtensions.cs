@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SessionHostRuntimeService>();
         services.AddSingleton<PluginManagerService>();
         services.AddSingleton<PluginHostProtocolService>();
+        services.AddSingleton<PluginResourceQueryService>();
         services.AddSingleton<IPluginUiStateFetcher, PluginUiStateFetcher>();
         services.AddSingleton<IExtensionActionExecutor, ExtensionActionExecutor>();
         services.AddSingleton<PluginHostEventRouterService>();

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
+using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -10,18 +10,12 @@ namespace ComCross.Core.Services;
 /// <summary>
 /// Orchestrates listener-style sessions that discover inbound peers (e.g. TCP accept, UDP peers)
 /// and automatically create child connection sessions.
-///
-/// Current MVP implementation targets the official network adapter plugin.
-/// Listener and child sessions share a session-host process grouped by listener session id.
 /// </summary>
 public sealed class ListenerAutoAcceptService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
-    private readonly PluginManagerService _pluginManagerService;
-    private readonly PluginHostProtocolService _protocol;
+    private readonly PluginResourceQueryService _resources;
     private readonly WorkspaceService _workspaceService;
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private readonly ILogger<ListenerAutoAcceptService> _logger;
@@ -37,14 +31,12 @@ public sealed class ListenerAutoAcceptService
 
     public ListenerAutoAcceptService(
         IEventBus eventBus,
-        PluginManagerService pluginManagerService,
-        PluginHostProtocolService protocol,
+        PluginResourceQueryService resources,
         WorkspaceService workspaceService,
         IWorkspaceCoordinator workspaceCoordinator,
         ILogger<ListenerAutoAcceptService> logger)
     {
-        _pluginManagerService = pluginManagerService ?? throw new ArgumentNullException(nameof(pluginManagerService));
-        _protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
+        _resources = resources ?? throw new ArgumentNullException(nameof(resources));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _workspaceCoordinator = workspaceCoordinator ?? throw new ArgumentNullException(nameof(workspaceCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -64,18 +56,9 @@ public sealed class ListenerAutoAcceptService
                 var sessions = _workspaceService.GetAllSessions();
                 foreach (var s in sessions)
                 {
-                    if (!string.Equals(s.PluginId, "network.adapter", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    if (s.CapabilityId is not ("tcp.server" or "udp.listen"))
-                    {
-                        continue;
-                    }
-
-                    // Skip bind-connection sessions.
-                    if (IsBindMode(s.ParametersJson))
+                    if (s.Kind != SessionKind.Listener
+                        || string.IsNullOrWhiteSpace(s.PluginId)
+                        || string.IsNullOrWhiteSpace(s.CapabilityId))
                     {
                         continue;
                     }
@@ -88,7 +71,7 @@ public sealed class ListenerAutoAcceptService
 
                     try
                     {
-                        await ProcessListenerPendingAsync(s.Id, s.CapabilityId!);
+                        await ProcessListenerPendingAsync(s);
                     }
                     finally
                     {
@@ -106,44 +89,10 @@ public sealed class ListenerAutoAcceptService
         }
     }
 
-    private static bool IsBindMode(string? parametersJson)
-    {
-        if (string.IsNullOrWhiteSpace(parametersJson))
-        {
-            return false;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(parametersJson);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            if (!doc.RootElement.TryGetProperty("mode", out var modeEl))
-            {
-                return false;
-            }
-
-            var mode = modeEl.ValueKind == JsonValueKind.String ? modeEl.GetString() : modeEl.ToString();
-            return string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private async Task HandleInvalidationAsync(PluginUiStateInvalidatedCoreEvent invalidated)
     {
         try
         {
-            if (!string.Equals(invalidated.PluginId, "network.adapter", StringComparison.Ordinal))
-            {
-                return;
-            }
-
             if (invalidated is null || string.IsNullOrWhiteSpace(invalidated.CapabilityId) || invalidated.SessionId is null)
             {
                 return;
@@ -158,8 +107,7 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
-            // MVP: only the official network adapter defines listener sessions today.
-            if (!string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal))
+            if (!string.Equals(session.PluginId, invalidated.PluginId, StringComparison.Ordinal))
             {
                 return;
             }
@@ -169,13 +117,13 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
-            if (invalidated.CapabilityId is not ("tcp.server" or "udp.listen"))
+            if (session.Kind != SessionKind.Listener)
             {
                 return;
             }
 
             if (!string.IsNullOrWhiteSpace(invalidated.ResourceKind)
-                && !string.Equals(invalidated.ResourceKind, "pending", StringComparison.Ordinal))
+                && !string.Equals(invalidated.ResourceKind, PluginResourceKinds.Pending, StringComparison.Ordinal))
             {
                 return;
             }
@@ -184,7 +132,7 @@ public sealed class ListenerAutoAcceptService
             await gate.WaitAsync();
             try
             {
-                await ProcessListenerPendingAsync(listenerSessionId, invalidated.CapabilityId);
+                await ProcessListenerPendingAsync(session);
             }
             finally
             {
@@ -197,181 +145,95 @@ public sealed class ListenerAutoAcceptService
         }
     }
 
-    private async Task ProcessListenerPendingAsync(string listenerSessionId, string capabilityId)
+    private async Task ProcessListenerPendingAsync(Session ownerSession)
     {
-        var runtime = _pluginManagerService.GetRuntime("network.adapter");
-        if (runtime is null)
-        {
-            return;
-        }
-
-        var (ok, error, snapshot) = await _protocol.GetUiStateAsync(
-            runtime,
-            capabilityId,
-            sessionId: listenerSessionId,
+        var (ok, error, state) = await _resources.GetResourceListAsync(
+            ownerSession,
+            PluginResourceKinds.Pending,
+            PluginResourceIds.All,
             viewKind: "listener",
             viewInstanceId: null,
-            resourceKind: "pending",
-            resourceId: "all",
             timeout: TimeSpan.FromSeconds(1));
 
-        if (!ok || snapshot is null)
+        if (!ok || state is null)
         {
-            if (!string.IsNullOrWhiteSpace(error))
+            if (!string.IsNullOrWhiteSpace(error) && !string.Equals(error, "Session host not running.", StringComparison.Ordinal))
             {
                 _logger.LogDebug(
-                    "Listener UI state fetch failed: ListenerSessionId={SessionId}, CapabilityId={CapabilityId}, Error={Error}",
-                    listenerSessionId,
-                    capabilityId,
+                    "Plugin resource query failed: OwnerSessionId={SessionId}, PluginId={PluginId}, CapabilityId={CapabilityId}, ResourceKind={ResourceKind}, Error={Error}",
+                    ownerSession.Id,
+                    ownerSession.PluginId,
+                    ownerSession.CapabilityId,
+                    PluginResourceKinds.Pending,
                     error);
             }
 
             return;
         }
 
-        if (snapshot.State.ValueKind != JsonValueKind.Object)
+        if (state.Items.Count == 0)
         {
             return;
         }
 
-        if (!TryReadPendingConnections(snapshot.State, out var pending))
+        var seen = _seenPendingByListener.GetOrAdd(ownerSession.Id, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
+        foreach (var item in state.Items)
         {
-            return;
-        }
-
-        if (pending.Count == 0)
-        {
-            return;
-        }
-
-        var seen = _seenPendingByListener.GetOrAdd(listenerSessionId, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
-
-
-        foreach (var p in pending)
-        {
-            if (string.IsNullOrWhiteSpace(p.PendingId))
+            if (string.IsNullOrWhiteSpace(item.Id))
             {
                 continue;
             }
 
-            if (!seen.TryAdd(p.PendingId, 0))
+            var acceptAction = FindConnectScopedAction(item.Actions);
+            if (acceptAction is null)
             {
                 continue;
             }
 
-            object parameters = new
+            if (!seen.TryAdd(item.Id, 0))
             {
-                endpoint = p.DisplayName
-            };
-
-            if (TryParseHostPort(p.DisplayName, out var host, out var port))
-            {
-                parameters = capabilityId switch
-                {
-                    "tcp.server" => new { host, port, endpoint = p.DisplayName },
-                    "udp.listen" => new { remoteHost = host, remotePort = port, endpoint = p.DisplayName },
-                    _ => parameters
-                };
+                continue;
             }
-
-            var parametersJson = JsonSerializer.Serialize(parameters);
-
-            var sessionName = string.IsNullOrWhiteSpace(p.DisplayName)
-                ? null
-                : p.DisplayName;
 
             try
             {
                 await _workspaceCoordinator.ConnectAsync(
-                    "network.adapter",
-                    capabilityId,
-                    parametersJson,
-                    sessionName,
-                    scopeSessionId: listenerSessionId,
-                    resourceKind: "pending",
-                    resourceId: p.PendingId);
+                    ownerSession.PluginId!,
+                    ownerSession.CapabilityId!,
+                    GetActionParametersJson(acceptAction),
+                    GetActionSessionName(acceptAction, item),
+                    scopeSessionId: ownerSession.Id,
+                    resourceKind: PluginResourceKinds.Pending,
+                    resourceId: item.Id);
             }
             catch (Exception ex)
             {
                 // Allow retry if connect failed.
-                seen.TryRemove(p.PendingId, out _);
+                seen.TryRemove(item.Id, out _);
                 _logger.LogWarning(
                     ex,
-                    "Auto-accept connect failed: ListenerSessionId={ListenerSessionId}, PendingId={PendingId}, CapabilityId={CapabilityId}",
-                    listenerSessionId,
-                    p.PendingId,
-                    capabilityId);
+                    "Auto-accept resource connect failed: OwnerSessionId={OwnerSessionId}, ResourceId={ResourceId}, PluginId={PluginId}, CapabilityId={CapabilityId}",
+                    ownerSession.Id,
+                    item.Id,
+                    ownerSession.PluginId,
+                    ownerSession.CapabilityId);
             }
         }
     }
 
-    private static bool TryParseHostPort(string? displayName, out string host, out int port)
-    {
-        host = string.Empty;
-        port = 0;
+    private static PluginResourceActionDescriptor? FindConnectScopedAction(
+        IReadOnlyList<PluginResourceActionDescriptor>? actions)
+        => actions?.FirstOrDefault(action =>
+            string.Equals(action.Id, PluginResourceActionIds.Accept, StringComparison.Ordinal)
+            && string.Equals(action.Kind, PluginResourceActionKinds.ConnectScopedResource, StringComparison.Ordinal));
 
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            return false;
-        }
+    private static string GetActionParametersJson(PluginResourceActionDescriptor action)
+        => action.Parameters is { } parameters ? parameters.GetRawText() : "{}";
 
-        var lastColon = displayName.LastIndexOf(':');
-        if (lastColon <= 0 || lastColon >= displayName.Length - 1)
-        {
-            return false;
-        }
-
-        var h = displayName[..lastColon].Trim();
-        var p = displayName[(lastColon + 1)..].Trim();
-        if (string.IsNullOrWhiteSpace(h) || !int.TryParse(p, out var parsed) || parsed is < 1 or > 65535)
-        {
-            return false;
-        }
-
-        host = h;
-        port = parsed;
-        return true;
-    }
-
-    private static bool TryReadPendingConnections(JsonElement state, out List<PendingConnection> pending)
-    {
-        pending = new List<PendingConnection>();
-
-        if (!state.TryGetProperty("items", out var arr)
-            && !state.TryGetProperty("pendingConnections", out arr)
-            && !state.TryGetProperty("pending", out arr))
-        {
-            return false;
-        }
-
-        if (arr.ValueKind != JsonValueKind.Array)
-        {
-            return false;
-        }
-
-        foreach (var item in arr.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            var id = item.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
-                ? idEl.GetString()
-                : null;
-
-            var display = item.TryGetProperty("displayName", out var dnEl) && dnEl.ValueKind == JsonValueKind.String
-                ? dnEl.GetString()
-                : null;
-
-            if (!string.IsNullOrWhiteSpace(id))
-            {
-                pending.Add(new PendingConnection(id!, display));
-            }
-        }
-
-        return true;
-    }
-
-    private readonly record struct PendingConnection(string PendingId, string? DisplayName);
+    private static string? GetActionSessionName(
+        PluginResourceActionDescriptor action,
+        PluginManagedResourceItem item)
+        => !string.IsNullOrWhiteSpace(action.SessionName)
+            ? action.SessionName
+            : string.IsNullOrWhiteSpace(item.DisplayName) ? null : item.DisplayName;
 }
