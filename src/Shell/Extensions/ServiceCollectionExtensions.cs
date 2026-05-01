@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         // Host-side helpers for plugin UI.
         services.AddSingleton<SerialPortsHostService>();
         services.AddSingleton<PluginManagementFacade>();
+        services.AddSingleton<BusAdapterConnectionFacade>();
 
         // Cross-cutting factories (avoid manual `new` for Views/ViewModels)
         services.AddTransient<IObjectFactory, ComCross.Shell.Services.ObjectFactory>();

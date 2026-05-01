@@ -41,10 +41,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly PluginUiRenderer _uiRenderer;
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerViewModel _pluginManager;
-    private readonly ComCross.Core.Services.PluginUiConfigService _pluginUiConfigService;
+    private readonly PluginUiConfigService _pluginUiConfigService;
     private readonly SerialPortsHostService _serialPorts;
-    private readonly ICapabilityDispatcher _dispatcher;
-    private readonly IWorkspaceCoordinator _workspaceCoordinator;
+    private readonly BusAdapterConnectionFacade _connections;
     private readonly IEventBus _eventBus;
     private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
     private readonly ILogger<BusAdapterSelectorViewModel>? _logger;
@@ -66,10 +65,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginUiRenderer uiRenderer,
         PluginUiStateManager stateManager,
         PluginManagerViewModel pluginManager,
-        ComCross.Core.Services.PluginUiConfigService pluginUiConfigService,
+        PluginUiConfigService pluginUiConfigService,
         SerialPortsHostService serialPorts,
-        ICapabilityDispatcher dispatcher,
-        IWorkspaceCoordinator workspaceCoordinator,
+        BusAdapterConnectionFacade connections,
         IEventBus eventBus,
         IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory,
         string viewKind = BusAdapterViewKind,
@@ -84,8 +82,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         _pluginManager = pluginManager;
         _pluginUiConfigService = pluginUiConfigService;
         _serialPorts = serialPorts;
-        _dispatcher = dispatcher;
-        _workspaceCoordinator = workspaceCoordinator;
+        _connections = connections;
         _eventBus = eventBus;
         _adapterItemFactory = adapterItemFactory;
         _logger = logger;
@@ -581,7 +578,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         try
         {
-            var sessions = (await _workspaceCoordinator.GetActiveSessionsAsync()).ToList();
+            var sessions = (await _connections.GetActiveSessionsAsync()).ToList();
 
             if (IsListenerManagerMode)
             {
@@ -813,14 +810,14 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         var parametersJson = System.Text.Json.JsonSerializer.Serialize(parameters);
         var sessionName = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
 
-        await _workspaceCoordinator.ConnectAsync(
+        await _connections.ConnectScopedResourceAsync(
             "network.adapter",
             _activeSession.CapabilityId ?? string.Empty,
             parametersJson,
             sessionName,
-            scopeSessionId: _activeSession.Id,
-            resourceKind: "pending",
-            resourceId: pendingId);
+            _activeSession.Id,
+            "pending",
+            pendingId);
 
         if (refreshAfter)
         {
@@ -958,12 +955,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             {
                 try
                 {
-                    var sessions = await _workspaceCoordinator.GetActiveSessionsAsync();
-                    var conflict = sessions.FirstOrDefault(s =>
-                        s.Status == SessionStatus.Connected
-                        && string.Equals(s.PluginId, pluginId, StringComparison.Ordinal)
-                        && string.Equals(s.CapabilityId, capabilityId, StringComparison.Ordinal)
-                        && string.Equals(TryGetCommittedParameterString(s.ParametersJson, "port"), desiredPort, StringComparison.Ordinal));
+                    var conflict = await _connections.FindSerialPortConflictAsync(pluginId, capabilityId, desiredPort);
 
                     if (conflict is not null)
                     {
@@ -976,7 +968,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                             return;
                         }
 
-                        await _dispatcher.DispatchAsync(pluginId, conflict.Id, ComCross.Shared.Models.PluginHostMessageTypes.Disconnect, null);
+                        await _connections.DisconnectPluginAsync(pluginId, conflict.Id);
                     }
                 }
                 catch
@@ -986,16 +978,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
         }
 
-        var payload = new
-        {
-            CapabilityId = capabilityId,
-            SessionId = targetSessionId,
-            Parameters = currentState
-        };
-
         try
         {
-            await _dispatcher.DispatchAsync(pluginId, targetSessionId, ComCross.Shared.Models.PluginHostMessageTypes.Connect, payload);
+            await _connections.ConnectPluginAsync(pluginId, capabilityId, targetSessionId, currentState);
             await RefreshActiveSessionFromWorkspaceAsync(targetSessionId);
             RefreshConnectionCommandState();
         }
@@ -1125,34 +1110,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         return int.TryParse(value.ToString(), out var result) ? result : null;
     }
 
-    private static string? TryGetCommittedParameterString(string? json, string key)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
-            {
-                return null;
-            }
-
-            if (!doc.RootElement.TryGetProperty(key, out var prop))
-            {
-                return null;
-            }
-
-            return prop.ValueKind == System.Text.Json.JsonValueKind.String ? prop.GetString() : prop.ToString();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private async System.Threading.Tasks.Task DisconnectAsync()
     {
         if (_activeSession?.Id is not { Length: > 0 } sessionId)
@@ -1166,7 +1123,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             pluginId = string.Empty;
         }
 
-        await _dispatcher.DispatchAsync(pluginId, sessionId, ComCross.Shared.Models.PluginHostMessageTypes.Disconnect, null);
+        await _connections.DisconnectPluginAsync(pluginId, sessionId);
         await RefreshActiveSessionFromWorkspaceAsync(sessionId);
         RefreshConnectionCommandState();
     }
@@ -1180,8 +1137,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         try
         {
-            var sessions = await _workspaceCoordinator.GetActiveSessionsAsync();
-            var session = sessions.FirstOrDefault(s => string.Equals(s.Id, sessionId, StringComparison.Ordinal));
+            var session = await _connections.GetActiveSessionAsync(sessionId);
             if (session is null)
             {
                 return;
@@ -1240,7 +1196,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        await _workspaceCoordinator.DeleteSessionAsync(sessionId);
+        await _connections.DeleteSessionAsync(sessionId);
     }
 
     private async Task DisconnectManagedSessionAsync(string? sessionId)
@@ -1250,7 +1206,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        await _workspaceCoordinator.CloseSessionAsync(sessionId);
+        await _connections.CloseSessionAsync(sessionId);
         await RefreshNetworkSelectionContextAsync();
     }
 
@@ -1268,7 +1224,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
         foreach (var sessionId in sessionIds)
         {
-            await _workspaceCoordinator.CloseSessionAsync(sessionId);
+            await _connections.CloseSessionAsync(sessionId);
         }
 
         await RefreshNetworkSelectionContextAsync();
@@ -1291,7 +1247,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        await _workspaceCoordinator.DeleteSessionAsync(sessionId);
+        await _connections.DeleteSessionAsync(sessionId);
         await RefreshNetworkSelectionContextAsync();
     }
 
