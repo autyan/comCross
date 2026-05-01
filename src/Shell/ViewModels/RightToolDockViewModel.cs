@@ -4,7 +4,10 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using ComCross.Core.Services;
+using ComCross.PluginSdk;
+using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
@@ -18,13 +21,16 @@ public sealed class RightToolDockViewModel : BaseViewModel
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private readonly AppLogService _appLogService;
     private readonly MessageStreamViewModel _messageStream;
+    private readonly IDisposable _pluginUiStateInvalidatedSubscription;
 
     private Session? _activeSession;
     private bool _isConnected;
+    private bool _requiresTransmitTarget;
     private bool _isSendHexMode;
     private bool _isAdvancedOptionsOpen;
     private bool _clearAfterSend;
     private string _messageInput = string.Empty;
+    private string? _sendErrorText;
     private string _commandSearchQuery = string.Empty;
     private CommandGroupFilterOption? _selectedCommandGroupFilter;
     private CommandListItemViewModel? _selectedSearchCommand;
@@ -32,10 +38,13 @@ public sealed class RightToolDockViewModel : BaseViewModel
     private bool _isSelectingSearchCommand;
     private bool _isCommandEditorOpen;
     private ToolDockTab _selectedToolTab = ToolDockTab.Send;
+    private TransmitTargetListItemViewModel? _selectedTransmitTarget;
+    private int _transmitTargetRefreshVersion;
 
     public RightToolDockViewModel(
         ILocalizationService localization,
         IWorkspaceCoordinator workspaceCoordinator,
+        IEventBus eventBus,
         AppLogService appLogService,
         MessageStreamViewModel messageStream,
         SettingsViewModel settings,
@@ -52,6 +61,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         SyncCommandGroups();
         SyncQuickCommands();
         SyncSearchCommands();
+        _pluginUiStateInvalidatedSubscription = eventBus.Subscribe<PluginUiStateInvalidatedCoreEvent>(OnPluginUiStateInvalidated);
     }
 
     public SettingsViewModel Settings { get; }
@@ -65,6 +75,8 @@ public sealed class RightToolDockViewModel : BaseViewModel
     public ObservableCollection<string> CommandGroupOptions { get; } = new();
 
     public ObservableCollection<CommandGroupFilterOption> CommandGroupFilters { get; } = new();
+
+    public ObservableCollection<TransmitTargetListItemViewModel> TransmitTargets { get; } = new();
 
     public Session? ActiveSession
     {
@@ -124,6 +136,44 @@ public sealed class RightToolDockViewModel : BaseViewModel
     }
 
     public string SendModeLabel => IsSendHexMode ? "HEX" : "STR";
+
+    public TransmitTargetListItemViewModel? SelectedTransmitTarget
+    {
+        get => _selectedTransmitTarget;
+        set
+        {
+            if (SetProperty(ref _selectedTransmitTarget, value))
+            {
+                SendErrorText = null;
+                OnPropertyChanged(nameof(CanSend));
+            }
+        }
+    }
+
+    public bool RequiresTransmitTarget
+    {
+        get => _requiresTransmitTarget;
+        private set
+        {
+            if (SetProperty(ref _requiresTransmitTarget, value))
+            {
+                OnPropertyChanged(nameof(CanSend));
+                OnPropertyChanged(nameof(IsTransmitTargetSelectorVisible));
+            }
+        }
+    }
+
+    public string? SendErrorText
+    {
+        get => _sendErrorText;
+        private set
+        {
+            if (SetProperty(ref _sendErrorText, value))
+            {
+                OnPropertyChanged(nameof(HasSendError));
+            }
+        }
+    }
 
     // i18n-ignore
     public string PinnedCommandCountText => $"{QuickCommands.Count} / {MaxPinnedCommands}";
@@ -216,8 +266,11 @@ public sealed class RightToolDockViewModel : BaseViewModel
     public bool CanSend
         => IsConnected
            && _activeSession?.InitializationState == SessionInitializationState.Ready
+           && (!RequiresTransmitTarget || SelectedTransmitTarget is not null)
            && !string.IsNullOrWhiteSpace(MessageInput);
     public bool CanClearInput => !string.IsNullOrWhiteSpace(MessageInput);
+    public bool HasSendError => !string.IsNullOrWhiteSpace(SendErrorText);
+    public bool IsTransmitTargetSelectorVisible => RequiresTransmitTarget || TransmitTargets.Count > 0;
 
     public bool HasQuickCommands => QuickCommands.Count > 0;
     public bool HasSearchCommands => SearchCommands.Count > 0;
@@ -254,6 +307,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
 
         IsConnected = _activeSession?.Status == SessionStatus.Connected;
+        ResetTransmitTargets();
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanSendCommand));
         OnPropertyChanged(nameof(CanSendSelectedSearchCommand));
@@ -261,6 +315,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         CommandCenter.IsActive = IsCommandsTabActive;
         SyncQuickCommands();
         SyncSearchCommands();
+        _ = RefreshTransmitTargetsAsync();
     }
 
     public void ToggleSendMode() => IsSendHexMode = !IsSendHexMode;
@@ -294,8 +349,21 @@ public sealed class RightToolDockViewModel : BaseViewModel
         try
         {
             var format = hex ? MessageFormat.Hex : MessageFormat.Text;
-            await _workspaceCoordinator.SendMessageAsync(ActiveSession.Id, MessageInput, format, addCr, addLf);
+            var result = await _workspaceCoordinator.SendMessageAsync(
+                ActiveSession.Id,
+                MessageInput,
+                format,
+                addCr,
+                addLf,
+                SelectedTransmitTarget?.Id);
 
+            if (!result.Ok)
+            {
+                ApplySendFailure(result);
+                return;
+            }
+
+            SendErrorText = null;
             if (ClearAfterSend)
             {
                 MessageInput = string.Empty;
@@ -305,6 +373,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         {
             // i18n-ignore (log message)
             _appLogService.LogException(ex, "Send failed");
+            SendErrorText = ex.Message;
         }
     }
 
@@ -564,6 +633,110 @@ public sealed class RightToolDockViewModel : BaseViewModel
         OnPropertyChanged(nameof(CanSendSelectedSearchCommand));
         OnPropertyChanged(nameof(CanPinSelectedSearchCommand));
     }
+
+    private async Task RefreshTransmitTargetsAsync()
+    {
+        var session = ActiveSession;
+        if (session is null || session.Status != SessionStatus.Connected)
+        {
+            ResetTransmitTargets();
+            return;
+        }
+
+        var version = ++_transmitTargetRefreshVersion;
+        PluginTransmitTargetSnapshot snapshot;
+        try
+        {
+            snapshot = await _workspaceCoordinator.GetTransmitTargetsAsync(session.Id);
+        }
+        catch (Exception ex)
+        {
+            // i18n-ignore (log message)
+            _appLogService.LogException(ex, "Refresh transmit targets failed");
+            snapshot = new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (version != _transmitTargetRefreshVersion
+                || ActiveSession is null
+                || !string.Equals(ActiveSession.Id, session.Id, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ApplyTransmitTargets(snapshot);
+        });
+    }
+
+    private void ApplyTransmitTargets(PluginTransmitTargetSnapshot snapshot)
+    {
+        var previousId = SelectedTransmitTarget?.Id;
+        TransmitTargets.Clear();
+        foreach (var target in snapshot.Targets)
+        {
+            TransmitTargets.Add(new TransmitTargetListItemViewModel(target));
+        }
+
+        RequiresTransmitTarget = snapshot.RequireTargetForSend;
+        SelectedTransmitTarget =
+            TransmitTargets.FirstOrDefault(t => string.Equals(t.Id, previousId, StringComparison.Ordinal))
+            ?? TransmitTargets.FirstOrDefault(t => string.Equals(t.Id, snapshot.DefaultTargetId, StringComparison.Ordinal))
+            ?? (RequiresTransmitTarget ? TransmitTargets.FirstOrDefault() : null);
+
+        OnPropertyChanged(nameof(IsTransmitTargetSelectorVisible));
+        OnPropertyChanged(nameof(CanSend));
+    }
+
+    private void ResetTransmitTargets()
+    {
+        _transmitTargetRefreshVersion++;
+        TransmitTargets.Clear();
+        SelectedTransmitTarget = null;
+        RequiresTransmitTarget = false;
+        SendErrorText = null;
+        OnPropertyChanged(nameof(IsTransmitTargetSelectorVisible));
+        OnPropertyChanged(nameof(CanSend));
+    }
+
+    private void ApplySendFailure(PluginCommandResult result)
+    {
+        SendErrorText = result.ErrorCode switch
+        {
+            "target-required" => L["tool.send.error.targetRequired"],
+            "target-not-found" => L["tool.send.error.targetNotFound"],
+            _ => result.Error ?? L["tool.send.error.generic"]
+        };
+
+        if (result.TargetInvalidated)
+        {
+            _ = RefreshTransmitTargetsAsync();
+        }
+    }
+
+    private void OnPluginUiStateInvalidated(PluginUiStateInvalidatedCoreEvent evt)
+    {
+        var sessionId = ActiveSession?.Id;
+        if (string.IsNullOrWhiteSpace(sessionId)
+            || !string.Equals(evt.SessionId, sessionId, StringComparison.Ordinal)
+            || !string.Equals(evt.ViewKind, "transmit-targets", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => _ = RefreshTransmitTargetsAsync());
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _pluginUiStateInvalidatedSubscription.Dispose();
+            CommandCenter.Commands.CollectionChanged -= OnCommandsChanged;
+        }
+
+        base.Dispose(disposing);
+    }
 }
 
 public sealed class CommandListItemViewModel
@@ -613,3 +786,17 @@ public sealed class CommandListItemViewModel
 }
 
 public sealed record CommandGroupFilterOption(string Value, string Label);
+
+public sealed class TransmitTargetListItemViewModel
+{
+    public TransmitTargetListItemViewModel(PluginTransmitTarget target)
+    {
+        Target = target;
+    }
+
+    public PluginTransmitTarget Target { get; }
+    public string Id => Target.Id;
+    public string DisplayName => Target.DisplayName;
+    public string Subtitle => Target.Subtitle ?? string.Empty;
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Target.Subtitle);
+}

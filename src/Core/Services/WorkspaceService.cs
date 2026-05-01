@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ComCross.Core.Models;
+using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -20,6 +21,7 @@ public sealed class WorkspaceService
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
     private readonly PluginSessionInitializationService _sessionInitializationService;
+    private readonly SessionDataCleanupService _sessionDataCleanupService;
     private readonly IEventBus _eventBus;
 
     private bool _sessionsRestored;
@@ -32,6 +34,7 @@ public sealed class WorkspaceService
         WorkspaceStateStore workspaceStateStore,
         WorkloadService workloadService,
         PluginSessionInitializationService sessionInitializationService,
+        SessionDataCleanupService sessionDataCleanupService,
         IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
@@ -41,6 +44,7 @@ public sealed class WorkspaceService
         _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
         _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
+        _sessionDataCleanupService = sessionDataCleanupService ?? throw new ArgumentNullException(nameof(sessionDataCleanupService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
     }
 
@@ -116,15 +120,26 @@ public sealed class WorkspaceService
     /// <summary>
     /// Send data to a session
     /// </summary>
-    public async Task<int> SendDataAsync(string sessionId, byte[] data, CancellationToken cancellationToken = default)
+    public async Task<PluginCommandResult> SendDataAsync(
+        string sessionId,
+        byte[] data,
+        string? transmitTargetId = null,
+        CancellationToken cancellationToken = default)
     {
-        return await _deviceService.SendAsync(sessionId, data, MessageFormat.Text, cancellationToken);
+        return await _deviceService.SendAsync(sessionId, data, MessageFormat.Text, transmitTargetId, cancellationToken);
     }
 
     /// <summary>
     /// Send formatted message to a session (text or hex)
     /// </summary>
-    public async Task<int> SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf, CancellationToken cancellationToken = default)
+    public async Task<PluginCommandResult> SendMessageAsync(
+        string sessionId,
+        string message,
+        MessageFormat format,
+        bool addCr,
+        bool addLf,
+        string? transmitTargetId = null,
+        CancellationToken cancellationToken = default)
     {
         byte[] data = format == MessageFormat.Hex
             ? Convert.FromHexString(message.Replace(" ", ""))
@@ -137,8 +152,13 @@ public sealed class WorkspaceService
             data = data.Concat(suffixBytes).ToArray();
         }
 
-        return await _deviceService.SendAsync(sessionId, data, format, cancellationToken);
+        return await _deviceService.SendAsync(sessionId, data, format, transmitTargetId, cancellationToken);
     }
+
+    public Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+        => _deviceService.GetTransmitTargetsAsync(sessionId, cancellationToken);
 
     /// <summary>
     /// Clear messages for a session
@@ -288,6 +308,14 @@ public sealed class WorkspaceService
             return;
         }
 
+        var cleanupTargets = orderedSessionIds
+            .Select(deleteId =>
+            {
+                var session = _deviceService.GetSession(deleteId);
+                return new SessionDataCleanupTarget(deleteId, session?.PluginId);
+            })
+            .ToList();
+
         foreach (var deleteId in orderedSessionIds)
         {
             var session = _deviceService.GetSession(deleteId);
@@ -296,6 +324,7 @@ public sealed class WorkspaceService
                 await DisconnectAsync(deleteId, cancellationToken);
             }
 
+            await _logStorageService.StopSessionAsync(deleteId);
             _deviceService.RemoveSession(deleteId);
             ClearMessages(deleteId);
             await _workloadService.RemoveSessionFromAllWorkloadsAsync(deleteId);
@@ -312,6 +341,8 @@ public sealed class WorkspaceService
                 state.UiState.ActiveSessionId = null;
             }
         }, cancellationToken);
+
+        await _sessionDataCleanupService.DeleteSessionOwnedDataAsync(cleanupTargets, cancellationToken);
 
         foreach (var deleteId in orderedSessionIds)
         {

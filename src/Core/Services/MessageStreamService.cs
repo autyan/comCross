@@ -149,7 +149,7 @@ public sealed class MessageStreamService : IMessageStreamService
                     {
                         var regex = new Regex(query, RegexOptions.IgnoreCase);
                         return _messages
-                            .Where(m => regex.IsMatch(m.Content))
+                            .Where(m => regex.IsMatch(BuildSearchText(m)))
                             .ToList();
                     }
                     catch (ArgumentException)
@@ -160,10 +160,23 @@ public sealed class MessageStreamService : IMessageStreamService
                 else
                 {
                     return _messages
-                        .Where(m => m.Content.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        .Where(m => BuildSearchText(m).Contains(query, StringComparison.OrdinalIgnoreCase))
                         .ToList();
                 }
             }
+        }
+
+        private static string BuildSearchText(LogMessage message)
+        {
+            if (message.Attributes.Count == 0)
+            {
+                return message.Content;
+            }
+
+            return string.Concat(
+                message.Content,
+                " ",
+                string.Join(" ", message.Attributes.Select(static x => $"{x.Key}={x.Value}")));
         }
 
         public void Clear()

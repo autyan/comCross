@@ -19,6 +19,7 @@ internal sealed class RoleGatekeeper
                 or PluginHostMessageTypes.Notify
                 or PluginHostMessageTypes.GetCapabilities
                 or PluginHostMessageTypes.GetUiState
+                or PluginHostMessageTypes.GetTransmitTargets
                 or PluginHostMessageTypes.InitializeSessionState
                 or PluginHostMessageTypes.LanguageChanged
                 or PluginHostMessageTypes.Shutdown;
@@ -28,6 +29,7 @@ internal sealed class RoleGatekeeper
             or PluginHostMessageTypes.Notify
             or PluginHostMessageTypes.GetCapabilities
             or PluginHostMessageTypes.GetUiState
+            or PluginHostMessageTypes.GetTransmitTargets
             or PluginHostMessageTypes.InitializeSessionState
             or PluginHostMessageTypes.ApplySharedMemorySegment
             or PluginHostMessageTypes.Connect

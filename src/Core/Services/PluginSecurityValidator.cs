@@ -195,6 +195,9 @@ public sealed class PluginSecurityValidator
             frameId = 1;
             return true;
         }
+
+        public bool TryWriteFrame(ReadOnlySpan<byte> data, IReadOnlyDictionary<string, string>? attributes, out long frameId)
+            => TryWriteFrame(data, out frameId);
         
         public long GetFreeSpace() => long.MaxValue;
         public double GetUsageRatio() => 0.0;

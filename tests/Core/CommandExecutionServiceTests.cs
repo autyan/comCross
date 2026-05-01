@@ -1,5 +1,6 @@
 using ComCross.Core.Models;
 using ComCross.Core.Services;
+using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Models;
 using Xunit;
@@ -120,22 +121,31 @@ public sealed class CommandExecutionServiceTests
 
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
 
-        public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf)
+        public Task<PluginCommandResult> SendMessageAsync(
+            string sessionId,
+            string message,
+            MessageFormat format,
+            bool addCr,
+            bool addLf,
+            string? transmitTargetId = null)
         {
             LastMessageSessionId = sessionId;
             LastMessage = message;
             LastFormat = format;
             LastAddCr = addCr;
             LastAddLf = addLf;
-            return Task.CompletedTask;
+            return Task.FromResult(new PluginCommandResult(true));
         }
 
-        public Task SendDataAsync(string sessionId, byte[] data)
+        public Task<PluginCommandResult> SendDataAsync(string sessionId, byte[] data, string? transmitTargetId = null)
         {
             LastDataSessionId = sessionId;
             LastData = data;
-            return Task.CompletedTask;
+            return Task.FromResult(new PluginCommandResult(true));
         }
+
+        public Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(string sessionId)
+            => Task.FromResult(new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>()));
 
         public void ClearMessages(string sessionId)
         {

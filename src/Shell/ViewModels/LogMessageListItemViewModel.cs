@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Text;
 using System.Runtime.CompilerServices;
 using ComCross.Shared.Models;
@@ -8,11 +10,17 @@ namespace ComCross.Shell.ViewModels;
 
 public sealed record LogMessageListItemContext(LogMessage Message, string? TimestampFormat, bool IsHexDisplayMode);
 
+public sealed record MessageAttributeListItemViewModel(string Key, string Value)
+{
+    public string DisplayText => $"{Key}={Value}";
+}
+
 public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IInitializable<LogMessageListItemContext>
 {
     private LogMessage? _message;
     private string _timestampText;
     private string _content;
+    private IReadOnlyList<MessageAttributeListItemViewModel> _attributes;
     private bool _isHexDisplayMode;
     private bool _isInitialized;
 
@@ -20,6 +28,7 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
     {
         _timestampText = string.Empty;
         _content = string.Empty;
+        _attributes = Array.Empty<MessageAttributeListItemViewModel>();
     }
 
     public void Init(LogMessageListItemContext context)
@@ -34,6 +43,10 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
         _timestampText = FormatTimestamp(context.Message.Timestamp, context.TimestampFormat);
         _isHexDisplayMode = context.IsHexDisplayMode;
         _content = FormatDisplayContent(context.Message, _isHexDisplayMode);
+        _attributes = context.Message.Attributes
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .Select(static x => new MessageAttributeListItemViewModel(x.Key, x.Value))
+            .ToArray();
         OnPropertyChanged(string.Empty);
     }
 
@@ -62,6 +75,10 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
     }
 
     public string Content => _content;
+
+    public IReadOnlyList<MessageAttributeListItemViewModel> Attributes => _attributes;
+
+    public bool HasAttributes => _attributes.Count > 0;
 
     public string TimestampText
     {

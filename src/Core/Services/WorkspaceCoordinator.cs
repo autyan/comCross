@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ComCross.Core.Models;
+using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
@@ -38,8 +39,15 @@ public interface IWorkspaceCoordinator
         string? resourceId = null);
     Task RenameSessionAsync(string sessionId, string name);
     Task DeleteSessionAsync(string sessionId);
-    Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf);
-    Task SendDataAsync(string sessionId, byte[] data);
+    Task<PluginCommandResult> SendMessageAsync(
+        string sessionId,
+        string message,
+        MessageFormat format,
+        bool addCr,
+        bool addLf,
+        string? transmitTargetId = null);
+    Task<PluginCommandResult> SendDataAsync(string sessionId, byte[] data, string? transmitTargetId = null);
+    Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(string sessionId);
     void ClearMessages(string sessionId);
     void SubscribeToMessages(string sessionId, Action<LogMessage> callback);
     
@@ -179,10 +187,20 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
     public Task RenameSessionAsync(string sessionId, string name) => _workspaceService.RenameSessionAsync(sessionId, name);
 
-    public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf)
-        => _workspaceService.SendMessageAsync(sessionId, message, format, addCr, addLf);
+    public Task<PluginCommandResult> SendMessageAsync(
+        string sessionId,
+        string message,
+        MessageFormat format,
+        bool addCr,
+        bool addLf,
+        string? transmitTargetId = null)
+        => _workspaceService.SendMessageAsync(sessionId, message, format, addCr, addLf, transmitTargetId);
 
-    public Task SendDataAsync(string sessionId, byte[] data) => _workspaceService.SendDataAsync(sessionId, data);
+    public Task<PluginCommandResult> SendDataAsync(string sessionId, byte[] data, string? transmitTargetId = null)
+        => _workspaceService.SendDataAsync(sessionId, data, transmitTargetId);
+
+    public Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(string sessionId)
+        => _workspaceService.GetTransmitTargetsAsync(sessionId);
 
     public void ClearMessages(string sessionId) => _workspaceService.ClearMessages(sessionId);
 

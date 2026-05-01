@@ -136,6 +136,7 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
                     Source = "system",
                     RawData = Array.Empty<byte>(),
                     Format = MessageFormat.Text,
+                    Attributes = MessageFrameAttributes.Empty,
                 });
                 cursor = firstAvailable - 1;
             }
@@ -154,7 +155,9 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
                     Level = LogLevel.Info,
                     Source = frame.Direction == FrameDirection.Tx ? "TX" : "RX",
                     RawData = frame.RawData,
-                    Format = frame.Format
+                    Format = frame.Format,
+                    Attributes = frame.Attributes,
+                    AttributeSchemaVersion = frame.AttributeSchemaVersion
                 });
             }
         }

@@ -213,7 +213,8 @@ public sealed class ExtensionBridgeService : IDisposable
                     frame.Direction.ToString(),
                     frame.RawData,
                     frame.Format.ToString(),
-                    frame.Source))
+                    frame.Source,
+                    frame.Attributes))
                 .ToList();
 
             await _extensionRuntimeService.PushFrameBatchAsync(batch, cancellationToken);

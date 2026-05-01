@@ -64,4 +64,10 @@ internal static class PluginHostHandlers
         HostRuntime state,
         JsonSerializerOptions jsonOptions)
         => GetUiStateHandler.Handle(request, state, jsonOptions);
+
+    public static PluginHostResponse HandleGetTransmitTargets(
+        PluginHostRequest request,
+        HostRuntime state,
+        JsonSerializerOptions jsonOptions)
+        => GetTransmitTargetsHandler.Handle(request, state, jsonOptions);
 }

@@ -29,6 +29,9 @@ public sealed class SwitchableSharedMemoryWriter : ISharedMemoryWriter
     public bool TryWriteFrame(ReadOnlySpan<byte> data, out long frameId)
         => _current.TryWriteFrame(data, out frameId);
 
+    public bool TryWriteFrame(ReadOnlySpan<byte> data, IReadOnlyDictionary<string, string>? attributes, out long frameId)
+        => _current.TryWriteFrame(data, attributes, out frameId);
+
     public long GetFreeSpace() => _current.GetFreeSpace();
 
     public double GetUsageRatio() => _current.GetUsageRatio();

@@ -187,6 +187,8 @@ internal sealed class SharedMemoryWriterManager
         }
 
         public bool TryWriteFrame(ReadOnlySpan<byte> data, out long frameId) => _segment.TryWriteFrame(data, out frameId);
+        public bool TryWriteFrame(ReadOnlySpan<byte> data, IReadOnlyDictionary<string, string>? attributes, out long frameId)
+            => _segment.TryWriteFrame(data, attributes, out frameId);
         public long GetFreeSpace() => _segment.GetFreeSpace();
         public double GetUsageRatio() => _segment.GetUsageRatio();
 

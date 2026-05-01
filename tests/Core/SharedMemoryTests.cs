@@ -69,7 +69,7 @@ public class SharedMemoryTests : IDisposable
         // Assert
         Assert.True(result);
         Assert.Equal(1, frameId);
-        Assert.Equal(100 + 4 + 16, 1024 * 1024 - 256 - segment.GetFreeSpace()); // 数据 + 长度字段 + wire header
+        Assert.Equal(100 + 4 + 16 + 4, 1024 * 1024 - 256 - segment.GetFreeSpace()); // 数据 + 长度字段 + wire header + attr section length
     }
     
     [Fact]
@@ -104,7 +104,7 @@ public class SharedMemoryTests : IDisposable
         
         // Assert ✅ 边界检查2：空间不足时返回false
         Assert.True(writeCount < 100); // 应该在某个点停止
-        Assert.True(segment.GetFreeSpace() < 120); // 剩余空间不足以写入100字节 + 4字节长度 + 16字节header
+        Assert.True(segment.GetFreeSpace() < 124); // 剩余空间不足以写入100字节 + 4字节长度 + 16字节header + attr section length
         
         // 再次尝试写入应该失败
         bool result = segment.TryWriteFrame(data, out long frameId);
@@ -127,6 +127,31 @@ public class SharedMemoryTests : IDisposable
         Assert.True(result);
         Assert.Equal(originalData.Length, readData.Length);
         Assert.Equal(originalData, readData);
+    }
+
+    [Fact]
+    public void TryReadFrameRecord_WithAttributes_PreservesAttributes()
+    {
+        // Arrange
+        var segment = _sharedMemory.AllocateSegment("session1", 1024 * 1024);
+        byte[] originalData = [0x01, 0x02, 0x03];
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["source.endpoint"] = "127.0.0.1:9000",
+            ["bus.kind"] = "udp"
+        };
+
+        // Act
+        var writeResult = segment.TryWriteFrame(originalData, attributes, out _);
+        var readResult = segment.TryReadFrameRecord(out var record);
+
+        // Assert
+        Assert.True(writeResult);
+        Assert.True(readResult);
+        Assert.Equal(originalData, record.RawData);
+        Assert.Equal("udp", record.Attributes["bus.kind"]);
+        Assert.Equal("127.0.0.1:9000", record.Attributes["source.endpoint"]);
+        Assert.Equal(MessageFrameAttributes.SchemaVersion, record.AttributeSchemaVersion);
     }
 
     [Fact]
@@ -308,7 +333,7 @@ public class SharedMemoryTests : IDisposable
         // Assert
         Assert.Equal(10 * 1024 * 1024, stats.TotalSize);
         Assert.Equal(3 * 1024 * 1024, stats.AllocatedSize);
-        Assert.Equal(1020, stats.UsedSize); // 1000字节数据 + 4字节长度 + 16字节header
+        Assert.Equal(1024, stats.UsedSize); // 1000字节数据 + 4字节长度 + 16字节header + attr section length
         Assert.Equal(2, stats.SessionCount);
     }
     

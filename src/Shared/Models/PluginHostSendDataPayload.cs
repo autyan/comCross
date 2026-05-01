@@ -2,4 +2,5 @@ namespace ComCross.Shared.Models;
 
 public sealed record PluginHostSendDataPayload(
     string SessionId,
-    byte[] Data);
+    byte[] Data,
+    string? TransmitTargetId = null);

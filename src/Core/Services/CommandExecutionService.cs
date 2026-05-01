@@ -1,5 +1,6 @@
 using ComCross.Shared.Helpers;
 using ComCross.Shared.Models;
+using ComCross.PluginSdk;
 
 namespace ComCross.Core.Services;
 
@@ -28,23 +29,23 @@ public sealed class CommandExecutionService
 
         if (command.Type == CommandPayloadType.Hex)
         {
-            await _workspaceCoordinator.SendMessageAsync(
+            EnsureSendSucceeded(await _workspaceCoordinator.SendMessageAsync(
                 sessionId,
                 command.Payload,
                 MessageFormat.Hex,
                 command.AppendCr,
-                command.AppendLf);
+                command.AppendLf));
             return;
         }
 
         if (UsesDefaultUtf8(command.Encoding))
         {
-            await _workspaceCoordinator.SendMessageAsync(
+            EnsureSendSucceeded(await _workspaceCoordinator.SendMessageAsync(
                 sessionId,
                 command.Payload,
                 MessageFormat.Text,
                 command.AppendCr,
-                command.AppendLf);
+                command.AppendLf));
             return;
         }
 
@@ -56,7 +57,15 @@ public sealed class CommandExecutionService
             data = data.Concat(encoding.GetBytes(suffix)).ToArray();
         }
 
-        await _workspaceCoordinator.SendDataAsync(sessionId, data);
+        EnsureSendSucceeded(await _workspaceCoordinator.SendDataAsync(sessionId, data));
+    }
+
+    private static void EnsureSendSucceeded(PluginCommandResult result)
+    {
+        if (!result.Ok)
+        {
+            throw new InvalidOperationException(result.Error ?? result.ErrorCode ?? "Send failed.");
+        }
     }
 
     private static bool UsesDefaultUtf8(string? encoding)

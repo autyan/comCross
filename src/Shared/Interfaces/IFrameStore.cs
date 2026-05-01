@@ -9,7 +9,14 @@ public interface IFrameStore
     /// <summary>
     /// Appends a frame into the per-session window and returns the assigned frame id.
     /// </summary>
-    long Append(string sessionId, DateTime timestampUtc, FrameDirection direction, byte[] rawData, MessageFormat format, string source);
+    long Append(
+        string sessionId,
+        DateTime timestampUtc,
+        FrameDirection direction,
+        byte[] rawData,
+        MessageFormat format,
+        string source,
+        IReadOnlyDictionary<string, string>? attributes = null);
 
     /// <summary>
     /// Reads frames strictly after <paramref name="afterFrameId"/>.

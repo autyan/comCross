@@ -63,10 +63,11 @@ public sealed class NetworkBusAdapterPluginTests
     }
 
     [Fact]
-    public async Task UdpListener_PendingResource_CanBeBoundViaFormalTarget()
+    public async Task UdpListener_WritesDatagramsToListenerSessionWithSourceEndpointAttribute()
     {
         var plugin = new NetworkBusAdapterPlugin();
         var listenPort = GetFreeUdpPort();
+        var writer = new CapturingSharedMemoryWriter();
 
         var listenParams = JsonSerializer.SerializeToElement(new
         {
@@ -80,39 +81,186 @@ public sealed class NetworkBusAdapterPluginTests
 
         Assert.True(listenResult.Ok, listenResult.Error);
         Assert.Equal("ServerIcon", listenResult.SessionIcon);
-        Assert.Contains(PluginResourceKinds.Pending, listenResult.ManagedResourceKinds ?? Array.Empty<string>());
+        Assert.DoesNotContain(PluginResourceKinds.Pending, listenResult.ManagedResourceKinds ?? Array.Empty<string>());
+
+        plugin.SetSharedMemoryWriter("listener-udp", writer);
 
         using var sender = new UdpClient();
         var payload = new byte[] { 0x01, 0x02, 0x03 };
         await sender.SendAsync(payload, payload.Length, new IPEndPoint(IPAddress.Loopback, listenPort));
 
-        var pendingId = await WaitForPendingAsync(plugin, "udp.listen", "listener-udp");
-        Assert.False(string.IsNullOrWhiteSpace(pendingId));
+        var captured = await writer.WaitForFrameAsync();
 
+        Assert.Equal(payload, captured.Data);
+        Assert.True(captured.Attributes.TryGetValue("source.endpoint", out var sourceEndpoint));
+        Assert.Contains("127.0.0.1", sourceEndpoint);
+
+        var pendingId = await WaitForPendingAsync(plugin, "udp.listen", "listener-udp");
+        Assert.Null(pendingId);
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp"), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UdpListener_ExposesRecentTransmitTargets()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeUdpPort();
+        var writer = new CapturingSharedMemoryWriter();
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand(
+                "udp.listen",
+                JsonSerializer.SerializeToElement(new { listenHost = "127.0.0.1", listenPort }),
+                "listener-udp-targets"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+        plugin.SetSharedMemoryWriter("listener-udp-targets", writer);
+
+        using var sender = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        await sender.SendAsync(new byte[] { 0x10 }, 1, new IPEndPoint(IPAddress.Loopback, listenPort));
+        await writer.WaitForFrameAsync();
+
+        var localEndpoint = (IPEndPoint)sender.Client.LocalEndPoint!;
+        var snapshot = plugin.GetTransmitTargets(new PluginTransmitTargetQuery("listener-udp-targets"));
+
+        var target = Assert.Single(snapshot.Targets);
+        Assert.Equal($"{localEndpoint.Address}:{localEndpoint.Port}", target.Id);
+        Assert.Equal(target.Id, snapshot.DefaultTargetId);
+        Assert.True(snapshot.RequireTargetForSend);
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp-targets"), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UdpListener_SendToSelectedTransmitTarget_RepliesToSource()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeUdpPort();
+        var writer = new CapturingSharedMemoryWriter();
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand(
+                "udp.listen",
+                JsonSerializer.SerializeToElement(new { listenHost = "127.0.0.1", listenPort }),
+                "listener-udp-send-target"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+        plugin.SetSharedMemoryWriter("listener-udp-send-target", writer);
+
+        using var sender = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        await sender.SendAsync(new byte[] { 0x10 }, 1, new IPEndPoint(IPAddress.Loopback, listenPort));
+        await writer.WaitForFrameAsync();
+
+        var target = Assert.Single(plugin.GetTransmitTargets(new PluginTransmitTargetQuery("listener-udp-send-target")).Targets);
+        var reply = new byte[] { 0x20, 0x21 };
+        var sendResult = await plugin.SendAsync(
+            new PluginSendCommand("listener-udp-send-target", reply, target.Id),
+            CancellationToken.None);
+
+        Assert.True(sendResult.Ok, sendResult.Error);
+        Assert.Equal(reply.Length, sendResult.BytesWritten);
+        Assert.Equal(target.Id, sendResult.TargetId);
+
+        var received = await ReceiveUdpAsync(sender);
+        Assert.Equal(reply, received.Buffer);
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp-send-target"), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UdpListener_SendWithoutTransmitTarget_ReturnsTargetRequired()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeUdpPort();
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand(
+                "udp.listen",
+                JsonSerializer.SerializeToElement(new { listenHost = "127.0.0.1", listenPort }),
+                "listener-udp-target-required"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+
+        var sendResult = await plugin.SendAsync(
+            new PluginSendCommand("listener-udp-target-required", new byte[] { 0x20 }),
+            CancellationToken.None);
+
+        Assert.False(sendResult.Ok);
+        Assert.Equal("target-required", sendResult.ErrorCode);
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp-target-required"), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UdpListener_SendToUnknownTransmitTarget_InvalidatesTarget()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeUdpPort();
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand(
+                "udp.listen",
+                JsonSerializer.SerializeToElement(new { listenHost = "127.0.0.1", listenPort }),
+                "listener-udp-target-missing"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+
+        var sendResult = await plugin.SendAsync(
+            new PluginSendCommand("listener-udp-target-missing", new byte[] { 0x20 }, "127.0.0.1:1"),
+            CancellationToken.None);
+
+        Assert.False(sendResult.Ok);
+        Assert.Equal("target-not-found", sendResult.ErrorCode);
+        Assert.True(sendResult.TargetInvalidated);
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp-target-missing"), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UdpListener_DoesNotSupportScopedChildSessionBinding()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
         var bindParams = JsonSerializer.SerializeToElement(new
         {
-            remoteHost = "127.0.0.1",
-            remotePort = sender.Client.LocalEndPoint is IPEndPoint ep ? ep.Port : 0,
-            endpoint = sender.Client.LocalEndPoint?.ToString()
+            mode = "bind",
+            listenerSessionId = "listener-udp",
+            pendingId = "pending-udp"
         });
 
-        var bindResult = await plugin.ConnectAsync(
+        var result = await plugin.ConnectAsync(
             new PluginConnectCommand(
                 "udp.listen",
                 bindParams,
                 "child-udp",
                 ScopeSessionId: "listener-udp",
-                ResourceKind: "pending",
-                ResourceId: pendingId),
+                ResourceKind: PluginResourceKinds.Pending,
+                ResourceId: "pending-udp"),
             CancellationToken.None);
 
-        Assert.True(bindResult.Ok, bindResult.Error);
-        Assert.Equal("listener-udp", bindResult.ParentSessionId);
-        Assert.Equal("NetworkIcon", bindResult.SessionIcon);
-        Assert.False(bindResult.CanReconnect);
+        Assert.False(result.Ok);
+    }
 
-        await plugin.DisconnectAsync(new PluginDisconnectCommand("child-udp"), CancellationToken.None);
-        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp"), CancellationToken.None);
+    [Fact]
+    public async Task UdpListener_StartupPatchClearsLegacyChildMetadata()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+
+        var result = await plugin.InitializeSessionStateAsync(
+            NewInitializationContext(
+                "udp.listen",
+                """{"mode":"bind","listenerSessionId":"listener-udp","endpoint":"127.0.0.1:9000"}"""),
+            CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.NotNull(result.SessionPatch);
+        Assert.Equal(string.Empty, result.SessionPatch!.ParentSessionId);
+        Assert.Empty(result.SessionPatch.ManagedResourceKinds ?? Array.Empty<string>());
+        Assert.Equal("127.0.0.1:9000", result.SessionPatch.DisplaySubtitle);
     }
 
     [Fact]
@@ -565,6 +713,14 @@ public sealed class NetworkBusAdapterPluginTests
         }
     }
 
+    private static async Task<UdpReceiveResult> ReceiveUdpAsync(UdpClient client)
+    {
+        var receiveTask = client.ReceiveAsync();
+        var completed = await Task.WhenAny(receiveTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(receiveTask, completed);
+        return await receiveTask;
+    }
+
     private static int GetFreeTcpPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -579,4 +735,37 @@ public sealed class NetworkBusAdapterPluginTests
         using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)client.Client.LocalEndPoint!).Port;
     }
+
+    private sealed class CapturingSharedMemoryWriter : ISharedMemoryWriter
+    {
+        private readonly TaskCompletionSource<CapturedFrame> _captured =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool TryWriteFrame(ReadOnlySpan<byte> data, out long frameId)
+            => TryWriteFrame(data, attributes: null, out frameId);
+
+        public bool TryWriteFrame(ReadOnlySpan<byte> data, IReadOnlyDictionary<string, string>? attributes, out long frameId)
+        {
+            frameId = 1;
+            _captured.TrySetResult(new CapturedFrame(
+                data.ToArray(),
+                attributes is null
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    : new Dictionary<string, string>(attributes, StringComparer.Ordinal)));
+            return true;
+        }
+
+        public long GetFreeSpace() => long.MaxValue;
+
+        public double GetUsageRatio() => 0;
+
+        public async Task<CapturedFrame> WaitForFrameAsync()
+        {
+            var completed = await Task.WhenAny(_captured.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.Same(_captured.Task, completed);
+            return await _captured.Task;
+        }
+    }
+
+    private sealed record CapturedFrame(byte[] Data, IReadOnlyDictionary<string, string> Attributes);
 }

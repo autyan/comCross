@@ -2,7 +2,9 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Text;
 using ComCross.PluginSdk;
+using ComCross.Shared.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ComCross.Shared.Services;
@@ -31,12 +33,20 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     private const int OFFSET_FRAME_SEQ = 144;     // 144-151: FrameIdSequence (8 bytes)
     private const int OFFSET_SEGMENT_SIZE = 152;  // 152-155: SegmentSize (4 bytes)
 
-    // Frame payload wire header (stored inside the ring buffer frame data)
-    // [version:u16][flags:u8][reserved:u8][timestampUtcTicks:i64][rawLen:i32]
+    // Frame payload wire header (stored inside the ring buffer frame data).
+    // Base: [version:u16][flags:u8][reserved:u8][timestampUtcTicks:i64][rawLen:i32]
+    // With attributes: Base + [attrSectionLen:i32][attrSection][rawData]
+    // attrSection: [count:u8] repeated [keyLen:u8][valueLen:u16][keyUtf8][valueUtf8]
     private const ushort WIRE_VERSION = 1;
-    private const int WIRE_HEADER_SIZE = 16;
+    private const byte WIRE_FLAG_ATTRIBUTES = 0x01;
+    private const int WIRE_BASE_HEADER_SIZE = 16;
+    private const int WIRE_ATTRIBUTE_LENGTH_SIZE = 4;
 
-    public readonly record struct SharedMemoryFrameRecord(DateTime TimestampUtc, byte[] RawData);
+    public readonly record struct SharedMemoryFrameRecord(
+        DateTime TimestampUtc,
+        byte[] RawData,
+        IReadOnlyDictionary<string, string> Attributes,
+        int AttributeSchemaVersion = MessageFrameAttributes.SchemaVersion);
     
     public SessionSegment(
         string sessionId,
@@ -64,6 +74,9 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     /// 🔒 核心安全机制：检查可用空间，防止写越界
     /// </summary>
     public bool TryWriteFrame(ReadOnlySpan<byte> data, out long frameId)
+        => TryWriteFrame(data, attributes: null, out frameId);
+
+    public bool TryWriteFrame(ReadOnlySpan<byte> data, IReadOnlyDictionary<string, string>? attributes, out long frameId)
     {
         frameId = -1;
         
@@ -73,8 +86,13 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
             return false;
         }
         
-        // 帧格式：[Length:4字节][WireHeader:16字节][RawData:N字节]
-        int recordLength = WIRE_HEADER_SIZE + data.Length;
+        var normalizedAttributes = MessageFrameAttributes.Normalize(
+            attributes,
+            diagnostic => _logger?.LogDebug("[{SessionId}] Dropped message frame attribute: {Diagnostic}", _sessionId, diagnostic));
+        var attributeBytes = EncodeAttributes(normalizedAttributes);
+
+        // 帧格式：[Length:4字节][WireBaseHeader:16字节][AttrLen:4字节][AttrSection:N字节][RawData:N字节]
+        int recordLength = WIRE_BASE_HEADER_SIZE + WIRE_ATTRIBUTE_LENGTH_SIZE + attributeBytes.Length + data.Length;
         int frameSize = 4 + recordLength;
         
         // ✅ 边界检查1：检查单帧大小是否超过总容量
@@ -114,15 +132,24 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         // 写入WireHeader + RawData（处理环绕）
         int recordWritePos = (int)((writePosition + 4) % _dataSize);
 
-        Span<byte> header = stackalloc byte[WIRE_HEADER_SIZE];
+        Span<byte> header = stackalloc byte[WIRE_BASE_HEADER_SIZE];
         BinaryPrimitives.WriteUInt16LittleEndian(header, WIRE_VERSION);
-        header[2] = 0; // flags
+        header[2] = normalizedAttributes.Count > 0 ? WIRE_FLAG_ATTRIBUTES : (byte)0; // flags
         header[3] = 0; // reserved
         BinaryPrimitives.WriteInt64LittleEndian(header.Slice(4, 8), DateTime.UtcNow.Ticks);
         BinaryPrimitives.WriteInt32LittleEndian(header.Slice(12, 4), data.Length);
 
         WriteBytesWrapped(recordWritePos, header);
-        WriteBytesWrapped((recordWritePos + WIRE_HEADER_SIZE) % _dataSize, data);
+        var attrLengthPos = (recordWritePos + WIRE_BASE_HEADER_SIZE) % _dataSize;
+        WriteInt32Wrapped(attrLengthPos, attributeBytes.Length);
+
+        if (attributeBytes.Length > 0)
+        {
+            WriteBytesWrapped((attrLengthPos + WIRE_ATTRIBUTE_LENGTH_SIZE) % _dataSize, attributeBytes);
+        }
+
+        var rawWritePos = (attrLengthPos + WIRE_ATTRIBUTE_LENGTH_SIZE + attributeBytes.Length) % _dataSize;
+        WriteBytesWrapped(rawWritePos, data);
         
         // 更新WritePosition
         writePosition += frameSize;
@@ -173,7 +200,7 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
 
         int logicalReadPos = (int)(readPosition % _dataSize);
         int recordLength = ReadInt32Wrapped(logicalReadPos);
-        if (recordLength < WIRE_HEADER_SIZE || recordLength > _dataSize)
+        if (recordLength < WIRE_BASE_HEADER_SIZE || recordLength > _dataSize)
         {
             _logger?.LogError(
                 "[{SessionId}] 读取到非法长度：{Length}，跳过此帧",
@@ -184,7 +211,7 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         int recordReadPos = (int)((readPosition + 4) % _dataSize);
 
         // Read header
-        Span<byte> header = stackalloc byte[WIRE_HEADER_SIZE];
+        Span<byte> header = stackalloc byte[WIRE_BASE_HEADER_SIZE];
         ReadBytesWrapped(recordReadPos, header);
 
         var version = BinaryPrimitives.ReadUInt16LittleEndian(header);
@@ -199,7 +226,7 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
         var ticks = BinaryPrimitives.ReadInt64LittleEndian(header.Slice(4, 8));
         var rawLen = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(12, 4));
 
-        if (rawLen < 0 || rawLen > _dataSize || recordLength != WIRE_HEADER_SIZE + rawLen)
+        if (rawLen < 0 || rawLen > _dataSize)
         {
             _logger?.LogError(
                 "[{SessionId}] 读取到非法payload长度：{Length}，跳过此帧",
@@ -207,14 +234,48 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
             return false;
         }
 
-        var rawReadPos = (recordReadPos + WIRE_HEADER_SIZE) % _dataSize;
+        var attributes = MessageFrameAttributes.Empty;
+        var rawReadPos = (recordReadPos + WIRE_BASE_HEADER_SIZE) % _dataSize;
+        if (recordLength == WIRE_BASE_HEADER_SIZE + rawLen)
+        {
+            // Compatible read path for frames written before attributes existed.
+        }
+        else
+        {
+            if (recordLength < WIRE_BASE_HEADER_SIZE + WIRE_ATTRIBUTE_LENGTH_SIZE + rawLen)
+            {
+                _logger?.LogError(
+                    "[{SessionId}] 读取到非法frame长度：{Length}",
+                    _sessionId, recordLength);
+                return false;
+            }
+
+            var attrLengthPos = (recordReadPos + WIRE_BASE_HEADER_SIZE) % _dataSize;
+            var attrLen = ReadInt32Wrapped(attrLengthPos);
+            if (attrLen < 0 || recordLength != WIRE_BASE_HEADER_SIZE + WIRE_ATTRIBUTE_LENGTH_SIZE + attrLen + rawLen)
+            {
+                _logger?.LogError(
+                    "[{SessionId}] 读取到非法attribute长度：{Length}",
+                    _sessionId, attrLen);
+                return false;
+            }
+
+            if (attrLen > 0)
+            {
+                var attrReadPos = (attrLengthPos + WIRE_ATTRIBUTE_LENGTH_SIZE) % _dataSize;
+                attributes = DecodeAttributes(ReadDataWrapped(attrReadPos, attrLen));
+            }
+
+            rawReadPos = (attrLengthPos + WIRE_ATTRIBUTE_LENGTH_SIZE + attrLen) % _dataSize;
+        }
+
         var raw = ReadDataWrapped(rawReadPos, rawLen);
 
         // advance
         readPosition += 4 + recordLength;
         WriteReadPosition(readPosition);
 
-        record = new SharedMemoryFrameRecord(new DateTime(ticks, DateTimeKind.Utc), raw);
+        record = new SharedMemoryFrameRecord(new DateTime(ticks, DateTimeKind.Utc), raw, attributes);
         return true;
     }
     
@@ -278,6 +339,81 @@ public sealed class SessionSegment : ISharedMemoryWriter, IDisposable
     private void WriteReadPosition(long value) => _accessor.Write(OFFSET_READ_POS, value);
 
     private void WriteFrameSequence(long value) => _accessor.Write(OFFSET_FRAME_SEQ, value);
+
+    private static byte[] EncodeAttributes(IReadOnlyDictionary<string, string> attributes)
+    {
+        if (attributes.Count == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        using var stream = new MemoryStream();
+        stream.WriteByte((byte)attributes.Count);
+        Span<byte> valueLength = stackalloc byte[2];
+
+        foreach (var pair in attributes.OrderBy(static x => x.Key, StringComparer.Ordinal))
+        {
+            var keyBytes = Encoding.UTF8.GetBytes(pair.Key);
+            var valueBytes = Encoding.UTF8.GetBytes(pair.Value);
+            stream.WriteByte((byte)keyBytes.Length);
+
+            BinaryPrimitives.WriteUInt16LittleEndian(valueLength, (ushort)valueBytes.Length);
+            stream.Write(valueLength);
+
+            stream.Write(keyBytes);
+            stream.Write(valueBytes);
+        }
+
+        return stream.ToArray();
+    }
+
+    private IReadOnlyDictionary<string, string> DecodeAttributes(byte[] encoded)
+    {
+        if (encoded.Length == 0)
+        {
+            return MessageFrameAttributes.Empty;
+        }
+
+        try
+        {
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            var index = 0;
+            var count = encoded[index++];
+
+            for (var i = 0; i < count; i++)
+            {
+                if (index + 3 > encoded.Length)
+                {
+                    return MessageFrameAttributes.Empty;
+                }
+
+                var keyLen = encoded[index++];
+                var valueLen = BinaryPrimitives.ReadUInt16LittleEndian(encoded.AsSpan(index, 2));
+                index += 2;
+
+                if (keyLen <= 0 || index + keyLen + valueLen > encoded.Length)
+                {
+                    return MessageFrameAttributes.Empty;
+                }
+
+                var key = Encoding.UTF8.GetString(encoded, index, keyLen);
+                index += keyLen;
+                var value = Encoding.UTF8.GetString(encoded, index, valueLen);
+                index += valueLen;
+
+                result[key] = value;
+            }
+
+            return MessageFrameAttributes.Normalize(
+                result,
+                diagnostic => _logger?.LogDebug("[{SessionId}] Dropped decoded message frame attribute: {Diagnostic}", _sessionId, diagnostic));
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "[{SessionId}] Failed to decode message frame attributes.", _sessionId);
+            return MessageFrameAttributes.Empty;
+        }
+    }
     
     /// <summary>
     /// 写入Int32（处理环绕）

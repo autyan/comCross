@@ -50,11 +50,14 @@ public static class MessageBoxService
         await ShowMessageAsync(title, message, MessageBoxIcon.Info, new[] { okText });
     }
 
-    public static async Task<bool> ShowConfirmAsync(string title, string message)
+    public static async Task<bool> ShowConfirmAsync(
+        string title,
+        string message,
+        MessageBoxIcon icon = MessageBoxIcon.Question)
     {
         var okText = _localization?.GetString("messagebox.ok") ?? "OK";
         var cancelText = _localization?.GetString("messagebox.cancel") ?? "Cancel";
-        var result = await ShowCustomAsync(title, message, MessageBoxIcon.Question, okText, cancelText);
+        var result = await ShowCustomAsync(title, message, icon, okText, cancelText);
         return result == 0;
     }
 

@@ -13,6 +13,7 @@ public sealed class NetworkBusAdapterPlugin :
     IPluginUiStateEventSource,
     IPluginSessionLifecycleEventSource,
     IPluginSessionStateInitializer,
+    IPluginTransmitTargetProvider,
     IMultiSessionDevicePlugin
 {
     private const string PendingResourceKind = PluginResourceKinds.Pending;
@@ -60,6 +61,21 @@ public sealed class NetworkBusAdapterPlugin :
     public event EventHandler<PluginUiStateInvalidatedEvent>? UiStateInvalidated;
     public event EventHandler<PluginSessionClosedEvent>? SessionClosed;
 
+    public PluginTransmitTargetSnapshot GetTransmitTargets(PluginTransmitTargetQuery query)
+    {
+        if (query is null || string.IsNullOrWhiteSpace(query.SessionId))
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        lock (_lock)
+        {
+            return _udpListeners.TryGetValue(query.SessionId, out var listener)
+                ? listener.GetTransmitTargetSnapshot()
+                : new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+    }
+
     public Task<PluginSessionStateInitializationResult> InitializeSessionStateAsync(
         PluginSessionStateInitializationContext context,
         CancellationToken cancellationToken)
@@ -81,7 +97,8 @@ public sealed class NetworkBusAdapterPlugin :
             {
                 "tcp" => BuildTcpClientSessionPatch(doc.RootElement),
                 "udp" => BuildUdpClientSessionPatch(doc.RootElement),
-                "tcp.server" or "udp.listen" => BuildScopedSessionPatch(doc.RootElement),
+                "tcp.server" => BuildScopedSessionPatch(doc.RootElement),
+                "udp.listen" => BuildUdpListenerSessionPatch(doc.RootElement),
                 _ => null
             };
 
@@ -143,14 +160,12 @@ public sealed class NetworkBusAdapterPlugin :
             {
                 Id = "udp.listen",
                 Name = "UDP (Listen)",
-                Description = "UDP listener; each peer becomes a session",
+                Description = "UDP listener; incoming datagrams stay on the listener session",
                 Icon = "ServerIcon",
                 JsonSchema = ReadEmbeddedResource(UdpListenParametersSchemaResource),
                 UiSchema = ReadEmbeddedResource(UdpListenConnectUiSchemaResource),
                 DefaultParametersJson = "{\"mode\":\"listen\"}",
-                SessionHostModel = SessionHostModel.SharedPerScope,
-                SessionHostGroupKeyParameter = "listenerSessionId",
-                SupportsMultiSession = true,
+                SupportsMultiSession = false,
                 SharedMemoryRequest = DefaultSharedMemoryRequest()
             }
         };
@@ -197,18 +212,12 @@ public sealed class NetworkBusAdapterPlugin :
 
             if (_udpListeners.TryGetValue(query.SessionId, out var udpListener))
             {
-                var pending = udpListener.GetPendingSnapshot();
-                if (string.Equals(query.ResourceKind, PendingResourceKind, StringComparison.Ordinal))
-                {
-                    return BuildPendingResourceSnapshot("udp", pending, query.ResourceId);
-                }
-
                 var state = new
                 {
                     kind = "listener",
                     protocol = "udp",
                     connected = true,
-                    pendingConnections = pending.Select(p => new { id = p.Id, displayName = p.DisplayName }).ToArray()
+                    pendingConnections = Array.Empty<object>()
                 };
 
                 return new PluginUiStateSnapshot(JsonSerializer.SerializeToElement(state), DateTimeOffset.UtcNow);
@@ -261,13 +270,15 @@ public sealed class NetworkBusAdapterPlugin :
 
         TcpConnectionSession? tcp;
         UdpConnectionSession? udp;
+        UdpListenerSession? udpListener;
         lock (_lock)
         {
             _tcpConnections.TryGetValue(command.SessionId, out tcp);
             _udpConnections.TryGetValue(command.SessionId, out udp);
+            _udpListeners.TryGetValue(command.SessionId, out udpListener);
         }
 
-        if (tcp is null && udp is null)
+        if (tcp is null && udp is null && udpListener is null)
         {
             return new PluginCommandResult(false, "Session is not connected.");
         }
@@ -287,12 +298,36 @@ public sealed class NetworkBusAdapterPlugin :
 
                 await stream.WriteAsync(data, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
-                return new PluginCommandResult(true);
+                return new PluginCommandResult(true, BytesWritten: data.Length);
             }
 
             if (udp is not null)
             {
                 return await udp.SendAsync(data, cancellationToken);
+            }
+
+            if (udpListener is not null)
+            {
+                if (string.IsNullOrWhiteSpace(command.TransmitTargetId))
+                {
+                    return new PluginCommandResult(
+                        false,
+                        "Select a transmit target before sending.",
+                        ErrorCode: "target-required");
+                }
+
+                if (!udpListener.TryGetTarget(command.TransmitTargetId, out var target))
+                {
+                    return new PluginCommandResult(
+                        false,
+                        "Transmit target not found.",
+                        ErrorCode: "target-not-found",
+                        TargetId: command.TransmitTargetId,
+                        TargetInvalidated: true);
+                }
+
+                await udpListener.Udp.SendAsync(data, target, cancellationToken);
+                return new PluginCommandResult(true, BytesWritten: data.Length, TargetId: command.TransmitTargetId);
             }
 
             return new PluginCommandResult(false, "Unknown session type.");
@@ -480,7 +515,7 @@ public sealed class NetworkBusAdapterPlugin :
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
         if (string.Equals(mode, "bind", StringComparison.Ordinal))
         {
-            return await Task.FromResult(BindUdpPeer(command));
+            return await Task.FromResult(new PluginConnectResult(false, "UDP bind mode is not supported."));
         }
 
         var remoteHost = TryReadString(command.Parameters, "remoteHost");
@@ -532,7 +567,7 @@ public sealed class NetworkBusAdapterPlugin :
             });
 
             var rxCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-            var state = new UdpConnectionSession(command.SessionId, udp, remote: null, listenerSessionId: null);
+            var state = new UdpConnectionSession(command.SessionId, udp);
             state.RxLoop = Task.Run(() => UdpReadLoopAsync(command.SessionId, udp, rxCts.Token));
             state.RxCts = rxCts;
 
@@ -581,7 +616,7 @@ public sealed class NetworkBusAdapterPlugin :
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
         if (string.Equals(mode, "bind", StringComparison.Ordinal) || IsPendingResourceTarget(command))
         {
-            return Task.FromResult(BindUdpPeer(command));
+            return Task.FromResult(new PluginConnectResult(false, "UDP listener does not create child sessions."));
         }
 
         return Task.FromResult(StartUdpListener(command));
@@ -700,8 +735,7 @@ public sealed class NetworkBusAdapterPlugin :
                 CommittedParameters: committed,
                 DisplayTitle: "UDP Listener",
                 DisplaySubtitle: subtitle,
-                SessionIcon: "ServerIcon",
-                ManagedResourceKinds: new[] { PluginResourceKinds.Pending });
+                SessionIcon: "ServerIcon");
         }
         catch (Exception ex)
         {
@@ -781,65 +815,6 @@ public sealed class NetworkBusAdapterPlugin :
         }
     }
 
-    private PluginConnectResult BindUdpPeer(PluginConnectCommand command)
-    {
-        var (listenerSessionId, pendingId) = ResolvePendingTarget(command);
-        if (string.IsNullOrWhiteSpace(listenerSessionId) || string.IsNullOrWhiteSpace(pendingId))
-        {
-            return new PluginConnectResult(false, "Missing pending resource target.");
-        }
-
-        UdpListenerSession? listener;
-        UdpPeerPending? peer;
-
-        lock (_lock)
-        {
-            if (!_udpListeners.TryGetValue(listenerSessionId, out listener))
-            {
-                return new PluginConnectResult(false, "Listener session not found.");
-            }
-
-            peer = listener.TryBindPeer(pendingId, command.SessionId);
-            if (peer is null)
-            {
-                return new PluginConnectResult(false, "Pending peer not found.");
-            }
-
-            _udpConnections[command.SessionId] = new UdpConnectionSession(command.SessionId, listener.Udp, peer.RemoteEndPoint, listenerSessionId);
-        }
-
-        // Flush buffered datagrams best-effort.
-        if (peer.BufferedDatagrams is { Count: > 0 })
-        {
-            foreach (var datagram in peer.BufferedDatagrams)
-            {
-                TryWriteFrame(command.SessionId, datagram);
-            }
-        }
-
-        NotifyListenerInvalidated(listener!.CapabilityId, listener!.SessionId, "peer-bound");
-        var subtitle = FormatEndpoint(peer.RemoteEndPoint);
-        var committed = JsonSerializer.SerializeToElement(new
-        {
-            mode = "bind",
-            listenerSessionId,
-            pendingId,
-            remoteHost = FormatAddress(peer.RemoteEndPoint.Address),
-            remotePort = peer.RemoteEndPoint.Port,
-            endpoint = subtitle
-        });
-
-        return new PluginConnectResult(
-            true,
-            SessionId: command.SessionId,
-            CommittedParameters: committed,
-            DisplayTitle: "Inbound UDP",
-            DisplaySubtitle: subtitle,
-            ParentSessionId: listenerSessionId,
-            SessionIcon: "NetworkIcon",
-            CanReconnect: false);
-    }
-
     private PluginCommandResult RejectPending(PluginActionCommand command)
     {
         var listenerSessionId = command.SessionId;
@@ -862,16 +837,6 @@ public sealed class NetworkBusAdapterPlugin :
                 return new PluginCommandResult(true);
             }
 
-            if (_udpListeners.TryGetValue(listenerSessionId, out var udpListener))
-            {
-                if (!udpListener.TryRejectPending(pendingId))
-                {
-                    return new PluginCommandResult(false, "Pending peer not found.");
-                }
-
-                NotifyListenerInvalidated(udpListener.CapabilityId, udpListener.SessionId, "pending-rejected");
-                return new PluginCommandResult(true);
-            }
         }
 
         return new PluginCommandResult(false, "Listener session not found.");
@@ -894,12 +859,6 @@ public sealed class NetworkBusAdapterPlugin :
                 return new PluginCommandResult(true);
             }
 
-            if (_udpListeners.TryGetValue(listenerSessionId, out var udpListener))
-            {
-                udpListener.RejectAllPending();
-                NotifyListenerInvalidated(udpListener.CapabilityId, udpListener.SessionId, "pending-cleared");
-                return new PluginCommandResult(true);
-            }
         }
 
         return new PluginCommandResult(false, "Listener session not found.");
@@ -967,7 +926,7 @@ public sealed class NetworkBusAdapterPlugin :
                 var payload = result.Buffer ?? Array.Empty<byte>();
                 if (payload.Length > 0)
                 {
-                    TryWriteFrame(sessionId, payload);
+                    TryWriteFrame(sessionId, payload, BuildSourceEndpointAttributes(result.RemoteEndPoint));
                 }
             }
             catch (OperationCanceledException)
@@ -1018,12 +977,9 @@ public sealed class NetworkBusAdapterPlugin :
             _udpListeners.TryGetValue(sessionId, out udpListener);
             removed |= _udpListeners.Remove(sessionId);
 
-            if (tcpListener is not null || udpListener is not null)
+            if (tcpListener is not null)
             {
                 childSessionIds.AddRange(_tcpConnections.Values
-                    .Where(s => string.Equals(s.ListenerSessionId, sessionId, StringComparison.Ordinal))
-                    .Select(s => s.SessionId));
-                childSessionIds.AddRange(_udpConnections.Values
                     .Where(s => string.Equals(s.ListenerSessionId, sessionId, StringComparison.Ordinal))
                     .Select(s => s.SessionId));
             }
@@ -1245,7 +1201,10 @@ public sealed class NetworkBusAdapterPlugin :
             && string.Equals(command.ResourceKind, PendingResourceKind, StringComparison.Ordinal)
             && !string.IsNullOrWhiteSpace(command.ResourceId);
 
-    private void TryWriteFrame(string sessionId, byte[] payload)
+    private void TryWriteFrame(
+        string sessionId,
+        byte[] payload,
+        IReadOnlyDictionary<string, string>? attributes = null)
     {
         if (_backpressure == BackpressureLevel.High)
         {
@@ -1258,8 +1217,14 @@ public sealed class NetworkBusAdapterPlugin :
             _writersBySession.TryGetValue(sessionId, out writer);
         }
 
-        writer?.TryWriteFrame(payload, out _);
+        writer?.TryWriteFrame(payload, attributes, out _);
     }
+
+    private static IReadOnlyDictionary<string, string> BuildSourceEndpointAttributes(IPEndPoint remote)
+        => new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["source.endpoint"] = FormatEndpoint(remote)
+        };
 
     private async Task TcpAcceptLoopAsync(TcpListenerSession listener, CancellationToken cancellationToken)
     {
@@ -1327,26 +1292,22 @@ public sealed class NetworkBusAdapterPlugin :
                 continue;
             }
 
-            var remote = result.RemoteEndPoint;
-            var key = listener.GetPeerKey(remote);
-
-            string? boundSessionId;
             lock (_lock)
             {
-                boundSessionId = listener.TryGetBoundSessionId(key);
-                if (boundSessionId is null)
+                if (!_udpListeners.TryGetValue(listener.SessionId, out var current) || !ReferenceEquals(current, listener))
                 {
-                    listener.EnsurePendingPeer(key, remote, result.Buffer);
+                    continue;
                 }
+
+                listener.UpsertTarget(result.RemoteEndPoint);
             }
 
-            if (boundSessionId is not null)
-            {
-                TryWriteFrame(boundSessionId, result.Buffer);
-                continue;
-            }
-
-            NotifyListenerInvalidated(listener.CapabilityId, listener.SessionId, "pending");
+            UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent(
+                listener.CapabilityId,
+                SessionId: listener.SessionId,
+                ViewKind: "transmit-targets",
+                Reason: "transmit-targets"));
+            TryWriteFrame(listener.SessionId, result.Buffer, BuildSourceEndpointAttributes(result.RemoteEndPoint));
         }
     }
 
@@ -1384,18 +1345,14 @@ public sealed class NetworkBusAdapterPlugin :
 
     private sealed class UdpConnectionSession : IDisposable
     {
-        public UdpConnectionSession(string sessionId, UdpClient udp, IPEndPoint? remote, string? listenerSessionId)
+        public UdpConnectionSession(string sessionId, UdpClient udp)
         {
             SessionId = sessionId;
             Udp = udp;
-            Remote = remote;
-            ListenerSessionId = listenerSessionId;
         }
 
         public string SessionId { get; }
         public UdpClient Udp { get; }
-        public IPEndPoint? Remote { get; }
-        public string? ListenerSessionId { get; }
 
         public CancellationTokenSource? RxCts { get; set; }
         public Task? RxLoop { get; set; }
@@ -1404,16 +1361,8 @@ public sealed class NetworkBusAdapterPlugin :
         {
             try
             {
-                if (Remote is null)
-                {
-                    // Connected UDP client.
-                    await Udp.SendAsync(data, cancellationToken);
-                    return new PluginCommandResult(true);
-                }
-
-                // Listener-owned UDP socket: send to remote endpoint.
-                await Udp.SendAsync(data, Remote, cancellationToken);
-                return new PluginCommandResult(true);
+                await Udp.SendAsync(data, cancellationToken);
+                return new PluginCommandResult(true, BytesWritten: data.Length);
             }
             catch (Exception ex)
             {
@@ -1426,11 +1375,7 @@ public sealed class NetworkBusAdapterPlugin :
             try { RxCts?.Cancel(); } catch { }
             try { RxCts?.Dispose(); } catch { }
 
-            // Only dispose UDP client if this is a standalone connected client.
-            if (Remote is null)
-            {
-                try { Udp.Dispose(); } catch { }
-            }
+            try { Udp.Dispose(); } catch { }
         }
     }
 
@@ -1513,9 +1458,11 @@ public sealed class NetworkBusAdapterPlugin :
 
     private sealed class UdpListenerSession : IDisposable
     {
-        private readonly Dictionary<string, UdpPeerPending> _pendingById = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, string> _pendingIdByPeerKey = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, string> _boundSessionByPeerKey = new(StringComparer.Ordinal);
+        private const int MaxTransmitTargets = 32;
+        private readonly object _targetLock = new();
+        private readonly Dictionary<string, UdpTransmitTarget> _targets = new(StringComparer.Ordinal);
+        private readonly List<string> _targetOrder = new();
+        private string? _defaultTargetId;
 
         public UdpListenerSession(string sessionId, string capabilityId, UdpClient udp, CancellationTokenSource rxCts)
         {
@@ -1531,114 +1478,78 @@ public sealed class NetworkBusAdapterPlugin :
         public CancellationTokenSource RxCts { get; }
         public Task? RxLoop { get; set; }
 
-        public string GetPeerKey(IPEndPoint ep) => $"{ep.Address}:{ep.Port}";
-
-        public string? TryGetBoundSessionId(string peerKey)
-            => _boundSessionByPeerKey.TryGetValue(peerKey, out var sid) ? sid : null;
-
-        public void EnsurePendingPeer(string peerKey, IPEndPoint remote, byte[] firstDatagram)
+        public void UpsertTarget(IPEndPoint endpoint)
         {
-            if (!_pendingIdByPeerKey.TryGetValue(peerKey, out var pendingId))
+            lock (_targetLock)
             {
-                pendingId = Guid.NewGuid().ToString("N");
-                _pendingIdByPeerKey[peerKey] = pendingId;
-                _pendingById[pendingId] = new UdpPeerPending(
-                    pendingId,
-                    remote,
-                    displayName: $"udp {remote.Address}:{remote.Port}");
-            }
+                var id = FormatEndpoint(endpoint);
+                _targets[id] = new UdpTransmitTarget(id, endpoint, DateTimeOffset.UtcNow);
+                _targetOrder.Remove(id);
+                _targetOrder.Insert(0, id);
+                _defaultTargetId = id;
 
-            if (_pendingById.TryGetValue(pendingId, out var pending))
-            {
-                pending.Append(firstDatagram);
+                while (_targetOrder.Count > MaxTransmitTargets)
+                {
+                    var stale = _targetOrder[^1];
+                    _targetOrder.RemoveAt(_targetOrder.Count - 1);
+                    _targets.Remove(stale);
+                }
             }
         }
 
-        public UdpPeerPending? TryBindPeer(string pendingId, string sessionId)
+        public PluginTransmitTargetSnapshot GetTransmitTargetSnapshot()
         {
-            if (!_pendingById.TryGetValue(pendingId, out var pending))
+            lock (_targetLock)
             {
-                return null;
+                var targets = _targetOrder
+                    .Where(id => _targets.ContainsKey(id))
+                    .Select(id =>
+                    {
+                        var target = _targets[id];
+                        return new PluginTransmitTarget(
+                            target.Id,
+                            target.Id,
+                            Subtitle: null,
+                            IsDefault: string.Equals(target.Id, _defaultTargetId, StringComparison.Ordinal),
+                            LastSeenUtc: target.LastSeenUtc);
+                    })
+                    .ToArray();
+
+                return new PluginTransmitTargetSnapshot(
+                    targets,
+                    _defaultTargetId,
+                    RequireTargetForSend: true,
+                    DateTimeOffset.UtcNow);
+            }
+        }
+
+        public bool TryGetTarget(string targetId, out IPEndPoint endpoint)
+        {
+            lock (_targetLock)
+            {
+                if (_targets.TryGetValue(targetId, out var target))
+                {
+                    endpoint = target.Endpoint;
+                    return true;
+                }
             }
 
-            var key = GetPeerKey(pending.RemoteEndPoint);
-            _boundSessionByPeerKey[key] = sessionId;
-
-            _pendingById.Remove(pendingId);
-            _pendingIdByPeerKey.Remove(key);
-            return pending;
+            endpoint = new IPEndPoint(IPAddress.None, 0);
+            return false;
         }
-
-        public bool TryRejectPending(string pendingId)
-        {
-            if (!_pendingById.TryGetValue(pendingId, out var pending))
-            {
-                return false;
-            }
-
-            var key = GetPeerKey(pending.RemoteEndPoint);
-            _pendingById.Remove(pendingId);
-            _pendingIdByPeerKey.Remove(key);
-            return true;
-        }
-
-        public int RejectAllPending()
-        {
-            var count = _pendingById.Count;
-            _pendingById.Clear();
-            _pendingIdByPeerKey.Clear();
-            return count;
-        }
-
-        public IReadOnlyList<(string Id, string DisplayName)> GetPendingSnapshot()
-            => _pendingById.Values.Select(p => (p.Id, p.DisplayName)).ToArray();
 
         public void Dispose()
         {
             try { RxCts.Cancel(); } catch { }
             try { RxCts.Dispose(); } catch { }
             try { Udp.Dispose(); } catch { }
-            _pendingById.Clear();
-            _pendingIdByPeerKey.Clear();
-            _boundSessionByPeerKey.Clear();
         }
     }
 
-    private sealed class UdpPeerPending
-    {
-        private const int MaxBufferedBytes = 256 * 1024;
-        private int _bufferedBytes;
-        private readonly List<byte[]> _buffer = new();
-
-        public UdpPeerPending(string id, IPEndPoint remoteEndPoint, string displayName)
-        {
-            Id = id;
-            RemoteEndPoint = remoteEndPoint;
-            DisplayName = displayName;
-        }
-
-        public string Id { get; }
-        public IPEndPoint RemoteEndPoint { get; }
-        public string DisplayName { get; }
-
-        public IReadOnlyList<byte[]> BufferedDatagrams => _buffer;
-
-        public void Append(byte[] datagram)
-        {
-            if (datagram.Length <= 0)
-            {
-                return;
-            }
-
-            if (_bufferedBytes + datagram.Length > MaxBufferedBytes)
-            {
-                return;
-            }
-
-            _buffer.Add(datagram);
-            _bufferedBytes += datagram.Length;
-        }
-    }
+    private sealed record UdpTransmitTarget(
+        string Id,
+        IPEndPoint Endpoint,
+        DateTimeOffset LastSeenUtc);
 
     private static SharedMemoryRequest DefaultSharedMemoryRequest()
     {
@@ -1706,6 +1617,12 @@ public sealed class NetworkBusAdapterPlugin :
                 CanReconnect: false)
             : new PluginSessionMetadataPatch(DisplaySubtitle: BuildListenerSubtitle(parameters));
     }
+
+    private static PluginSessionMetadataPatch? BuildUdpListenerSessionPatch(JsonElement parameters)
+        => new(
+            DisplaySubtitle: BuildListenerSubtitle(parameters),
+            ParentSessionId: string.Empty,
+            ManagedResourceKinds: Array.Empty<string>());
 
     private static string? BuildClientSubtitle(JsonElement parameters)
         => BuildStoredEndpointSubtitle(parameters)

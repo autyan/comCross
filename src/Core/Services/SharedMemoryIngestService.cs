@@ -105,7 +105,8 @@ public sealed class SharedMemoryIngestService : IDisposable
                             FrameDirection.Rx,
                             record.RawData,
                             MessageFormat.Hex,
-                            source: "shm-rx");
+                            source: "shm-rx",
+                            attributes: record.Attributes);
 
                         _eventBus.Publish(new DataReceivedEvent(sessionId, record.RawData, record.RawData.Length));
                     }

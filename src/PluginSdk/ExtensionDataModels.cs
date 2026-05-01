@@ -9,7 +9,8 @@ public sealed record ExtensionFrame(
     string Direction,
     byte[] RawData,
     string Format,
-    string Source);
+    string Source,
+    IReadOnlyDictionary<string, string>? Attributes = null);
 
 public sealed record ExtensionSessionSnapshot(
     string Id,

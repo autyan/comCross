@@ -11,4 +11,6 @@ public sealed record FrameRecord(
     FrameDirection Direction,
     byte[] RawData,
     MessageFormat Format,
-    string Source);
+    string Source,
+    IReadOnlyDictionary<string, string> Attributes,
+    int AttributeSchemaVersion = MessageFrameAttributes.SchemaVersion);

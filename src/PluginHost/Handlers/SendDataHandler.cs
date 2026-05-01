@@ -54,7 +54,7 @@ internal static class SendDataHandler
             cts.CancelAfter(HandlerDefaults.DefaultOperationTimeout);
 
             var result = await tx.SendAsync(
-                new PluginSendCommand(payload.SessionId, payload.Data ?? Array.Empty<byte>()),
+                new PluginSendCommand(payload.SessionId, payload.Data ?? Array.Empty<byte>(), payload.TransmitTargetId),
                 cts.Token);
 
             var json = JsonSerializer.Serialize(result, jsonOptions);

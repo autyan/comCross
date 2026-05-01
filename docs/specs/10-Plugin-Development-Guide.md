@@ -133,7 +133,6 @@ Plugins that own transient resources under an active session can expose them thr
 
 Typical examples:
 - a TCP listener with pending clients
-- a UDP listener with pending peers
 
 Use `IPluginUiStateProvider.GetUiState` with `PluginUiStateQuery.ResourceKind` and `ResourceId` to return a `PluginResourceListState`. Each `PluginManagedResourceItem` can include `PluginResourceActionDescriptor` entries that describe what the host UI can do with the resource.
 
@@ -176,7 +175,50 @@ The initializer returns:
 
 Core owns the state transition and persistence. Plugins should not access workspace files directly for this flow. If the plugin is unavailable or the initializer fails, the session remains visible but unavailable until the user deletes it or a later startup can initialize it.
 
+When the user deletes a session, ComCross treats that session as permanently removed. Core removes the session descriptor and deletes the plugin-owned storage file for that session. Plugins should not depend on session storage surviving session deletion.
+
 ## 13) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.
+
+## 14) Message Frame Attributes
+
+Bus plugins may attach small metadata attributes to received message frames through the shared-memory writer contract.
+
+The main program validates and normalizes attributes at the contract boundary:
+
+- schema version: `1`
+- maximum attributes per frame: `8`
+- key: required, UTF-8 byte length up to `32`
+- key characters: lowercase ASCII letters, digits, `.`, `_`, and `-`
+- value: non-null string, UTF-8 byte length up to `128`
+- invalid attributes are dropped; values are never truncated
+- attributes are sorted by key for storage, export, display, and extension delivery
+
+Use attributes for domain facts that belong to one frame, such as a UDP datagram source endpoint. Do not use attributes as a general payload store or as a replacement for session metadata.
+
+For the built-in network adapter, UDP listener sessions do not create child sessions per remote endpoint. Incoming datagrams stay on the listener session, and the sender endpoint is exposed as a message frame attribute such as `source.endpoint`. TCP listener sessions may still expose accepted connections as child sessions because TCP accepted clients are connection-oriented resources with independent lifecycles.
+
+## 15) Transmit Targets And Send Results
+
+Some bus sessions receive through one logical session but can send to multiple possible targets. A plugin can expose this as an optional SDK capability by implementing `IPluginTransmitTargetProvider`.
+
+Core queries transmit targets with `PluginTransmitTargetQuery(SessionId)`. The plugin returns a `PluginTransmitTargetSnapshot`:
+
+- `Targets`: plugin-produced target ids and labels
+- `DefaultTargetId`: optional preferred target, usually the most recently active endpoint
+- `RequireTargetForSend`: true when the session cannot send without an explicit target
+- `UpdatedAt`: snapshot timestamp
+
+Shell only shows a target selector when the snapshot declares targets or requires a target. Core and Shell must not infer target semantics from plugin ids, capability ids, or private connection parameters.
+
+`PluginSendCommand` includes an optional `TransmitTargetId`. `PluginCommandResult` is the authoritative send result and can include:
+
+- `Ok`: whether the send succeeded
+- `Error` and `ErrorCode`: structured failure details for UI display
+- `BytesWritten`: bytes accepted by the plugin transport
+- `TargetId`: target used for the send, when applicable
+- `TargetInvalidated`: true when Shell should refresh the target list
+
+The built-in UDP listener uses this model: incoming datagrams remain on the listener session, message frames carry `source.endpoint`, and replies can be sent to a selected recent source endpoint. TCP accepted clients remain independent scoped sessions because they have connection lifecycles.

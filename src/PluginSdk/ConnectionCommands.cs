@@ -16,7 +16,11 @@ public sealed record PluginDisconnectCommand(
 
 public sealed record PluginCommandResult(
     bool Ok,
-    string? Error = null);
+    string? Error = null,
+    int BytesWritten = 0,
+    string? ErrorCode = null,
+    string? TargetId = null,
+    bool TargetInvalidated = false);
 
 public sealed record PluginConnectResult(
     bool Ok,

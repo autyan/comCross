@@ -112,6 +112,38 @@ public sealed class PluginSessionStorageService
         }
     }
 
+    public async Task DeleteAsync(
+        string pluginId,
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(pluginId) || string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var filePath = GetFilePath(pluginId, sessionId);
+            var tempPath = filePath + ".tmp";
+
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private string GetFilePath(string pluginId, string sessionId)
         => Path.Combine(_rootDirectory, Sanitize(pluginId), "sessions", Sanitize(sessionId) + ".json");
 

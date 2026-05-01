@@ -120,7 +120,8 @@ public partial class LeftSidebar : BaseUserControl
             : "dialog.deleteSession.message";
         var confirmed = await MessageBoxService.ShowConfirmAsync(
             vm.L["dialog.deleteSession.title"],
-            string.Format(vm.L[messageKey], session.Name));
+            string.Format(vm.L[messageKey], session.Name),
+            MessageBoxIcon.Warning);
         if (!confirmed)
         {
             return;

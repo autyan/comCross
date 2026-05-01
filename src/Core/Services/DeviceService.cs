@@ -306,7 +306,12 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         _eventBus.Publish(new SessionClosedEvent(evt.SessionId, reason));
     }
 
-    public async Task<int> SendAsync(string sessionId, byte[] data, MessageFormat format = MessageFormat.Text, CancellationToken cancellationToken = default)
+    public async Task<PluginCommandResult> SendAsync(
+        string sessionId,
+        byte[] data,
+        MessageFormat format = MessageFormat.Text,
+        string? transmitTargetId = null,
+        CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out _))
         {
@@ -322,7 +327,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
 
         // Send via Session Host (real TX)
-        var payload = JsonSerializer.SerializeToElement(new PluginHostSendDataPayload(sessionId, data));
+        var payload = JsonSerializer.SerializeToElement(new PluginHostSendDataPayload(sessionId, data, transmitTargetId));
         var response = await sessionHost.Client.SendAsync(
             new PluginHostRequest(
                 Guid.NewGuid().ToString("N"),
@@ -333,18 +338,85 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
         if (response is null)
         {
-            throw new InvalidOperationException("Session host unavailable.");
+            return new PluginCommandResult(false, "Session host unavailable.", ErrorCode: "session-host-unavailable");
         }
 
         if (!response.Ok)
         {
-            throw new InvalidOperationException(response.Error ?? "Send failed.");
+            return new PluginCommandResult(false, response.Error ?? "Send failed.", ErrorCode: "transport-error");
         }
+
+        PluginCommandResult result;
+        if (response.Payload is { } responsePayload)
+        {
+            try
+            {
+                result = responsePayload.Deserialize<PluginCommandResult>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                         ?? new PluginCommandResult(response.Ok, response.Error);
+            }
+            catch
+            {
+                result = new PluginCommandResult(response.Ok, response.Error);
+            }
+        }
+        else
+        {
+            result = new PluginCommandResult(response.Ok, response.Error);
+        }
+
+        if (!result.Ok)
+        {
+            return result;
+        }
+
+        result = result.BytesWritten > 0
+            ? result
+            : result with { BytesWritten = data.Length };
 
         // Mirror TX into the FrameStore so RX/TX share one timeline.
         _frameStore.Append(sessionId, DateTime.UtcNow, FrameDirection.Tx, data, format, source: "send-tx");
-        _eventBus.Publish(new DataSentEvent(sessionId, data, data.Length));
-        return data.Length;
+        _eventBus.Publish(new DataSentEvent(sessionId, data, result.BytesWritten));
+        return result;
+    }
+
+    public async Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out _))
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(
+                Guid.NewGuid().ToString("N"),
+                PluginHostMessageTypes.GetTransmitTargets,
+                SessionId: sessionId,
+                Payload: JsonSerializer.SerializeToElement(new PluginTransmitTargetQuery(sessionId))),
+            TimeSpan.FromSeconds(3));
+
+        if (response is not { Ok: true } || response.Payload is null)
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        try
+        {
+            return response.Payload.Value.Deserialize<PluginTransmitTargetSnapshot>(
+                       new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                   ?? new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+        catch
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
     }
 
     public Session? GetSession(string sessionId) => _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;

@@ -5,6 +5,7 @@ using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 using Xunit;
 
 namespace ComCross.Tests.Core;
@@ -292,6 +293,56 @@ public sealed class WorkspaceStateFlowTests
         Assert.DoesNotContain(persistedState.SessionDescriptors, descriptor => descriptor.Id == "child-1");
     }
 
+    [Fact]
+    public async Task DeleteSessionAsync_RemovesSessionOwnedLogFilesAndPluginStorage()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var database = harness.Services.GetRequiredService<AppDatabase>();
+        var storage = harness.Services.GetRequiredService<PluginSessionStorageService>();
+
+        await database.InitializeAsync();
+        await workspaceService.LoadStateAsync();
+
+        var descriptor = CreateDescriptor("session-owned-data");
+        deviceService.RestoreSession(descriptor);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        var logPath = Path.Combine(harness.ConfigDirectory, "session-owned-data.log");
+        await File.WriteAllTextAsync(logPath, "data");
+        await database.UpsertLogFileAsync(new LogFileRecord
+        {
+            SessionId = descriptor.Id,
+            SessionName = descriptor.Name,
+            FilePath = logPath,
+            StartTime = DateTime.UtcNow,
+            EndTime = DateTime.UtcNow,
+            SizeBytes = 4
+        });
+
+        await storage.ApplyPatchAsync(
+            descriptor.PluginId!,
+            descriptor.Id,
+            new ComCross.PluginSdk.PluginSessionStoragePatch(
+                SchemaVersion: 1,
+                Upserts: new Dictionary<string, JsonElement>
+                {
+                    ["value"] = JsonSerializer.SerializeToElement("kept")
+                },
+                Deletes: null));
+
+        await workspaceService.DeleteSessionAsync(descriptor.Id);
+
+        Assert.False(File.Exists(logPath));
+        Assert.Empty(await database.GetLogFilesBySessionAsync(descriptor.Id));
+
+        var snapshot = await storage.LoadAsync(descriptor.PluginId!, descriptor.Id);
+        Assert.Equal(0, snapshot.SchemaVersion);
+        Assert.Empty(snapshot.Values);
+    }
+
     private static SessionDescriptor CreateDescriptor(
         string sessionId,
         string? parentSessionId = null,
@@ -322,6 +373,8 @@ public sealed class WorkspaceStateFlowTests
         }
 
         public IServiceProvider Services { get; }
+
+        public string ConfigDirectory => _configDirectory;
 
         public static Task<TestHarness> CreateAsync()
         {

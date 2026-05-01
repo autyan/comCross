@@ -31,7 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<EventBus>());
         
         services.AddSingleton<ConfigService>();
-        services.AddSingleton<AppDatabase>();
+        services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ConfigService>().ConfigDirectory));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
         services.AddSingleton<AppLogService>();
@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PluginResourceQueryService>();
         services.AddSingleton<PluginSessionStorageService>();
         services.AddSingleton<PluginSessionInitializationService>();
+        services.AddSingleton<SessionDataCleanupService>();
         services.AddSingleton<IPluginUiStateFetcher, PluginUiStateFetcher>();
         services.AddSingleton<IExtensionActionExecutor, ExtensionActionExecutor>();
         services.AddSingleton<PluginHostEventRouterService>();

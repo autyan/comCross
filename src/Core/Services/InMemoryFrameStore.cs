@@ -27,7 +27,14 @@ public sealed class InMemoryFrameStore : IFrameStore
 
     public event Action<string>? FramesAppended;
 
-    public long Append(string sessionId, DateTime timestampUtc, FrameDirection direction, byte[] rawData, MessageFormat format, string source)
+    public long Append(
+        string sessionId,
+        DateTime timestampUtc,
+        FrameDirection direction,
+        byte[] rawData,
+        MessageFormat format,
+        string source,
+        IReadOnlyDictionary<string, string>? attributes = null)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -38,7 +45,10 @@ public sealed class InMemoryFrameStore : IFrameStore
         source ??= string.Empty;
 
         var window = _sessions.GetOrAdd(sessionId, _ => new SessionWindow(_maxBytesPerSession));
-        var frameId = window.Append(sessionId, timestampUtc, direction, rawData, format, source);
+        var normalizedAttributes = MessageFrameAttributes.Normalize(
+            attributes,
+            diagnostic => _logger.LogDebug("Dropped message frame attribute: {Diagnostic}", diagnostic));
+        var frameId = window.Append(sessionId, timestampUtc, direction, rawData, format, source, normalizedAttributes);
 
         try
         {
@@ -113,12 +123,19 @@ public sealed class InMemoryFrameStore : IFrameStore
             _maxBytes = maxBytes;
         }
 
-        public long Append(string sessionId, DateTime timestampUtc, FrameDirection direction, byte[] rawData, MessageFormat format, string source)
+        public long Append(
+            string sessionId,
+            DateTime timestampUtc,
+            FrameDirection direction,
+            byte[] rawData,
+            MessageFormat format,
+            string source,
+            IReadOnlyDictionary<string, string> attributes)
         {
             lock (_gate)
             {
                 var id = _nextId++;
-                var record = new FrameRecord(id, sessionId, timestampUtc, direction, rawData, format, source);
+                var record = new FrameRecord(id, sessionId, timestampUtc, direction, rawData, format, source, attributes);
                 _frames.Add(record);
                 _bytes += rawData.Length;
 

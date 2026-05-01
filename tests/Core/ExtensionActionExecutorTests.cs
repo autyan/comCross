@@ -132,14 +132,24 @@ public sealed class ExtensionActionExecutorTests
             string? resourceId = null) => throw new NotSupportedException();
         public Task RenameSessionAsync(string sessionId, string name) => Task.CompletedTask;
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
-        public Task SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf) => Task.CompletedTask;
+        public Task<PluginCommandResult> SendMessageAsync(
+            string sessionId,
+            string message,
+            MessageFormat format,
+            bool addCr,
+            bool addLf,
+            string? transmitTargetId = null)
+            => Task.FromResult(new PluginCommandResult(true));
 
-        public Task SendDataAsync(string sessionId, byte[] data)
+        public Task<PluginCommandResult> SendDataAsync(string sessionId, byte[] data, string? transmitTargetId = null)
         {
             LastSessionId = sessionId;
             LastData = data;
-            return Task.CompletedTask;
+            return Task.FromResult(new PluginCommandResult(true));
         }
+
+        public Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(string sessionId)
+            => Task.FromResult(new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>()));
 
         public void ClearMessages(string sessionId)
         {

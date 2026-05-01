@@ -35,6 +35,43 @@
                                  KeyDown="OnSendMessageBoxKeyDown"
                                  IsEnabled="{Binding IsConnected}" />
 
+                            <StackPanel Spacing="6"
+                                        IsVisible="{Binding IsTransmitTargetSelectorVisible}">
+                                <TextBlock Text="{Binding L[tool.send.target]}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text1Brush}" />
+                                <ComboBox ItemsSource="{Binding TransmitTargets}"
+                                          SelectedItem="{Binding SelectedTransmitTarget}"
+                                          PlaceholderText="{Binding L[tool.send.target.placeholder]}"
+                                          HorizontalAlignment="Stretch"
+                                          IsEnabled="{Binding IsConnected}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid RowDefinitions="Auto,Auto">
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Text0Brush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Row="1"
+                                                           Text="{Binding Subtitle}"
+                                                           IsVisible="{Binding HasSubtitle}"
+                                                           FontSize="10"
+                                                           Foreground="{StaticResource Text2Brush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding SendErrorText}"
+                                       IsVisible="{Binding HasSendError}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource ErrorBrush}"
+                                       TextWrapping="Wrap" />
+
                             <Grid ColumnDefinitions="64,*,*">
                                 <Border Grid.Column="0"
                                     Height="34"

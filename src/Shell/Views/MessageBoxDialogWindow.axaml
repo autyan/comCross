@@ -16,10 +16,12 @@
 
   <StackPanel>
     <StackPanel Orientation="Horizontal" Margin="20">
-      <TextBlock Text="{Binding IconText}"
-                 FontSize="32"
-                 Margin="0,0,16,0"
-                 VerticalAlignment="Top" />
+      <PathIcon Data="{Binding IconData}"
+                Foreground="{Binding IconBrush}"
+                Width="32"
+                Height="32"
+                Margin="0,0,16,0"
+                VerticalAlignment="Top" />
       <TextBlock Text="{Binding Message}"
                  TextWrapping="Wrap"
                  MaxWidth="500"
