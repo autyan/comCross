@@ -72,8 +72,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PluginHostEventRouterService>();
         services.AddSingleton<ICapabilityDispatcher, CapabilityDispatcher>();
 
-        // Listener-style session orchestration (e.g. network server auto-accept)
-        services.AddSingleton<ListenerAutoAcceptService>();
+        // Plugin-managed resource orchestration.
+        services.AddSingleton<ManagedResourceAutoConnectService>();
 
         // Shared Memory (IPC)
         services.AddSingleton(new SharedMemoryConfig());

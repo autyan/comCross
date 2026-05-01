@@ -176,7 +176,7 @@ public class MainWindowViewModel : BaseViewModel
     public bool HasSessionDetailSession => SessionDetailSession is not null;
 
     public string SessionDetailTitle
-        => SessionDetailSession?.CapabilityId is "tcp.server" or "udp.listen"
+        => SessionDetailSession?.ManagedResourceKinds.Count > 0
                 ? "监听器详情"
                 : "会话详情";
 
@@ -192,20 +192,9 @@ public class MainWindowViewModel : BaseViewModel
                 return string.Empty;
             }
 
-            if (!string.IsNullOrWhiteSpace(session.ParentSessionId))
-            {
-                return L["network.session.connection.inbound"];
-            }
-
-            return session.CapabilityId switch
-            {
-                "tcp.server" => L["network.session.listener.tcp"],
-                "udp.listen" => L["network.session.listener.udp"],
-                "tcp" => L["network.session.client.tcp"],
-                "udp" => L["network.session.client.udp"],
-                "serial" => L["stream.session.serial"],
-                _ => L["stream.session.generic"]
-            };
+            return !string.IsNullOrWhiteSpace(session.DisplayTitle)
+                ? session.DisplayTitle
+                : L["stream.session.generic"];
         }
     }
 

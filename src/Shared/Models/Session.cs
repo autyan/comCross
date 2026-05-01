@@ -15,13 +15,14 @@ public sealed class Session : INotifyPropertyChanged
     private string? _parametersJson;
     private string? _displayTitle;
     private string? _displaySubtitle;
+    private string? _displayIcon;
     private SessionStatus _status;
     private DateTime? _startTime;
     private long _rxBytes;
     private long _txBytes;
     private bool _enableDatabaseStorage;
-    private SessionKind _kind = SessionKind.Connection;
     private string? _parentSessionId;
+    private IReadOnlyList<string> _managedResourceKinds = Array.Empty<string>();
 
     public required string Id { get; init; }
     
@@ -95,15 +96,10 @@ public sealed class Session : INotifyPropertyChanged
         }
     }
 
-    /// <summary>
-    /// Session topology kind.
-    /// Listener sessions are control-plane entries (e.g., TCP server listener).
-    /// Connection sessions are data-plane entries (e.g., an accepted TCP client).
-    /// </summary>
-    public SessionKind Kind
+    public string? DisplayIcon
     {
-        get => _kind;
-        set => SetField(ref _kind, value);
+        get => _displayIcon;
+        set => SetField(ref _displayIcon, string.IsNullOrWhiteSpace(value) ? null : value);
     }
 
     /// <summary>
@@ -115,6 +111,16 @@ public sealed class Session : INotifyPropertyChanged
         get => _parentSessionId;
         set => SetField(ref _parentSessionId, string.IsNullOrWhiteSpace(value) ? null : value);
     }
+
+    public IReadOnlyList<string> ManagedResourceKinds
+    {
+        get => _managedResourceKinds;
+        set => SetField(ref _managedResourceKinds, NormalizeResourceKinds(value));
+    }
+
+    public bool HasManagedResourceKind(string resourceKind)
+        => !string.IsNullOrWhiteSpace(resourceKind)
+           && _managedResourceKinds.Any(kind => string.Equals(kind, resourceKind, StringComparison.Ordinal));
 
     /// <summary>
     /// A best-effort, UI-friendly endpoint label derived from <see cref="ParametersJson"/>.
@@ -256,6 +262,20 @@ public sealed class Session : INotifyPropertyChanged
         return true;
     }
 
+    private static IReadOnlyList<string> NormalizeResourceKinds(IReadOnlyList<string>? kinds)
+    {
+        if (kinds is null || kinds.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        return kinds
+            .Where(kind => !string.IsNullOrWhiteSpace(kind))
+            .Select(kind => kind.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static bool TryGetString(System.Text.Json.JsonElement obj, string key, out string value)
     {
         value = string.Empty;
@@ -290,10 +310,4 @@ public enum SessionStatus
     Closing,
     Connected,
     Error
-}
-
-public enum SessionKind
-{
-    Connection,
-    Listener
 }

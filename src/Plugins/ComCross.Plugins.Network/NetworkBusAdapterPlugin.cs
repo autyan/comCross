@@ -422,7 +422,7 @@ public sealed class NetworkBusAdapterPlugin :
                 CommittedParameters: committed,
                 DisplayTitle: "TCP Client",
                 DisplaySubtitle: subtitle,
-                SessionKind: "connection");
+                SessionIcon: "NetworkIcon");
         }
         catch (OperationCanceledException)
         {
@@ -515,7 +515,7 @@ public sealed class NetworkBusAdapterPlugin :
                 CommittedParameters: committed,
                 DisplayTitle: "UDP Socket",
                 DisplaySubtitle: subtitle,
-                SessionKind: "connection");
+                SessionIcon: "NetworkIcon");
         }
         catch (Exception ex)
         {
@@ -603,7 +603,8 @@ public sealed class NetworkBusAdapterPlugin :
                 CommittedParameters: committed,
                 DisplayTitle: "TCP Listener",
                 DisplaySubtitle: subtitle,
-                SessionKind: "listener");
+                SessionIcon: "ServerIcon",
+                ManagedResourceKinds: new[] { PluginResourceKinds.Pending });
         }
         catch (Exception ex)
         {
@@ -643,7 +644,24 @@ public sealed class NetworkBusAdapterPlugin :
 
             state.RxLoop = Task.Run(() => UdpListenLoopAsync(state, rxCts.Token));
             NotifyListenerInvalidated(state.CapabilityId, state.SessionId, "listening");
-            return new PluginConnectResult(true, SessionId: command.SessionId);
+            var local = udp.Client.LocalEndPoint as IPEndPoint;
+            var subtitle = FormatEndpoint(local);
+            var committed = JsonSerializer.SerializeToElement(new
+            {
+                mode = "listen",
+                listenHost = FormatAddress(local?.Address) ?? listenHost,
+                listenPort = local?.Port ?? port,
+                endpoint = subtitle
+            });
+
+            return new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                CommittedParameters: committed,
+                DisplayTitle: "UDP Listener",
+                DisplaySubtitle: subtitle,
+                SessionIcon: "ServerIcon",
+                ManagedResourceKinds: new[] { PluginResourceKinds.Pending });
         }
         catch (Exception ex)
         {
@@ -712,8 +730,8 @@ public sealed class NetworkBusAdapterPlugin :
                 CommittedParameters: committed,
                 DisplayTitle: "Inbound TCP",
                 DisplaySubtitle: subtitle,
-                SessionKind: "connection",
-                ParentSessionId: listenerSessionId);
+                ParentSessionId: listenerSessionId,
+                SessionIcon: "NetworkIcon");
         }
         catch (Exception ex)
         {
@@ -759,7 +777,25 @@ public sealed class NetworkBusAdapterPlugin :
         }
 
         NotifyListenerInvalidated(listener!.CapabilityId, listener!.SessionId, "peer-bound");
-        return new PluginConnectResult(true, SessionId: command.SessionId);
+        var subtitle = FormatEndpoint(peer.RemoteEndPoint);
+        var committed = JsonSerializer.SerializeToElement(new
+        {
+            mode = "bind",
+            listenerSessionId,
+            pendingId,
+            remoteHost = FormatAddress(peer.RemoteEndPoint.Address),
+            remotePort = peer.RemoteEndPoint.Port,
+            endpoint = subtitle
+        });
+
+        return new PluginConnectResult(
+            true,
+            SessionId: command.SessionId,
+            CommittedParameters: committed,
+            DisplayTitle: "Inbound UDP",
+            DisplaySubtitle: subtitle,
+            ParentSessionId: listenerSessionId,
+            SessionIcon: "NetworkIcon");
     }
 
     private PluginCommandResult RejectPending(PluginActionCommand command)

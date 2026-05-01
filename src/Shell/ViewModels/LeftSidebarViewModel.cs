@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ComCross.Core.Services;
@@ -30,7 +29,7 @@ public enum LeftSidebarSessionSurfaceMode
 
 public sealed class LeftSidebarViewModel : BaseViewModel
 {
-    private const int ListenerPreviewLimit = 5;
+    private const int ChildPreviewLimit = 5;
 
     private readonly IEventBus _eventBus;
     private readonly WorkloadService _workloadService;
@@ -50,12 +49,12 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     private readonly PropertyChangedEventHandler _activeSessionPropertyChangedHandler;
 
-    // Simplified listener-mode UI: allocate stable connection indices for child sessions.
+    // Simplified parent-child UI: allocate stable connection indices for child sessions.
     private readonly Dictionary<string, int> _connectionIndexBySessionId = new(StringComparer.Ordinal);
     private int _nextConnectionIndex;
 
-    // UI-only state: collapsed listener nodes.
-    private readonly HashSet<string> _collapsedListenerSessionIds = new(StringComparer.Ordinal);
+    // UI-only state: collapsed parent nodes.
+    private readonly HashSet<string> _collapsedParentSessionIds = new(StringComparer.Ordinal);
 
     private Session? _activeSession;
     private bool _isConnected;
@@ -387,20 +386,20 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         Dispatcher.UIThread.Post(RebuildSessionItems);
     }
 
-    public void ToggleListenerCollapsed(string listenerSessionId)
+    public void ToggleParentCollapsed(string parentSessionId)
     {
-        if (string.IsNullOrWhiteSpace(listenerSessionId))
+        if (string.IsNullOrWhiteSpace(parentSessionId))
         {
             return;
         }
 
-        if (_collapsedListenerSessionIds.Contains(listenerSessionId))
+        if (_collapsedParentSessionIds.Contains(parentSessionId))
         {
-            _collapsedListenerSessionIds.Remove(listenerSessionId);
+            _collapsedParentSessionIds.Remove(parentSessionId);
         }
         else
         {
-            _collapsedListenerSessionIds.Add(listenerSessionId);
+            _collapsedParentSessionIds.Add(parentSessionId);
         }
 
         Dispatcher.UIThread.Post(RebuildSessionItems);
@@ -526,9 +525,10 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         target.ParametersJson = source.ParametersJson;
         target.DisplayTitle = source.DisplayTitle;
         target.DisplaySubtitle = source.DisplaySubtitle;
+        target.DisplayIcon = source.DisplayIcon;
         target.EnableDatabaseStorage = source.EnableDatabaseStorage;
-        target.Kind = source.Kind;
         target.ParentSessionId = source.ParentSessionId;
+        target.ManagedResourceKinds = source.ManagedResourceKinds;
         target.Status = source.Status;
         target.StartTime = source.StartTime;
     }
@@ -555,53 +555,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     }
 
     private static string? InferEffectiveParentSessionId(Session session)
-    {
-        if (!string.IsNullOrWhiteSpace(session.ParentSessionId))
-        {
-            return session.ParentSessionId;
-        }
-
-        // Back-compat / robustness: infer listener-child topology from persisted parameters.
-        if (!string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal)
-            || session.CapabilityId is not ("tcp.server" or "udp.listen")
-            || string.IsNullOrWhiteSpace(session.ParametersJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(session.ParametersJson);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return null;
-            }
-
-            if (!root.TryGetProperty("mode", out var modeEl))
-            {
-                return null;
-            }
-
-            var mode = modeEl.ValueKind == JsonValueKind.String ? modeEl.GetString() : modeEl.ToString();
-            if (!string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            if (!root.TryGetProperty("listenerSessionId", out var parentEl))
-            {
-                return null;
-            }
-
-            var parent = parentEl.ValueKind == JsonValueKind.String ? parentEl.GetString() : parentEl.ToString();
-            return string.IsNullOrWhiteSpace(parent) ? null : parent;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        => string.IsNullOrWhiteSpace(session.ParentSessionId) ? null : session.ParentSessionId;
 
     private void RebuildSessionItems()
     {
@@ -634,19 +588,13 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             {
                 var topItem = SessionItems.Add(top);
                 topItem.IndentLevel = 0;
-                topItem.OverrideName = IsDefaultNetworkListenerName(top)
-                    ? (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "tcp.server")
-                    ? "TCP Listener"
-                    : (string.Equals(top.PluginId, "network.adapter", StringComparison.Ordinal) && top.CapabilityId is "udp.listen")
-                        ? "UDP Listener"
-                        : null
-                    : null;
-                topItem.ListenerChildCount = visibleSessions.Count(s =>
+                topItem.OverrideName = null;
+                topItem.ChildSessionCount = visibleSessions.Count(s =>
                     string.Equals(effectiveParentBySessionId.GetValueOrDefault(s.Id), top.Id, StringComparison.Ordinal));
 
-                topItem.IsCollapsed = topItem.IsListener && _collapsedListenerSessionIds.Contains(top.Id);
+                topItem.IsCollapsed = topItem.HasChildSessions && _collapsedParentSessionIds.Contains(top.Id);
 
-                if (topItem.IsListener && topItem.IsCollapsed)
+                if (topItem.HasChildSessions && topItem.IsCollapsed)
                 {
                     continue;
                 }
@@ -657,7 +605,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                     .ToList();
 
                 var visibleChildIds = orderedChildren
-                    .Take(ListenerPreviewLimit)
+                    .Take(ChildPreviewLimit)
                     .Select(s => s.Id)
                     .ToHashSet(StringComparer.Ordinal);
 
@@ -700,11 +648,6 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             _syncingSelection = false;
         }
     }
-
-    private static bool IsDefaultNetworkListenerName(Session session)
-        => string.Equals(session.PluginId, "network.adapter", StringComparison.Ordinal)
-           && session.CapabilityId is "tcp.server" or "udp.listen"
-           && session.Name.StartsWith($"{session.CapabilityId} #", StringComparison.Ordinal);
 
     private static string ResolveSessionDisplayName(Session? session)
     {
@@ -778,14 +721,14 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         });
     }
 
-    public int GetChildConnectionCount(string listenerSessionId)
+    public int GetChildSessionCount(string parentSessionId)
     {
-        if (string.IsNullOrWhiteSpace(listenerSessionId))
+        if (string.IsNullOrWhiteSpace(parentSessionId))
         {
             return 0;
         }
 
-        return Sessions.Count(session => string.Equals(InferEffectiveParentSessionId(session), listenerSessionId, StringComparison.Ordinal));
+        return Sessions.Count(session => string.Equals(InferEffectiveParentSessionId(session), parentSessionId, StringComparison.Ordinal));
     }
 
     protected override void Dispose(bool disposing)

@@ -34,10 +34,10 @@
             </StackPanel>
           </Border>
           <Border Grid.Column="1" Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="4,0,0,0"
-                  IsVisible="{Binding IsListenerManagerMode}">
+                  IsVisible="{Binding IsManagedResourceMode}">
             <StackPanel Spacing="2">
               <TextBlock Text="{Binding L[network.session.connections]}" FontSize="10" Foreground="#87909B" />
-              <TextBlock Text="{Binding ListenerConnectionSummary}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+              <TextBlock Text="{Binding ManagedSessionSummary}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
             </StackPanel>
           </Border>
         </Grid>
@@ -58,9 +58,9 @@
                    FontSize="11"
                    Foreground="#87909B"
                    TextWrapping="Wrap"
-                   IsVisible="{Binding IsListenerManagerMode}" />
+                   IsVisible="{Binding IsManagedResourceMode}" />
 
-        <StackPanel Spacing="10" IsVisible="{Binding IsListenerManagerMode}">
+        <StackPanel Spacing="10" IsVisible="{Binding IsManagedResourceMode}">
           <StackPanel Spacing="6">
             <Grid ColumnDefinitions="*,Auto,Auto">
               <TextBlock Grid.Column="0"
@@ -69,7 +69,7 @@
                          FontWeight="SemiBold"
                          Foreground="#E6EDF3" />
               <TextBlock Grid.Column="1"
-                         Text="{Binding ListenerConnectionSummary}"
+                         Text="{Binding ManagedSessionSummary}"
                          FontSize="10"
                          Foreground="#87909B"
                          Margin="0,0,12,0" />
@@ -91,15 +91,15 @@
                            FontSize="11"
                            Foreground="#87909B"
                            TextWrapping="Wrap"
-                           IsVisible="{Binding !HasListenerConnections}" />
+                           IsVisible="{Binding !HasManagedSessions}" />
 
                 <ScrollViewer Grid.Row="1"
                               MaxHeight="220"
                               VerticalScrollBarVisibility="Auto"
-                              IsVisible="{Binding HasListenerConnections}">
-                  <ItemsControl ItemsSource="{Binding ListenerConnections}">
+                              IsVisible="{Binding HasManagedSessions}">
+                  <ItemsControl ItemsSource="{Binding ManagedSessions}">
                     <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:NetworkManagedConnectionRow">
+                      <DataTemplate x:DataType="vm:ManagedSessionRow">
                         <Border Background="#162026"
                                 BorderBrush="#25303A"
                                 BorderThickness="1"
@@ -174,7 +174,7 @@
                          FontWeight="SemiBold"
                          Foreground="#E6EDF3" />
               <TextBlock Grid.Column="1"
-                         Text="{Binding ListenerPendingSummary}"
+                         Text="{Binding PendingResourceSummary}"
                          FontSize="10"
                          Foreground="#87909B"
                          Margin="0,0,12,0" />
@@ -203,15 +203,15 @@
                            FontSize="11"
                            Foreground="#87909B"
                            TextWrapping="Wrap"
-                           IsVisible="{Binding !HasListenerPendingItems}" />
+                           IsVisible="{Binding !HasPendingResources}" />
 
                 <ScrollViewer Grid.Row="1"
                               MaxHeight="180"
                               VerticalScrollBarVisibility="Auto"
-                              IsVisible="{Binding HasListenerPendingItems}">
-                  <ItemsControl ItemsSource="{Binding ListenerPendingItems}">
+                              IsVisible="{Binding HasPendingResources}">
+                  <ItemsControl ItemsSource="{Binding PendingResources}">
                     <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:NetworkPendingResourceRow">
+                      <DataTemplate x:DataType="vm:PendingResourceRow">
                         <Border Background="#162026"
                                 BorderBrush="#25303A"
                                 BorderThickness="1"

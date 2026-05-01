@@ -129,7 +129,20 @@ Supported generic action kinds:
 
 The host UI must consume the generic descriptors and should not hardcode a plugin's private action names or payload shape.
 
-## 10) Notes
+## 10) Session Metadata
+
+Plugins should describe the session they created through `PluginConnectResult`.
+
+Common metadata:
+- `DisplayTitle`: user-facing title for the session.
+- `DisplaySubtitle`: user-facing endpoint or detail text.
+- `SessionIcon`: icon resource key such as `NetworkIcon`, `ServerIcon`, `CableIcon`, or a plugin-provided icon reference.
+- `ParentSessionId`: parent session id when the new session belongs under another session.
+- `ManagedResourceKinds`: resource kinds the session owns, such as `pending`.
+
+Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
+
+## 11) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.

@@ -54,7 +54,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly IDisposable _sessionCreatedSubscription;
     private readonly IDisposable _sessionDeletedSubscription;
     private readonly IDisposable _pluginUiInvalidatedSubscription;
-    private int _listenerConnectionCount;
+    private int _managedSessionCount;
     private string? _networkParentDisplayName;
     private bool _forceCreateMode;
     private string? _reconnectTargetSessionId;
@@ -88,8 +88,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         _logger = logger;
 
         AdapterItems = new ItemVmCollection<BusAdapterListItemViewModel, BusAdapterInfo>(_adapterItemFactory);
-        ListenerConnections = new ObservableCollection<NetworkManagedConnectionRow>();
-        ListenerPendingItems = new ObservableCollection<NetworkPendingResourceRow>();
+        ManagedSessions = new ObservableCollection<ManagedSessionRow>();
+        PendingResources = new ObservableCollection<PendingResourceRow>();
 
         ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => CanConnect);
         DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => CanDisconnect);
@@ -147,9 +147,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public AsyncRelayCommand<string> DeleteManagedSessionCommand { get; }
 
-    public ObservableCollection<NetworkManagedConnectionRow> ListenerConnections { get; }
+    public ObservableCollection<ManagedSessionRow> ManagedSessions { get; }
 
-    public ObservableCollection<NetworkPendingResourceRow> ListenerPendingItems { get; }
+    public ObservableCollection<PendingResourceRow> PendingResources { get; }
 
     public bool IsConnected => _activeSession?.Status == SessionStatus.Connected;
 
@@ -159,11 +159,11 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public bool IsCreateMode => _forceCreateMode || !IsNetworkSelectionMode;
 
-    public bool IsListenerManagerMode
-        => IsNetworkSelectionMode && _activeSession?.Kind == SessionKind.Listener;
+    public bool IsManagedResourceMode
+        => IsNetworkSelectionMode && _activeSession?.HasManagedResourceKind(PluginResourceKinds.Pending) == true;
 
-    public bool IsConnectionDetailMode
-        => IsNetworkSelectionMode && _activeSession is not null && _activeSession.Kind != SessionKind.Listener;
+    public bool IsSessionDetailMode
+        => IsNetworkSelectionMode && _activeSession is not null && !IsManagedResourceMode;
 
     public bool CanEditConfiguration => !IsConnected && IsCreateMode;
 
@@ -189,7 +189,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 return string.Empty;
             }
 
-            if (IsListenerManagerMode)
+            if (IsManagedResourceMode)
             {
                 return _activeSession.CapabilityId switch
                 {
@@ -226,29 +226,29 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         private set => SetProperty(ref _networkParentDisplayName, value);
     }
 
-    public int ListenerConnectionCount
+    public int ManagedSessionCount
     {
-        get => _listenerConnectionCount;
-        private set => SetProperty(ref _listenerConnectionCount, value);
+        get => _managedSessionCount;
+        private set => SetProperty(ref _managedSessionCount, value);
     }
 
-    public string ListenerConnectionSummary
-        => string.Format(L["network.session.listener.connections"], ListenerConnectionCount);
+    public string ManagedSessionSummary
+        => string.Format(L["network.session.listener.connections"], ManagedSessionCount);
 
-    public bool HasListenerConnections => ListenerConnections.Count > 0;
+    public bool HasManagedSessions => ManagedSessions.Count > 0;
 
-    public bool HasListenerPendingItems => ListenerPendingItems.Count > 0;
+    public bool HasPendingResources => PendingResources.Count > 0;
 
-    public bool CanAcceptAllPending => IsListenerManagerMode && HasListenerPendingItems;
+    public bool CanAcceptAllPending => IsManagedResourceMode && HasPendingResources;
 
-    public bool CanDisconnectAllManagedSessions => IsListenerManagerMode && HasListenerConnections;
+    public bool CanDisconnectAllManagedSessions => IsManagedResourceMode && HasManagedSessions;
 
-    public bool CanRejectAllPending => IsListenerManagerMode && HasListenerPendingItems && _rejectAllPendingAction is not null;
+    public bool CanRejectAllPending => IsManagedResourceMode && HasPendingResources && _rejectAllPendingAction is not null;
 
-    public int ListenerPendingCount => ListenerPendingItems.Count;
+    public int PendingResourceCount => PendingResources.Count;
 
-    public string ListenerPendingSummary
-        => string.Format(L["network.session.pending.connections"], ListenerPendingCount);
+    public string PendingResourceSummary
+        => string.Format(L["network.session.pending.connections"], PendingResourceCount);
 
     public string PendingBulkActionLabel
         => _activeSession?.CapabilityId switch
@@ -466,15 +466,15 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         RefreshConnectionCommandState();
         OnPropertyChanged(nameof(IsNetworkSelectionMode));
         OnPropertyChanged(nameof(IsCreateMode));
-        OnPropertyChanged(nameof(IsListenerManagerMode));
-        OnPropertyChanged(nameof(IsConnectionDetailMode));
+        OnPropertyChanged(nameof(IsManagedResourceMode));
+        OnPropertyChanged(nameof(IsSessionDetailMode));
         OnPropertyChanged(nameof(NetworkSelectionTitle));
         OnPropertyChanged(nameof(NetworkSelectionEndpoint));
         OnPropertyChanged(nameof(NetworkSelectionStatus));
-        OnPropertyChanged(nameof(ListenerConnectionSummary));
-        OnPropertyChanged(nameof(HasListenerConnections));
-        OnPropertyChanged(nameof(HasListenerPendingItems));
-        OnPropertyChanged(nameof(ListenerPendingSummary));
+        OnPropertyChanged(nameof(ManagedSessionSummary));
+        OnPropertyChanged(nameof(HasManagedSessions));
+        OnPropertyChanged(nameof(HasPendingResources));
+        OnPropertyChanged(nameof(PendingResourceSummary));
         OnPropertyChanged(nameof(PendingBulkActionLabel));
         OnPropertyChanged(nameof(PendingRejectAllLabel));
         
@@ -561,13 +561,13 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         if (!IsNetworkSelectionMode || _activeSession is null)
         {
             NetworkParentDisplayName = null;
-            ListenerConnectionCount = 0;
+            ManagedSessionCount = 0;
             _rejectAllPendingAction = null;
-            ListenerConnections.Clear();
-            ListenerPendingItems.Clear();
-            OnPropertyChanged(nameof(HasListenerConnections));
-            OnPropertyChanged(nameof(HasListenerPendingItems));
-            OnPropertyChanged(nameof(ListenerPendingSummary));
+            ManagedSessions.Clear();
+            PendingResources.Clear();
+            OnPropertyChanged(nameof(HasManagedSessions));
+            OnPropertyChanged(nameof(HasPendingResources));
+            OnPropertyChanged(nameof(PendingResourceSummary));
             OnPropertyChanged(nameof(CanAcceptAllPending));
             OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
             OnPropertyChanged(nameof(CanRejectAllPending));
@@ -581,21 +581,21 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         {
             var sessions = (await _connections.GetActiveSessionsAsync()).ToList();
 
-            if (IsListenerManagerMode)
+            if (IsManagedResourceMode)
             {
                 var childSessions = sessions
                     .Where(session => string.Equals(session.ParentSessionId, _activeSession.Id, StringComparison.Ordinal))
                     .OrderBy(session => session.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                ListenerConnectionCount = childSessions.Count;
+                ManagedSessionCount = childSessions.Count;
                 NetworkParentDisplayName = null;
-                ReplaceListenerConnections(childSessions);
+                ReplaceManagedSessions(childSessions);
                 await RefreshPendingResourceRowsAsync();
-                OnPropertyChanged(nameof(ListenerConnectionSummary));
-                OnPropertyChanged(nameof(HasListenerConnections));
-                OnPropertyChanged(nameof(HasListenerPendingItems));
-                OnPropertyChanged(nameof(ListenerPendingSummary));
+                OnPropertyChanged(nameof(ManagedSessionSummary));
+                OnPropertyChanged(nameof(HasManagedSessions));
+                OnPropertyChanged(nameof(HasPendingResources));
+                OnPropertyChanged(nameof(PendingResourceSummary));
                 OnPropertyChanged(nameof(CanAcceptAllPending));
                 OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
                 OnPropertyChanged(nameof(CanRejectAllPending));
@@ -605,10 +605,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 return;
             }
 
-            ListenerConnectionCount = 0;
+            ManagedSessionCount = 0;
             _rejectAllPendingAction = null;
-            ListenerConnections.Clear();
-            ListenerPendingItems.Clear();
+            ManagedSessions.Clear();
+            PendingResources.Clear();
             if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
             {
                 NetworkParentDisplayName = sessions
@@ -622,16 +622,16 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
         catch
         {
-            ListenerConnectionCount = 0;
+            ManagedSessionCount = 0;
             _rejectAllPendingAction = null;
             NetworkParentDisplayName = null;
-            ListenerConnections.Clear();
-            ListenerPendingItems.Clear();
+            ManagedSessions.Clear();
+            PendingResources.Clear();
         }
 
-        OnPropertyChanged(nameof(HasListenerConnections));
-        OnPropertyChanged(nameof(HasListenerPendingItems));
-        OnPropertyChanged(nameof(ListenerPendingSummary));
+        OnPropertyChanged(nameof(HasManagedSessions));
+        OnPropertyChanged(nameof(HasPendingResources));
+        OnPropertyChanged(nameof(PendingResourceSummary));
         OnPropertyChanged(nameof(CanAcceptAllPending));
         OnPropertyChanged(nameof(CanDisconnectAllManagedSessions));
         OnPropertyChanged(nameof(CanRejectAllPending));
@@ -640,12 +640,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         RejectAllPendingCommand.RaiseCanExecuteChanged();
     }
 
-    private void ReplaceListenerConnections(IReadOnlyList<Session> sessions)
+    private void ReplaceManagedSessions(IReadOnlyList<Session> sessions)
     {
-        ListenerConnections.Clear();
+        ManagedSessions.Clear();
         foreach (var session in sessions)
         {
-            ListenerConnections.Add(new NetworkManagedConnectionRow(
+            ManagedSessions.Add(new ManagedSessionRow(
                 session.Id,
                 session.Name,
                 session.Endpoint,
@@ -665,10 +665,10 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     private async Task RefreshPendingResourceRowsAsync()
     {
-        ListenerPendingItems.Clear();
+        PendingResources.Clear();
         _rejectAllPendingAction = null;
 
-        if (!IsListenerManagerMode
+        if (!IsManagedResourceMode
             || _activeSession is null
             || string.IsNullOrWhiteSpace(_activeSession.PluginId)
             || string.IsNullOrWhiteSpace(_activeSession.CapabilityId))
@@ -721,7 +721,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
             var acceptAction = FindResourceAction(item.Actions, PluginResourceActionIds.Accept);
             var rejectAction = FindResourceAction(item.Actions, PluginResourceActionIds.Reject);
-            ListenerPendingItems.Add(new NetworkPendingResourceRow(
+            PendingResources.Add(new PendingResourceRow(
                 item.Id,
                 string.IsNullOrWhiteSpace(item.DisplayName) ? item.Id : item.DisplayName,
                 ResolveResourceActionLabel(acceptAction, GetPendingActionLabel()),
@@ -732,8 +732,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                 RejectPendingResourceAsync));
         }
 
-        OnPropertyChanged(nameof(HasListenerPendingItems));
-        OnPropertyChanged(nameof(ListenerPendingSummary));
+        OnPropertyChanged(nameof(HasPendingResources));
+        OnPropertyChanged(nameof(PendingResourceSummary));
     }
 
     private string ResolveResourceActionLabel(PluginResourceActionDescriptor? action, string fallback)
@@ -765,7 +765,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        var pendingSnapshot = ListenerPendingItems.ToList();
+        var pendingSnapshot = PendingResources.ToList();
         foreach (var item in pendingSnapshot)
         {
             await AcceptPendingResourceCoreAsync(item.PendingId, item.DisplayName, item.ConnectAction, refreshAfter: false);
@@ -815,7 +815,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     private async Task RejectPendingResourceAsync(string? pendingId, PluginResourceActionDescriptor? action)
     {
-        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId) || action is null)
+        if (!IsManagedResourceMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId) || action is null)
         {
             return;
         }
@@ -839,7 +839,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginResourceActionDescriptor? action,
         bool refreshAfter)
     {
-        if (!IsListenerManagerMode
+        if (!IsManagedResourceMode
             || _activeSession is null
             || action is null
             || string.IsNullOrWhiteSpace(pendingId)
@@ -1202,7 +1202,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        var message = IsListenerManagerMode
+        var message = IsManagedResourceMode
             ? string.Format(L["dialog.deleteSession.listener.message"], _activeSession.Name)
             : string.Format(L["dialog.deleteSession.message"], _activeSession.Name);
 
@@ -1235,7 +1235,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        var sessionIds = ListenerConnections
+        var sessionIds = ManagedSessions
             .Select(item => item.SessionId)
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToList();
@@ -1255,7 +1255,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        var row = ListenerConnections.FirstOrDefault(item => string.Equals(item.SessionId, sessionId, StringComparison.Ordinal));
+        var row = ManagedSessions.FirstOrDefault(item => string.Equals(item.SessionId, sessionId, StringComparison.Ordinal));
         var displayName = row?.Name ?? sessionId;
         var confirmed = await MessageBoxService.ShowConfirmAsync(
             L["dialog.deleteSession.title"],
@@ -1605,7 +1605,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        if (IsListenerManagerMode && string.Equals(evt.Session.ParentSessionId, _activeSession.Id, StringComparison.Ordinal))
+        if (IsManagedResourceMode && string.Equals(evt.Session.ParentSessionId, _activeSession.Id, StringComparison.Ordinal))
         {
             Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
         }
@@ -1618,7 +1618,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        if (IsListenerManagerMode)
+        if (IsManagedResourceMode)
         {
             Dispatcher.UIThread.Post(() => _ = RefreshNetworkSelectionContextAsync());
         }
@@ -1630,18 +1630,18 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     private void OnPluginUiStateInvalidated(PluginUiStateInvalidatedCoreEvent evt)
     {
-        if (!IsListenerManagerMode || _activeSession is null)
+        if (!IsManagedResourceMode || _activeSession is null)
         {
             return;
         }
 
-        if (!string.Equals(evt.PluginId, "network.adapter", StringComparison.Ordinal)
+        if (!string.Equals(evt.PluginId, _activeSession.PluginId, StringComparison.Ordinal)
             || !string.Equals(evt.SessionId, _activeSession.Id, StringComparison.Ordinal))
         {
             return;
         }
 
-        if (!string.Equals(evt.ResourceKind, "pending", StringComparison.Ordinal))
+        if (!string.Equals(evt.ResourceKind, PluginResourceKinds.Pending, StringComparison.Ordinal))
         {
             return;
         }
@@ -1822,12 +1822,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     }
 }
 
-public sealed class NetworkManagedConnectionRow
+public sealed class ManagedSessionRow
 {
     private readonly string _connectedText;
     private readonly string _disconnectedText;
 
-    public NetworkManagedConnectionRow(
+    public ManagedSessionRow(
         string sessionId,
         string name,
         string endpoint,
@@ -1887,7 +1887,7 @@ public sealed class NetworkManagedConnectionRow
     public AsyncRelayCommand DeleteCommand { get; }
 }
 
-public sealed record NetworkPendingResourceRow(
+public sealed record PendingResourceRow(
     string PendingId,
     string DisplayName,
     string ActionLabel,

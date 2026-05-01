@@ -108,9 +108,10 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
                 ParametersJson = s.ParametersJson,
                 DisplayTitle = s.DisplayTitle,
                 DisplaySubtitle = s.DisplaySubtitle,
+                DisplayIcon = s.DisplayIcon,
                 EnableDatabaseStorage = s.EnableDatabaseStorage,
-                Kind = s.Kind,
-                ParentSessionId = s.ParentSessionId
+                ParentSessionId = s.ParentSessionId,
+                ManagedResourceKinds = s.ManagedResourceKinds.ToList()
             })
             .ToList();
 

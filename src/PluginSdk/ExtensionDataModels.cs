@@ -18,8 +18,11 @@ public sealed record ExtensionSessionSnapshot(
     string? PluginId,
     string? CapabilityId,
     string Status,
-    string Kind,
     string? ParentSessionId,
+    string? DisplayTitle,
+    string? DisplaySubtitle,
+    string? DisplayIcon,
+    IReadOnlyList<string> ManagedResourceKinds,
     string? ParametersJson,
     long RxBytes,
     long TxBytes);

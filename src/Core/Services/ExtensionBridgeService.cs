@@ -158,8 +158,11 @@ public sealed class ExtensionBridgeService : IDisposable
                 session.PluginId,
                 session.CapabilityId,
                 session.Status.ToString(),
-                session.Kind.ToString(),
                 session.ParentSessionId,
+                session.DisplayTitle,
+                session.DisplaySubtitle,
+                session.DisplayIcon,
+                session.ManagedResourceKinds,
                 session.ParametersJson,
                 session.RxBytes,
                 session.TxBytes))

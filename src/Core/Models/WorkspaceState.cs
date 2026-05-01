@@ -89,11 +89,11 @@ public sealed class SessionDescriptor
     public string? ParametersJson { get; set; }
     public string? DisplayTitle { get; set; }
     public string? DisplaySubtitle { get; set; }
+    public string? DisplayIcon { get; set; }
     public bool EnableDatabaseStorage { get; set; }
 
-    // v0.4+: topology hints for hierarchical UI (listener -> connection sessions)
-    public SessionKind Kind { get; set; } = SessionKind.Connection;
     public string? ParentSessionId { get; set; }
+    public List<string> ManagedResourceKinds { get; set; } = new();
 }
 
 public sealed class SessionState

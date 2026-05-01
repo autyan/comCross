@@ -210,7 +210,10 @@ public sealed class SerialBusAdapterPlugin : IConnectableBusAdapterPlugin, ITran
                 _rxLoop = Task.Run(() => ReadLoopAsync(command.SessionId, serial, _rxCts.Token));
             }
 
-            return Task.FromResult(new PluginConnectResult(true, SessionId: command.SessionId));
+            return Task.FromResult(new PluginConnectResult(
+                true,
+                SessionId: command.SessionId,
+                SessionIcon: "CableIcon"));
         }
         catch (Exception ex)
         {

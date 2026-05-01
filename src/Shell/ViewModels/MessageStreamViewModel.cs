@@ -126,20 +126,9 @@ public sealed class MessageStreamViewModel : BaseViewModel
                 return string.Empty;
             }
 
-            if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
-            {
-                return L["network.session.connection.inbound"];
-            }
-
-            return _activeSession.CapabilityId switch
-            {
-                "tcp.server" => L["network.session.listener.tcp"],
-                "udp.listen" => L["network.session.listener.udp"],
-                "tcp" => L["network.session.client.tcp"],
-                "udp" => L["network.session.client.udp"],
-                "serial" => L["stream.session.serial"],
-                _ => L["stream.session.generic"]
-            };
+            return !string.IsNullOrWhiteSpace(_activeSession.DisplayTitle)
+                ? _activeSession.DisplayTitle
+                : L["stream.session.generic"];
         }
     }
 

@@ -97,9 +97,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
         session.Status = SessionStatus.Connecting;
 
-        // Listener topology hints (used by UI + orchestration).
-        ApplyListenerTopologyHints(session, pluginId, capabilityId, parameters, scopeSessionId, resourceKind, resourceId);
-
         var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
         var sessionHostModel = ResolveSessionHostModel(capability);
         var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
@@ -387,29 +384,12 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             ParametersJson = descriptor.ParametersJson,
             DisplayTitle = descriptor.DisplayTitle,
             DisplaySubtitle = descriptor.DisplaySubtitle,
+            DisplayIcon = descriptor.DisplayIcon,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
-            Kind = descriptor.Kind,
             ParentSessionId = descriptor.ParentSessionId,
+            ManagedResourceKinds = descriptor.ManagedResourceKinds,
             Status = SessionStatus.Disconnected
         };
-
-        // Back-compat: older workspace-state.json may not persist Kind/ParentSessionId.
-        // Re-infer listener topology from ParametersJson when available.
-        if (!string.IsNullOrWhiteSpace(session.PluginId)
-            && !string.IsNullOrWhiteSpace(session.CapabilityId)
-            && !string.IsNullOrWhiteSpace(descriptor.ParametersJson))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(descriptor.ParametersJson);
-                var parameters = doc.RootElement.Clone();
-                ApplyListenerTopologyHints(session, session.PluginId!, session.CapabilityId!, parameters);
-            }
-            catch
-            {
-                // best-effort
-            }
-        }
 
         var added = false;
         var state = _sessions.GetOrAdd(descriptor.Id, _ =>
@@ -432,9 +412,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.ParametersJson = session.ParametersJson;
             state.Session.DisplayTitle = session.DisplayTitle;
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
+            state.Session.DisplayIcon = session.DisplayIcon;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
-            state.Session.Kind = session.Kind;
             state.Session.ParentSessionId = session.ParentSessionId;
+            state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
             if (state.Session.Status != SessionStatus.Connected)
             {
                 state.Session.Status = SessionStatus.Disconnected;
@@ -592,17 +573,16 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
             session.DisplayTitle = result.DisplayTitle;
             session.DisplaySubtitle = result.DisplaySubtitle;
-
-            if (!string.IsNullOrWhiteSpace(result.SessionKind))
-            {
-                session.Kind = string.Equals(result.SessionKind, "listener", StringComparison.OrdinalIgnoreCase)
-                    ? SessionKind.Listener
-                    : SessionKind.Connection;
-            }
+            session.DisplayIcon = result.SessionIcon;
+            session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
 
             if (!string.IsNullOrWhiteSpace(result.ParentSessionId))
             {
                 session.ParentSessionId = result.ParentSessionId;
+            }
+            else
+            {
+                session.ParentSessionId = null;
             }
         }
         catch
@@ -697,43 +677,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
 
         return null;
-    }
-
-    private static void ApplyListenerTopologyHints(
-        Session session,
-        string pluginId,
-        string capabilityId,
-        JsonElement parameters,
-        string? scopeSessionId = null,
-        string? resourceKind = null,
-        string? resourceId = null)
-    {
-        if (!string.Equals(pluginId, "network.adapter", StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (capabilityId is not ("tcp.server" or "udp.listen"))
-        {
-            return;
-        }
-
-        var mode = TryGetString(parameters, "mode");
-        if (string.Equals(mode, "bind", StringComparison.OrdinalIgnoreCase)
-            || (!string.IsNullOrWhiteSpace(scopeSessionId)
-                && string.Equals(resourceKind, "pending", StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(resourceId)))
-        {
-            session.Kind = SessionKind.Connection;
-            session.ParentSessionId = !string.IsNullOrWhiteSpace(scopeSessionId)
-                ? scopeSessionId
-                : TryGetString(parameters, "listenerSessionId");
-        }
-        else
-        {
-            session.Kind = SessionKind.Listener;
-            session.ParentSessionId = null;
-        }
     }
 
     private static int? TryGetInt(JsonElement element, string propertyName)

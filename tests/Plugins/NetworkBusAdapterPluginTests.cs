@@ -27,6 +27,8 @@ public sealed class NetworkBusAdapterPluginTests
             CancellationToken.None);
 
         Assert.True(listenResult.Ok, listenResult.Error);
+        Assert.Equal("ServerIcon", listenResult.SessionIcon);
+        Assert.Contains(PluginResourceKinds.Pending, listenResult.ManagedResourceKinds ?? Array.Empty<string>());
 
         using var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, listenPort);
@@ -52,6 +54,8 @@ public sealed class NetworkBusAdapterPluginTests
             CancellationToken.None);
 
         Assert.True(bindResult.Ok, bindResult.Error);
+        Assert.Equal("listener-tcp", bindResult.ParentSessionId);
+        Assert.Equal("NetworkIcon", bindResult.SessionIcon);
 
         await plugin.DisconnectAsync(new PluginDisconnectCommand("child-tcp"), CancellationToken.None);
         await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-tcp"), CancellationToken.None);
@@ -74,6 +78,8 @@ public sealed class NetworkBusAdapterPluginTests
             CancellationToken.None);
 
         Assert.True(listenResult.Ok, listenResult.Error);
+        Assert.Equal("ServerIcon", listenResult.SessionIcon);
+        Assert.Contains(PluginResourceKinds.Pending, listenResult.ManagedResourceKinds ?? Array.Empty<string>());
 
         using var sender = new UdpClient();
         var payload = new byte[] { 0x01, 0x02, 0x03 };
@@ -100,6 +106,8 @@ public sealed class NetworkBusAdapterPluginTests
             CancellationToken.None);
 
         Assert.True(bindResult.Ok, bindResult.Error);
+        Assert.Equal("listener-udp", bindResult.ParentSessionId);
+        Assert.Equal("NetworkIcon", bindResult.SessionIcon);
 
         await plugin.DisconnectAsync(new PluginDisconnectCommand("child-udp"), CancellationToken.None);
         await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp"), CancellationToken.None);
@@ -279,7 +287,7 @@ public sealed class NetworkBusAdapterPluginTests
 
             Assert.True(result.Ok, result.Error);
             Assert.Equal("TCP Client", result.DisplayTitle);
-            Assert.Equal("connection", result.SessionKind);
+            Assert.Equal("NetworkIcon", result.SessionIcon);
             Assert.NotNull(result.CommittedParameters);
 
             var committed = result.CommittedParameters!.Value;
@@ -359,7 +367,7 @@ public sealed class NetworkBusAdapterPluginTests
 
         Assert.True(result.Ok, result.Error);
         Assert.Equal("UDP Socket", result.DisplayTitle);
-        Assert.Equal("connection", result.SessionKind);
+        Assert.Equal("NetworkIcon", result.SessionIcon);
         Assert.NotNull(result.CommittedParameters);
 
         var committed = result.CommittedParameters!.Value;

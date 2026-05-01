@@ -322,7 +322,7 @@
                                         <ListBox.ItemTemplate>
                                             <DataTemplate x:DataType="vm:SessionListItemViewModel">
                                                 <Grid Margin="0,2,0,4">
-                                                    <Grid IsVisible="{Binding IsListener}"
+                                                    <Grid IsVisible="{Binding IsGroupSession}"
                                                           HorizontalAlignment="Stretch">
                                                         <Grid ColumnDefinitions="28,*"
                                                               HorizontalAlignment="Stretch">
@@ -330,7 +330,8 @@
                                                                     Classes="prototype-plain"
                                                                     Width="28"
                                                                     Height="40"
-                                                                    Click="OnToggleListenerCollapseClick">
+                                                                    IsVisible="{Binding ShowChevron}"
+                                                                    Click="OnToggleParentCollapseClick">
                                                                 <Border Width="28"
                                                                         Height="40"
                                                                         Background="Transparent"
@@ -366,7 +367,7 @@
                                                                 <Grid ColumnDefinitions="16,*,Auto,Auto,Auto"
                                                                       VerticalAlignment="Center">
                                                                     <Path Classes="prototype-icon"
-                                                                          Data="{StaticResource ServerIcon}"
+                                                                          Data="{Binding IconGeometry}"
                                                                           Width="16"
                                                                           Height="16"
                                                                           Stroke="{StaticResource AccentCyanBrush}"
@@ -390,7 +391,7 @@
                                                                                    IsVisible="{Binding HasSubtitle}" />
                                                                     </StackPanel>
                                                                     <TextBlock Grid.Column="2"
-                                                                               Text="{Binding ListenerChildCount}"
+                                                                               Text="{Binding ChildSessionCount}"
                                                                                Margin="10,0,0,0"
                                                                                FontSize="10"
                                                                                Foreground="{StaticResource Text2Brush}"
@@ -425,7 +426,7 @@
                                                         </Grid>
                                                     </Grid>
 
-                                                    <Grid IsVisible="{Binding IsConnection}"
+                                                    <Grid IsVisible="{Binding IsLeafSession}"
                                                           HorizontalAlignment="Stretch">
                                                         <Grid IsVisible="{Binding HasParent}"
                                                               ColumnDefinitions="28,*"
@@ -455,24 +456,13 @@
 
                                                                 <Grid ColumnDefinitions="16,*,Auto,Auto"
                                                                       VerticalAlignment="Center">
-                                                                    <Grid>
-                                                                        <Path IsVisible="{Binding IsNetworkConnection}"
-                                                                              Classes="prototype-icon"
-                                                                              Data="{StaticResource NetworkIcon}"
-                                                                              Width="16"
-                                                                              Height="16"
-                                                                              Stroke="{StaticResource AccentBlueBrush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                        <Path IsVisible="{Binding IsSerialConnection}"
-                                                                              Classes="prototype-icon"
-                                                                              Data="{StaticResource CableIcon}"
-                                                                              Width="16"
-                                                                              Height="16"
-                                                                              Stroke="{StaticResource Text1Brush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                    </Grid>
+                                                                    <Path Classes="prototype-icon"
+                                                                          Data="{Binding IconGeometry}"
+                                                                          Width="16"
+                                                                          Height="16"
+                                                                          Stroke="{StaticResource AccentBlueBrush}"
+                                                                          HorizontalAlignment="Center"
+                                                                          VerticalAlignment="Center" />
 
                                                                     <StackPanel Grid.Column="1"
                                                                                 Spacing="2"
@@ -534,24 +524,13 @@
 
                                                             <Grid ColumnDefinitions="16,*,Auto,Auto"
                                                                   VerticalAlignment="Center">
-                                                                <Grid>
-                                                                    <Path IsVisible="{Binding IsNetworkConnection}"
-                                                                          Classes="prototype-icon"
-                                                                          Data="{StaticResource NetworkIcon}"
-                                                                          Width="16"
-                                                                          Height="16"
-                                                                          Stroke="{StaticResource AccentBlueBrush}"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-                                                                    <Path IsVisible="{Binding IsSerialConnection}"
-                                                                          Classes="prototype-icon"
-                                                                          Data="{StaticResource CableIcon}"
-                                                                          Width="16"
-                                                                          Height="16"
-                                                                          Stroke="{StaticResource Text1Brush}"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-                                                                </Grid>
+                                                                <Path Classes="prototype-icon"
+                                                                      Data="{Binding IconGeometry}"
+                                                                      Width="16"
+                                                                      Height="16"
+                                                                      Stroke="{StaticResource AccentBlueBrush}"
+                                                                      HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center" />
 
                                                                 <StackPanel Grid.Column="1"
                                                                             Spacing="2"

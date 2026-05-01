@@ -25,5 +25,6 @@ public sealed record PluginConnectResult(
     JsonElement? CommittedParameters = null,
     string? DisplayTitle = null,
     string? DisplaySubtitle = null,
-    string? SessionKind = null,
-    string? ParentSessionId = null);
+    string? ParentSessionId = null,
+    string? SessionIcon = null,
+    IReadOnlyList<string>? ManagedResourceKinds = null);

@@ -268,8 +268,8 @@ public sealed class WorkspaceStateFlowTests
         await workspaceService.LoadStateAsync();
         var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
 
-        deviceService.RestoreSession(CreateDescriptor("listener-1", SessionKind.Listener));
-        deviceService.RestoreSession(CreateDescriptor("child-1", SessionKind.Connection, parentSessionId: "listener-1"));
+        deviceService.RestoreSession(CreateDescriptor("listener-1", managedResourceKinds: new[] { "pending" }));
+        deviceService.RestoreSession(CreateDescriptor("child-1", parentSessionId: "listener-1"));
         await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "listener-1");
         await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "child-1");
         await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
@@ -292,9 +292,9 @@ public sealed class WorkspaceStateFlowTests
 
     private static SessionDescriptor CreateDescriptor(
         string sessionId,
-        SessionKind kind = SessionKind.Connection,
         string? parentSessionId = null,
-        string parametersJson = """{"port":"COM1","baudRate":115200}""")
+        string parametersJson = """{"port":"COM1","baudRate":115200}""",
+        IReadOnlyList<string>? managedResourceKinds = null)
     {
         return new SessionDescriptor
         {
@@ -304,8 +304,8 @@ public sealed class WorkspaceStateFlowTests
             PluginId = "serial.adapter",
             CapabilityId = "serial",
             ParametersJson = parametersJson,
-            Kind = kind,
-            ParentSessionId = parentSessionId
+            ParentSessionId = parentSessionId,
+            ManagedResourceKinds = managedResourceKinds?.ToList() ?? new List<string>()
         };
     }
 

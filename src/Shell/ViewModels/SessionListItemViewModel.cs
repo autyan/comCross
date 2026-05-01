@@ -1,5 +1,8 @@
 using System;
 using System.ComponentModel;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 
@@ -13,7 +16,7 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     private int _indentLevel;
     private string? _overrideName;
     private bool _isCollapsed;
-    private int _listenerChildCount;
+    private int _childSessionCount;
 
     public SessionListItemViewModel(ILocalizationService localization)
         : base(localization)
@@ -46,8 +49,6 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
             {
                 OnPropertyChanged(nameof(DisplayName));
                 OnPropertyChanged(nameof(HasParent));
-                OnPropertyChanged(nameof(ShowConnectionBadge));
-                OnPropertyChanged(nameof(ConnectionBadgeText));
             }
         }
     }
@@ -71,13 +72,10 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     public string? Subtitle => string.IsNullOrWhiteSpace(Session.DisplaySubtitle) ? null : Session.DisplaySubtitle;
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
-    public bool IsListener => Session.Kind == SessionKind.Listener;
-    public bool IsConnection => !IsListener;
-    public bool IsNetworkConnection
-        => IsConnection && string.Equals(Session.PluginId, "network.adapter", StringComparison.Ordinal);
-    public bool IsSerialConnection
-        => IsConnection && string.Equals(Session.CapabilityId, "serial", StringComparison.Ordinal);
-    public bool ShowChevron => IsListener;
+    public StreamGeometry IconGeometry => ResolveIconGeometry(Session.DisplayIcon);
+    public bool IsGroupSession => ChildSessionCount > 0 || Session.ManagedResourceKinds.Count > 0;
+    public bool IsLeafSession => !IsGroupSession;
+    public bool ShowChevron => ChildSessionCount > 0;
 
     public bool IsCollapsed
     {
@@ -92,30 +90,29 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
     }
 
     public string ChevronGlyph => IsCollapsed ? "▶" : "▼";
-    public bool ShowStats => !IsListener;
+    public bool ShowStats => IsLeafSession;
     public bool HasParent => IndentLevel > 0;
-    public bool ShowConnectionBadge
-        => IsConnection && string.Equals(Session.PluginId, "network.adapter", StringComparison.Ordinal);
 
-    public string ConnectionBadgeText
-        => HasParent ? L["network.session.badge.inbound"] : L["network.session.badge.client"];
-
-    public int ListenerChildCount
+    public int ChildSessionCount
     {
-        get => _listenerChildCount;
+        get => _childSessionCount;
         set
         {
-            if (SetProperty(ref _listenerChildCount, value))
+            if (SetProperty(ref _childSessionCount, value))
             {
-                OnPropertyChanged(nameof(ListenerSummaryText));
-                OnPropertyChanged(nameof(HasListenerChildren));
+                OnPropertyChanged(nameof(ChildSummaryText));
+                OnPropertyChanged(nameof(HasChildSessions));
+                OnPropertyChanged(nameof(IsGroupSession));
+                OnPropertyChanged(nameof(IsLeafSession));
+                OnPropertyChanged(nameof(ShowChevron));
+                OnPropertyChanged(nameof(ShowStats));
             }
         }
     }
 
-    public bool HasListenerChildren => ListenerChildCount > 0;
+    public bool HasChildSessions => ChildSessionCount > 0;
 
-    public string ListenerSummaryText => string.Format(L["network.session.listener.connections"], ListenerChildCount);
+    public string ChildSummaryText => string.Format(L["network.session.listener.connections"], ChildSessionCount);
 
     public string Endpoint
     {
@@ -177,17 +174,17 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
                 OnPropertyChanged(nameof(HasSubtitle));
                 OnPropertyChanged(nameof(Endpoint));
                 break;
-            case nameof(Session.Kind):
+            case nameof(Session.DisplayIcon):
+                OnPropertyChanged(nameof(IconGeometry));
+                break;
+            case nameof(Session.ManagedResourceKinds):
             case nameof(Session.PluginId):
             case nameof(Session.CapabilityId):
-                OnPropertyChanged(nameof(IsListener));
-                OnPropertyChanged(nameof(IsConnection));
-                OnPropertyChanged(nameof(IsNetworkConnection));
-                OnPropertyChanged(nameof(IsSerialConnection));
+                OnPropertyChanged(nameof(IsGroupSession));
+                OnPropertyChanged(nameof(IsLeafSession));
+                OnPropertyChanged(nameof(IconGeometry));
                 OnPropertyChanged(nameof(ShowChevron));
                 OnPropertyChanged(nameof(ShowStats));
-                OnPropertyChanged(nameof(ShowConnectionBadge));
-                OnPropertyChanged(nameof(ConnectionBadgeText));
                 break;
             case nameof(Session.ParametersJson):
             case nameof(Session.Endpoint):
@@ -216,5 +213,22 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
         }
 
         base.Dispose(disposing);
+    }
+
+    private static StreamGeometry ResolveIconGeometry(string? icon)
+    {
+        var key = string.IsNullOrWhiteSpace(icon) ? "PluginIcon" : icon;
+        if (Application.Current is not null && Application.Current.TryFindResource(key, out var resource) && resource is StreamGeometry geometry)
+        {
+            return geometry;
+        }
+
+        return key switch
+        {
+            "NetworkIcon" => StreamGeometry.Parse("M12 4v4M6 10h12M7 20h4v-6H7zM13 20h4v-6h-4zM10 10v4M14 10v4"),
+            "ServerIcon" => StreamGeometry.Parse("M5 5h14v5H5zM5 14h14v5H5zM8 7.5h.01M8 16.5h.01"),
+            "CableIcon" => StreamGeometry.Parse("M8 4v8a2 2 0 0 0 2 2h4a2 2 0 0 1 2 2v4M6 2h4v4H6zM14 2h4v4h-4zM6 18h4v4H6zM14 18h4v4h-4z"),
+            _ => StreamGeometry.Parse("M9 3h6v4h2a4 4 0 0 1 4 4v2h-4v-2a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H3v-2a4 4 0 0 1 4-4h2zM5 15h4v6H5zM15 15h4v6h-4zM10 17h4v2h-4z")
+        };
     }
 }

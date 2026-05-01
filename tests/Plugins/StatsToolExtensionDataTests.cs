@@ -13,8 +13,8 @@ public class StatsToolExtensionDataTests
         var snapshot = new ExtensionContextSnapshot(
             Sessions:
             [
-                new ExtensionSessionSnapshot("s1", "Session 1", "plugin:test:a", "plugin.test", "a", "Connected", "Connection", null, null, 0, 0),
-                new ExtensionSessionSnapshot("s2", "Session 2", "plugin:test:b", "plugin.test", "b", "Disconnected", "Connection", null, null, 0, 0)
+                new ExtensionSessionSnapshot("s1", "Session 1", "plugin:test:a", "plugin.test", "a", "Connected", null, "Session 1", null, "PluginIcon", [], null, 0, 0),
+                new ExtensionSessionSnapshot("s2", "Session 2", "plugin:test:b", "plugin.test", "b", "Disconnected", null, "Session 2", null, "PluginIcon", [], null, 0, 0)
             ],
             Workloads: Array.Empty<ExtensionWorkloadSnapshot>(),
             ActiveWorkloadId: "w1",

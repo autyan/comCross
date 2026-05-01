@@ -8,33 +8,32 @@ using Microsoft.Extensions.Logging;
 namespace ComCross.Core.Services;
 
 /// <summary>
-/// Orchestrates listener-style sessions that discover inbound peers (e.g. TCP accept, UDP peers)
-/// and automatically create child connection sessions.
+/// Orchestrates sessions that expose plugin-managed pending resources and automatically create child sessions.
 /// </summary>
-public sealed class ListenerAutoAcceptService
+public sealed class ManagedResourceAutoConnectService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
     private readonly PluginResourceQueryService _resources;
     private readonly WorkspaceService _workspaceService;
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
-    private readonly ILogger<ListenerAutoAcceptService> _logger;
+    private readonly ILogger<ManagedResourceAutoConnectService> _logger;
 
     private readonly CancellationTokenSource _pollCts = new();
     private readonly PeriodicTimer _pollTimer = new(PollInterval);
 
-    // listenerSessionId -> (pendingId -> seen)
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _seenPendingByListener = new(StringComparer.Ordinal);
+    // ownerSessionId -> (resourceId -> seen)
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _seenPendingByOwner = new(StringComparer.Ordinal);
 
-    // listenerSessionId -> gate
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _listenerGates = new(StringComparer.Ordinal);
+    // ownerSessionId -> gate
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _ownerGates = new(StringComparer.Ordinal);
 
-    public ListenerAutoAcceptService(
+    public ManagedResourceAutoConnectService(
         IEventBus eventBus,
         PluginResourceQueryService resources,
         WorkspaceService workspaceService,
         IWorkspaceCoordinator workspaceCoordinator,
-        ILogger<ListenerAutoAcceptService> logger)
+        ILogger<ManagedResourceAutoConnectService> logger)
     {
         _resources = resources ?? throw new ArgumentNullException(nameof(resources));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
@@ -43,11 +42,11 @@ public sealed class ListenerAutoAcceptService
 
         eventBus.Subscribe<PluginUiStateInvalidatedCoreEvent>(evt => _ = HandleInvalidationAsync(evt));
 
-        // Robustness: in case UI-state invalidations are missed, poll active listener sessions.
-        _ = Task.Run(PollListenersAsync);
+        // Robustness: in case UI-state invalidations are missed, poll active managed-resource sessions.
+        _ = Task.Run(PollManagedResourceSessionsAsync);
     }
 
-    private async Task PollListenersAsync()
+    private async Task PollManagedResourceSessionsAsync()
     {
         try
         {
@@ -56,14 +55,18 @@ public sealed class ListenerAutoAcceptService
                 var sessions = _workspaceService.GetAllSessions();
                 foreach (var s in sessions)
                 {
-                    if (s.Kind != SessionKind.Listener
-                        || string.IsNullOrWhiteSpace(s.PluginId)
+                    if (string.IsNullOrWhiteSpace(s.PluginId)
                         || string.IsNullOrWhiteSpace(s.CapabilityId))
                     {
                         continue;
                     }
 
-                    var gate = _listenerGates.GetOrAdd(s.Id, _ => new SemaphoreSlim(1, 1));
+                    if (!s.HasManagedResourceKind(PluginResourceKinds.Pending))
+                    {
+                        continue;
+                    }
+
+                    var gate = _ownerGates.GetOrAdd(s.Id, _ => new SemaphoreSlim(1, 1));
                     if (!await gate.WaitAsync(0))
                     {
                         continue;
@@ -71,7 +74,7 @@ public sealed class ListenerAutoAcceptService
 
                     try
                     {
-                        await ProcessListenerPendingAsync(s);
+                        await ProcessPendingResourcesAsync(s);
                     }
                     finally
                     {
@@ -98,10 +101,10 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
-            // Only react to listener-scoped invalidations.
-            var listenerSessionId = invalidated.SessionId;
+            // Only react to resource-scoped invalidations.
+            var ownerSessionId = invalidated.SessionId;
 
-            var session = _workspaceService.GetSession(listenerSessionId);
+            var session = _workspaceService.GetSession(ownerSessionId);
             if (session is null)
             {
                 return;
@@ -117,7 +120,7 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
-            if (session.Kind != SessionKind.Listener)
+            if (!session.HasManagedResourceKind(PluginResourceKinds.Pending))
             {
                 return;
             }
@@ -128,11 +131,11 @@ public sealed class ListenerAutoAcceptService
                 return;
             }
 
-            var gate = _listenerGates.GetOrAdd(listenerSessionId, _ => new SemaphoreSlim(1, 1));
+            var gate = _ownerGates.GetOrAdd(ownerSessionId, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync();
             try
             {
-                await ProcessListenerPendingAsync(session);
+                await ProcessPendingResourcesAsync(session);
             }
             finally
             {
@@ -145,12 +148,13 @@ public sealed class ListenerAutoAcceptService
         }
     }
 
-    private async Task ProcessListenerPendingAsync(Session ownerSession)
+    private async Task ProcessPendingResourcesAsync(Session ownerSession)
     {
         var (ok, error, state) = await _resources.GetResourceListAsync(
             ownerSession,
             PluginResourceKinds.Pending,
             PluginResourceIds.All,
+            // Keep the existing plugin UI view scope until the i18n/UI cleanup scope migrates view names.
             viewKind: "listener",
             viewInstanceId: null,
             timeout: TimeSpan.FromSeconds(1));
@@ -176,7 +180,7 @@ public sealed class ListenerAutoAcceptService
             return;
         }
 
-        var seen = _seenPendingByListener.GetOrAdd(ownerSession.Id, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
+        var seen = _seenPendingByOwner.GetOrAdd(ownerSession.Id, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
         foreach (var item in state.Items)
         {
             if (string.IsNullOrWhiteSpace(item.Id))

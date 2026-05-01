@@ -67,7 +67,7 @@ public partial class LeftSidebar : BaseUserControl
         vm.OpenSessionDetail(session, openReconnectEditor);
     }
 
-    private void OnToggleListenerCollapseClick(object? sender, RoutedEventArgs e)
+    private void OnToggleParentCollapseClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button)
         {
@@ -75,14 +75,14 @@ public partial class LeftSidebar : BaseUserControl
         }
 
         var itemVm = button.DataContext as SessionListItemViewModel;
-        if (itemVm is null || !itemVm.IsListener)
+        if (itemVm is null || !itemVm.HasChildSessions)
         {
             return;
         }
 
         if (DataContext is LeftSidebarViewModel sidebarVm)
         {
-            sidebarVm.ToggleListenerCollapsed(itemVm.Session.Id);
+            sidebarVm.ToggleParentCollapsed(itemVm.Session.Id);
         }
     }
 
@@ -113,7 +113,9 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        var messageKey = session.Kind == SessionKind.Listener
+        var hasChildren = DataContext is LeftSidebarViewModel sidebarVmForMessage
+                          && sidebarVmForMessage.GetChildSessionCount(session.Id) > 0;
+        var messageKey = hasChildren
             ? "dialog.deleteSession.listener.message"
             : "dialog.deleteSession.message";
         var confirmed = await MessageBoxService.ShowConfirmAsync(
