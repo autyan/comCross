@@ -24,6 +24,8 @@
   - Core/Shell may ask a plugin to connect, disconnect, execute an action, provide UI state, initialize session state, or describe resources.
   - The plugin's returned data is the authoritative source for bus-domain decisions that Core/Shell need to consume.
   - Core/Shell own validation of contract shape, lifecycle safety, persistence of public metadata, and degraded behavior when the producer is unavailable.
+- Plugin settings are public producer inputs. When a plugin setting affects plugin-owned domain behavior, Core may pass a settings snapshot through the relevant IPC query, and the plugin must apply it itself.
+- Do not reimplement plugin-owned discovery in Shell/Core. For example, serial port scanning belongs to the serial bus plugin; Shell only renders the plugin-provided state and dispatches plugin actions.
 
 ## Capability And Permission Semantics
 

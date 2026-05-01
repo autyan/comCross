@@ -15,20 +15,17 @@ public class ShellPluginCommunicationLink : IPluginCommunicationLink
 {
     private readonly PluginManagerViewModel _pluginManager;
     private readonly ICapabilityDispatcher _dispatcher;
-    private readonly SerialPortsHostService _serialPorts;
     private readonly ILocalizationService _localization;
     private readonly ILogger<ShellPluginCommunicationLink> _logger;
 
     public ShellPluginCommunicationLink(
         PluginManagerViewModel pluginManager, 
         ICapabilityDispatcher dispatcher,
-        SerialPortsHostService serialPorts,
         ILocalizationService localization,
         ILogger<ShellPluginCommunicationLink> logger)
     {
         _pluginManager = pluginManager;
         _dispatcher = dispatcher;
-        _serialPorts = serialPorts;
         _localization = localization;
         _logger = logger;
     }
@@ -36,13 +33,6 @@ public class ShellPluginCommunicationLink : IPluginCommunicationLink
     public async Task SendActionAsync(string pluginId, string? sessionId, string actionName, object? parameters)
     {
         _logger.LogInformation("Sending action {Action} to plugin {PluginId} (Session: {SessionId})", actionName, pluginId, sessionId ?? "null");
-
-        // Host-only actions (do not go through Core dispatcher)
-        if (string.Equals(actionName, SerialPortsHostService.RefreshPortsHostAction, StringComparison.Ordinal))
-        {
-            await _serialPorts.RefreshPortsAsync(pluginId, sessionId);
-            return;
-        }
         
         try
         {

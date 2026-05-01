@@ -28,8 +28,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public const string BusAdapterViewKind = "bus-adapter";
 
     private const string PluginAdapterPrefix = "plugin:";
-    private const string SerialPluginId = SerialPortsHostService.SerialPluginId;
-    private const string SerialCapabilityId = SerialPortsHostService.SerialCapabilityId;
+    private const string SerialPluginId = "serial.adapter";
+    private const string SerialCapabilityId = "serial";
     private readonly string _viewKind;
     private readonly string? _viewInstanceId;
     private BusAdapterInfo? _selectedAdapter;
@@ -41,7 +41,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly PluginUiStateManager _stateManager;
     private readonly PluginManagerViewModel _pluginManager;
     private readonly PluginUiConfigService _pluginUiConfigService;
-    private readonly SerialPortsHostService _serialPorts;
     private readonly BusAdapterConnectionService _connections;
     private readonly IEventBus _eventBus;
     private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
@@ -66,7 +65,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginUiStateManager stateManager,
         PluginManagerViewModel pluginManager,
         PluginUiConfigService pluginUiConfigService,
-        SerialPortsHostService serialPorts,
         BusAdapterConnectionService connections,
         IEventBus eventBus,
         IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory,
@@ -81,7 +79,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         _stateManager = stateManager;
         _pluginManager = pluginManager;
         _pluginUiConfigService = pluginUiConfigService;
-        _serialPorts = serialPorts;
         _connections = connections;
         _eventBus = eventBus;
         _adapterItemFactory = adapterItemFactory;
@@ -1400,18 +1397,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                          sessionId: null,
                          viewKind: _viewKind,
                          viewInstanceId: _viewInstanceId);
-                 }
-
-                 // Host-side serial initialization: apply defaults and load ports once.
-                 if (adapter.CapabilityId != null
-                     && string.Equals(adapter.PluginId, SerialPluginId, StringComparison.Ordinal)
-                     && string.Equals(adapter.CapabilityId, SerialCapabilityId, StringComparison.Ordinal))
-                 {
-                     await _serialPorts.InitializeSerialUiAsync(
-                         pluginId,
-                         capabilityId,
-                         stateSessionId,
-                         schema);
                  }
 
                  _uiRenderer.ClearCache(pluginId, capabilityId, stateSessionId, _viewKind, _viewInstanceId);

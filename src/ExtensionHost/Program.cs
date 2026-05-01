@@ -288,7 +288,8 @@ internal static class Program
                 payload.ViewKind,
                 payload.ViewInstanceId,
                 payload.ResourceKind,
-                payload.ResourceId));
+                payload.ResourceId,
+                payload.Settings));
 
             var resultPayload = JsonDocument.Parse(JsonSerializer.Serialize(snapshot, JsonOptions)).RootElement.Clone();
             return new PluginHostResponse(request.Id, true, Payload: resultPayload);

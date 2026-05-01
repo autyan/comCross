@@ -152,20 +152,26 @@ public class AppHost : IAppHost
                 var descriptorPersistence = _serviceProvider.GetService<SessionDescriptorPersistenceService>();
                 if (descriptorPersistence is not null)
                 {
-                    await descriptorPersistence.FlushAsync();
+                    await RunWithTimeoutBestEffortAsync(descriptorPersistence.FlushAsync(), TimeSpan.FromSeconds(2));
                 }
             });
 
             await RunShutdownStepAsync("dispose device service", async () =>
             {
                 var deviceService = _serviceProvider.GetRequiredService<DeviceService>();
-                await deviceService.DisposeAsync();
+                await RunWithTimeoutBestEffortAsync(deviceService.DisposeAsync().AsTask(), TimeSpan.FromSeconds(8));
+            });
+
+            await RunShutdownStepAsync("shutdown session hosts", async () =>
+            {
+                var sessionHosts = _serviceProvider.GetRequiredService<SessionHostRuntimeService>();
+                await sessionHosts.ShutdownAllAsync(TimeSpan.FromSeconds(2), "app-shutdown");
             });
 
             await RunShutdownStepAsync("shutdown plugin manager", async () =>
             {
                 var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
-                await pluginManager.ShutdownAsync();
+                await RunWithTimeoutBestEffortAsync(pluginManager.ShutdownAsync(), TimeSpan.FromSeconds(5));
             });
 
             _isShutdown = true;
@@ -191,6 +197,23 @@ public class AppHost : IAppHost
         {
             _logger.LogError(ex, "Error during Core Engine shutdown step: {StepName}", stepName);
         }
+    }
+
+    private static async Task RunWithTimeoutBestEffortAsync(Task task, TimeSpan timeout)
+    {
+        var completed = await Task.WhenAny(task, Task.Delay(timeout));
+        if (completed == task)
+        {
+            await task;
+            return;
+        }
+
+        _ = task.ContinueWith(
+            static t =>
+            {
+                _ = t.Exception;
+            },
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     public async Task NotifyLanguageChangedAsync(string cultureCode)

@@ -255,6 +255,40 @@ public sealed class SessionHostRuntimeService
         }
     }
 
+    public async Task ShutdownAllAsync(TimeSpan timeout, string? reason = null)
+    {
+        var groups = _groupsByKey.ToArray();
+        if (groups.Length == 0)
+        {
+            return;
+        }
+
+        _groupsByKey.Clear();
+        _sessionToGroupKey.Clear();
+
+        var perHostTimeout = timeout <= TimeSpan.Zero
+            ? TimeSpan.FromMilliseconds(1)
+            : timeout;
+
+        var shutdownTasks = groups.Select(async item =>
+        {
+            try
+            {
+                await item.Value.Runtime.ShutdownAsync(perHostTimeout);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Session host shutdown-all failed: Key={Key}, Reason={Reason}", item.Key, reason ?? "-");
+            }
+            finally
+            {
+                item.Value.Runtime.Dispose();
+            }
+        });
+
+        await Task.WhenAll(shutdownTasks);
+    }
+
     private void RegisterSessionToGroup(string key, HostGroup group, string sessionId)
     {
         lock (_gate)

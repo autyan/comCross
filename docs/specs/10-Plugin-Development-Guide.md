@@ -142,7 +142,15 @@ Supported generic action kinds:
 
 The host UI must consume the generic descriptors and should not hardcode a plugin's private action names or payload shape.
 
-## 11) Session Metadata
+## 11) Plugin Settings In UI State
+
+Plugins can declare settings pages in the manifest. Core persists those settings and includes a read-only settings snapshot in `PluginUiStateQuery.Settings` when requesting plugin UI state.
+
+Settings snapshot keys use the format `{settingsPageId}.{fieldKey}`. Plugins should treat this as input to their own producer behavior, not as host-owned business logic.
+
+Example: the serial adapter declares a `serial-scan.scanPatterns` setting and uses that value inside the serial plugin when producing its `ports` UI state. Shell renders the resulting state and dispatches refresh actions; it does not scan serial devices itself.
+
+## 12) Session Metadata
 
 Plugins should describe the session they created through `PluginConnectResult`.
 
@@ -157,7 +165,7 @@ Common metadata:
 Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
 Passive child sessions created from an accepted resource should set `CanReconnect` to `false` when the host cannot actively recreate that session.
 
-## 12) Startup Session State Initialization
+## 13) Startup Session State Initialization
 
 Plugins can implement `IPluginSessionStateInitializer` when persisted session state needs plugin-owned validation, normalization, or migration at startup.
 
@@ -177,7 +185,7 @@ Core owns the state transition and persistence. Plugins should not access worksp
 
 When the user deletes a session, ComCross treats that session as permanently removed. Core removes the session descriptor and deletes the plugin-owned storage file for that session. Plugins should not depend on session storage surviving session deletion.
 
-## 13) Notes
+## 14) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.

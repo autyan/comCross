@@ -16,7 +16,8 @@ public sealed class SerialBusAdapterPlugin :
     ITransmittableBusAdapterPlugin,
     IPluginUiStateProvider,
     IPluginUiStateEventSource,
-    IPluginSessionStateInitializer
+    IPluginSessionStateInitializer,
+    IPluginActionHandler
 {
     private readonly CancellationTokenSource _cts = new();
 
@@ -32,9 +33,13 @@ public sealed class SerialBusAdapterPlugin :
 
     private const string SerialParametersSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.parameters.schema.json";
     private const string SerialConnectUiSchemaResource = "ComCross.Plugins.Serial.Resources.Schemas.serial.connect.ui.schema.json";
+    private const string RefreshPortsAction = "comcross.serial.refreshPorts";
+    private const string DefaultScanPatterns =
+        "/dev/ttyUSB*,/dev/ttyACM*,/dev/serial/by-id/*,/dev/ttyS*,/dev/cu.usbserial*,/dev/cu.usbmodem*,COM*,/dev/tnt*";
 
     private string[] _lastPorts = Array.Empty<string>();
     private volatile bool _connected;
+    private string _scanPatterns = DefaultScanPatterns;
 
     public SerialBusAdapterPlugin()
     {
@@ -122,7 +127,8 @@ public sealed class SerialBusAdapterPlugin :
         // Convention-based snapshot for main process:
         // - ports: string[]
         // - defaultParameters: object
-        var ports = GetPortsSafe();
+        _scanPatterns = ReadScanPatterns(query.Settings);
+        var ports = GetPortsSafe(_scanPatterns);
         var defaultPort = ports.FirstOrDefault();
 
         var isConnected = _connected;
@@ -151,6 +157,22 @@ public sealed class SerialBusAdapterPlugin :
 
         var element = JsonSerializer.SerializeToElement(state);
         return new PluginUiStateSnapshot(element, DateTimeOffset.UtcNow);
+    }
+
+    public Task<PluginCommandResult> ExecuteActionAsync(PluginActionCommand command, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(command.ActionName, RefreshPortsAction, StringComparison.Ordinal))
+        {
+            return Task.FromResult(new PluginCommandResult(false, $"Unknown action: {command.ActionName}"));
+        }
+
+        var ports = GetPortsSafe(_scanPatterns);
+        _lastPorts = ports;
+        UiStateInvalidated?.Invoke(
+            this,
+            new PluginUiStateInvalidatedEvent("serial", SessionId: null, ViewKind: "connect-dialog", Reason: "refresh"));
+
+        return Task.FromResult(new PluginCommandResult(true));
     }
 
     public Task<PluginConnectResult> ConnectAsync(PluginConnectCommand command, CancellationToken cancellationToken)
@@ -460,7 +482,7 @@ public sealed class SerialBusAdapterPlugin :
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
-                var ports = GetPortsSafe();
+                var ports = GetPortsSafe(_scanPatterns);
                 if (!ports.SequenceEqual(_lastPorts, StringComparer.Ordinal))
                 {
                     _lastPorts = ports;
@@ -478,11 +500,40 @@ public sealed class SerialBusAdapterPlugin :
         }
     }
 
-    private string[] GetPortsSafe()
+    private static string ReadScanPatterns(IReadOnlyDictionary<string, JsonElement>? settings)
+    {
+        if (settings is not null
+            && settings.TryGetValue("serial-scan.scanPatterns", out var value)
+            && value.ValueKind == JsonValueKind.String)
+        {
+            var scanPatterns = value.GetString();
+            if (!string.IsNullOrWhiteSpace(scanPatterns))
+            {
+                return scanPatterns;
+            }
+        }
+
+        return DefaultScanPatterns;
+    }
+
+    private static string[] GetPortsSafe(string scanPatterns)
     {
         try
         {
             var ports = new HashSet<string>(SerialPort.GetPortNames().Where(p => !string.IsNullOrWhiteSpace(p)), StringComparer.Ordinal);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                foreach (var pattern in SplitScanPatterns(scanPatterns))
+                {
+                    foreach (var port in ScanLinuxPorts(pattern))
+                    {
+                        if (!string.IsNullOrWhiteSpace(port))
+                        {
+                            ports.Add(port);
+                        }
+                    }
+                }
+            }
 
             return ports.OrderBy(p => p, StringComparer.Ordinal).ToArray();
         }
@@ -498,6 +549,11 @@ public sealed class SerialBusAdapterPlugin :
             }
         }
     }
+
+    private static IEnumerable<string> SplitScanPatterns(string? scanPatterns)
+        => (scanPatterns ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(pattern => !string.IsNullOrWhiteSpace(pattern));
 
     private static PluginSessionMetadataPatch BuildSessionPatch(JsonElement parameters)
     {

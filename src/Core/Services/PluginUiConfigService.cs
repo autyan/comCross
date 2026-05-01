@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ComCross.Core.Models;
 using ComCross.PluginSdk.UI;
 using Microsoft.Extensions.Logging;
 
@@ -66,6 +67,71 @@ public sealed class PluginUiConfigService
             }
             return result;
         }
+    }
+
+    public async Task<IReadOnlyDictionary<string, JsonElement>?> BuildSettingsSnapshotAsync(
+        PluginInfo plugin,
+        CancellationToken cancellationToken = default)
+    {
+        var pages = plugin.Manifest.SettingsPages;
+        if (pages is null || pages.Count == 0)
+        {
+            return null;
+        }
+
+        var snapshot = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var page in pages)
+        {
+            if (string.IsNullOrWhiteSpace(page.Id))
+            {
+                continue;
+            }
+
+            var pageValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            if (page.UiSchema is not null)
+            {
+                var schema = PluginUiSchema.TryParse(page.UiSchema.Value.GetRawText());
+                if (schema is not null)
+                {
+                    foreach (var field in schema.Fields)
+                    {
+                        if (string.IsNullOrWhiteSpace(field.Key) || field.DefaultValue is null)
+                        {
+                            continue;
+                        }
+
+                        pageValues[field.Key] = ToJsonElement(field.DefaultValue).Clone();
+                    }
+                }
+            }
+
+            var persisted = await TryLoadAsync(
+                plugin.Manifest.Id,
+                $"settings:{page.Id}",
+                sessionId: null,
+                viewKind: "settings",
+                cancellationToken: cancellationToken);
+
+            if (persisted is not null)
+            {
+                foreach (var kvp in persisted)
+                {
+                    if (string.IsNullOrWhiteSpace(kvp.Key))
+                    {
+                        continue;
+                    }
+
+                    pageValues[kvp.Key] = ToJsonElement(kvp.Value).Clone();
+                }
+            }
+
+            foreach (var kvp in pageValues)
+            {
+                snapshot[$"{page.Id}.{kvp.Key}"] = kvp.Value.Clone();
+            }
+        }
+
+        return snapshot.Count == 0 ? null : snapshot;
     }
 
     /// <summary>

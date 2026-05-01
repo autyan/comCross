@@ -59,7 +59,8 @@ internal static class GetUiStateHandler
                 payload.ViewKind,
                 payload.ViewInstanceId,
                 payload.ResourceKind,
-                payload.ResourceId));
+                payload.ResourceId,
+                payload.Settings));
 
             var json = JsonSerializer.Serialize(uiState, jsonOptions);
             var resultPayload = JsonDocument.Parse(json).RootElement.Clone();

@@ -19,14 +19,15 @@ public partial class LeftSidebar : BaseUserControl
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
     {
-        if (TopLevel.GetTopLevel(this) is not Window owner)
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
         {
             return;
         }
 
         if (owner.DataContext is MainWindowViewModel vm)
         {
-            await ShellUiServices.ConnectDialogService.ShowAsync(owner, vm.PluginManager);
+            await ShellContext.ConnectDialogs.ShowAsync(owner, vm.PluginManager);
         }
     }
 
@@ -60,7 +61,8 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
         {
             return;
         }
@@ -93,7 +95,8 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
         {
             return;
         }
@@ -108,7 +111,8 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window owner || owner.DataContext is not MainWindowViewModel vm)
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
         {
             return;
         }
@@ -118,7 +122,8 @@ public partial class LeftSidebar : BaseUserControl
         var messageKey = hasChildren
             ? "dialog.deleteSession.listener.message"
             : "dialog.deleteSession.message";
-        var confirmed = await MessageBoxService.ShowConfirmAsync(
+        var confirmed = await ShellContext.Dialogs.ShowConfirmAsync(
+            owner,
             vm.L["dialog.deleteSession.title"],
             string.Format(vm.L[messageKey], session.Name),
             MessageBoxIcon.Warning);
@@ -150,12 +155,13 @@ public partial class LeftSidebar : BaseUserControl
 
     private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
     {
-        if (TopLevel.GetTopLevel(this) is not Window owner)
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
         {
             return;
         }
 
-        var result = await ShellUiServices.SessionRenameDialogService.ShowAsync(owner, session, vm);
+        var result = await ShellContext.SessionRenameDialogs.ShowAsync(owner, session, vm);
         if (!string.IsNullOrWhiteSpace(result))
         {
             if (DataContext is LeftSidebarViewModel sidebarVm)

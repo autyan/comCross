@@ -119,8 +119,7 @@
       "id": "comcross.serial.refreshPorts",
       "labelKey": "serial.adapter.connect.action.refreshPorts",
       "icon": "⟳",
-      "kind": "host",
-      "hostAction": "comcross.serial.refreshPorts"
+      "kind": "plugin"
     }
   ]
 }

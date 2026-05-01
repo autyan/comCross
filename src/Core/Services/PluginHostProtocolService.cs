@@ -20,15 +20,18 @@ public sealed class PluginHostProtocolService
 
     private readonly SharedMemorySessionService _sharedMemorySessionService;
     private readonly SessionHostRuntimeService _sessionHostRuntimeService;
+    private readonly PluginUiConfigService _pluginUiConfigService;
     private readonly ILogger<PluginHostProtocolService> _logger;
 
     public PluginHostProtocolService(
         SharedMemorySessionService sharedMemorySessionService,
         SessionHostRuntimeService sessionHostRuntimeService,
+        PluginUiConfigService pluginUiConfigService,
         ILogger<PluginHostProtocolService> logger)
     {
         _sharedMemorySessionService = sharedMemorySessionService ?? throw new ArgumentNullException(nameof(sharedMemorySessionService));
         _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
+        _pluginUiConfigService = pluginUiConfigService ?? throw new ArgumentNullException(nameof(pluginUiConfigService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -143,6 +146,8 @@ public sealed class PluginHostProtocolService
             return (false, "Invalid sessionId.", null);
         }
 
+        var settings = await _pluginUiConfigService.BuildSettingsSnapshotAsync(runtime.Info, cancellationToken);
+
         // If sessionId is provided, query the corresponding session host.
         // Session-scoped UI state is maintained by the session host for listener-style plugins.
         var payload = JsonSerializer.SerializeToElement(
@@ -153,7 +158,8 @@ public sealed class PluginHostProtocolService
                 viewInstanceId,
                 PluginId: null,
                 ResourceKind: resourceKind,
-                ResourceId: resourceId),
+                ResourceId: resourceId,
+                Settings: settings),
             JsonOptions);
 
         PluginHostResponse? response;
@@ -435,6 +441,244 @@ public sealed class PluginHostProtocolService
         return result;
     }
 
+    public async Task<PluginConnectResult> ConnectSessionAsync(
+        PluginRuntime runtime,
+        string capabilityId,
+        string sessionId,
+        JsonElement parameters,
+        string? scopeSessionId,
+        string? resourceKind,
+        string? resourceId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (runtime.State != PluginLoadState.Loaded)
+        {
+            return new PluginConnectResult(false, "Plugin not loaded.", SessionId: sessionId);
+        }
+
+        if (string.IsNullOrWhiteSpace(capabilityId))
+        {
+            return new PluginConnectResult(false, "Missing capabilityId.", SessionId: sessionId);
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return new PluginConnectResult(false, "Missing sessionId.");
+        }
+
+        var validateError = ValidateParameters(runtime, capabilityId, parameters);
+        if (!string.IsNullOrWhiteSpace(validateError))
+        {
+            return new PluginConnectResult(false, validateError, SessionId: sessionId);
+        }
+
+        var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
+        var sessionHostModel = ResolveSessionHostModel(capability);
+        var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
+        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters, scopeSessionId);
+
+        SessionHostRuntime sessionHost;
+        try
+        {
+            sessionHost = await _sessionHostRuntimeService.EnsureStartedAsync(
+                runtime.Info,
+                sessionId,
+                capabilityId,
+                supportsMultiSession,
+                multiSessionGroupId,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new PluginConnectResult(false, $"Failed to start session host: {ex.Message}", SessionId: sessionId);
+        }
+
+        try
+        {
+            var payload = JsonSerializer.SerializeToElement(
+                new PluginHostConnectPayload(
+                    capabilityId,
+                    parameters,
+                    sessionId,
+                    scopeSessionId,
+                    resourceKind,
+                    resourceId),
+                JsonOptions);
+
+            var response = await sessionHost.Client.SendAsync(
+                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Connect, SessionId: sessionId, Payload: payload),
+                timeout);
+
+            if (response is null)
+            {
+                return new PluginConnectResult(false, "Session host unavailable.", SessionId: sessionId);
+            }
+
+            PluginConnectResult? result = null;
+            if (response.Payload is not null)
+            {
+                try
+                {
+                    result = response.Payload.Value.Deserialize<PluginConnectResult>(JsonOptions);
+                }
+                catch
+                {
+                }
+            }
+
+            result ??= new PluginConnectResult(response.Ok, response.Error, SessionId: sessionId);
+            result = result with { SessionId = sessionId };
+            if (!result.Ok)
+            {
+                return result;
+            }
+
+            var sharedMemoryRequest = capability?.SharedMemoryRequest;
+            if (sharedMemoryRequest is not null)
+            {
+                var requestedBytes = sharedMemoryRequest.PreferredBytes is > 0
+                    ? sharedMemoryRequest.PreferredBytes
+                    : sharedMemoryRequest.MinBytes is > 0
+                        ? sharedMemoryRequest.MinBytes
+                        : 256 * 1024;
+
+                var upgraded = await AllocateAndApplySharedMemorySegmentAsync(
+                    runtime,
+                    sessionId,
+                    requestedBytes,
+                    timeout,
+                    cancellationToken);
+
+                if (!upgraded.Ok)
+                {
+                    await DisconnectAsync(
+                        runtime,
+                        sessionId,
+                        $"shared-memory-init-failed: {upgraded.Error}",
+                        timeout,
+                        cancellationToken);
+
+                    var error = string.IsNullOrWhiteSpace(upgraded.Error) ? "Unknown error." : upgraded.Error;
+                    return new PluginConnectResult(false, $"Shared memory init failed: {error}", SessionId: sessionId);
+                }
+
+                if (sharedMemoryRequest.MinBytes > 0
+                    && upgraded.GrantedBytes is int granted
+                    && granted < sharedMemoryRequest.MinBytes)
+                {
+                    await DisconnectAsync(
+                        runtime,
+                        sessionId,
+                        $"shared-memory-under-min: granted={granted}, min={sharedMemoryRequest.MinBytes}",
+                        timeout,
+                        cancellationToken);
+
+                    return new PluginConnectResult(
+                        false,
+                        $"Shared memory allocation under MinBytes: granted={granted}, min={sharedMemoryRequest.MinBytes}.",
+                        SessionId: sessionId);
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            await DisconnectAsync(runtime, sessionId, "connect-exception", TimeSpan.FromSeconds(1), cancellationToken);
+            return new PluginConnectResult(false, $"Connect failed: {ex.Message}", SessionId: sessionId);
+        }
+    }
+
+    public async Task<PluginCommandResult> SendDataAsync(
+        string sessionId,
+        byte[] data,
+        string? transmitTargetId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return new PluginCommandResult(false, "Missing sessionId.", ErrorCode: "missing-session");
+        }
+
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
+        {
+            return new PluginCommandResult(false, "Session host not running.", ErrorCode: "session-host-not-running");
+        }
+
+        var payload = JsonSerializer.SerializeToElement(
+            new PluginHostSendDataPayload(sessionId, data ?? Array.Empty<byte>(), transmitTargetId),
+            JsonOptions);
+
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.SendData, SessionId: sessionId, Payload: payload),
+            timeout);
+
+        if (response is null)
+        {
+            return new PluginCommandResult(false, "Session host unavailable.", ErrorCode: "session-host-unavailable");
+        }
+
+        if (!response.Ok)
+        {
+            return new PluginCommandResult(false, response.Error ?? "Send failed.", ErrorCode: "transport-error");
+        }
+
+        if (response.Payload is null)
+        {
+            return new PluginCommandResult(true);
+        }
+
+        try
+        {
+            return response.Payload.Value.Deserialize<PluginCommandResult>(JsonOptions)
+                   ?? new PluginCommandResult(true);
+        }
+        catch
+        {
+            return new PluginCommandResult(true);
+        }
+    }
+
+    public async Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(
+        string sessionId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
+        if (sessionHost is null)
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        var payload = JsonSerializer.SerializeToElement(new PluginTransmitTargetQuery(sessionId), JsonOptions);
+        var response = await sessionHost.Client.SendAsync(
+            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.GetTransmitTargets, SessionId: sessionId, Payload: payload),
+            timeout);
+
+        if (response is not { Ok: true } || response.Payload is null)
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+
+        try
+        {
+            return response.Payload.Value.Deserialize<PluginTransmitTargetSnapshot>(JsonOptions)
+                   ?? new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+        catch
+        {
+            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
+        }
+    }
+
     public async Task<PluginCommandResult> DisconnectAsync(
         PluginRuntime runtime,
         string? sessionId,
@@ -672,7 +916,8 @@ public sealed class PluginHostProtocolService
         string sessionId,
         SessionHostModel model,
         PluginCapabilityDescriptor? capability,
-        JsonElement parameters)
+        JsonElement parameters,
+        string? scopeSessionId = null)
     {
         if (model is SessionHostModel.DedicatedPerSession)
         {
@@ -699,7 +944,7 @@ public sealed class PluginHostProtocolService
                 }
             }
 
-            return sessionId;
+            return string.IsNullOrWhiteSpace(scopeSessionId) ? sessionId : scopeSessionId;
         }
 
         return null;

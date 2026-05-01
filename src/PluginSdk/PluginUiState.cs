@@ -17,7 +17,8 @@ public sealed record PluginUiStateQuery(
     string? ViewKind = null,
     string? ViewInstanceId = null,
     string? ResourceKind = null,
-    string? ResourceId = null);
+    string? ResourceId = null,
+    IReadOnlyDictionary<string, JsonElement>? Settings = null);
 
 /// <summary>
 /// Snapshot returned by a plugin for UI rendering/state synchronization.

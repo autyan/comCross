@@ -6,6 +6,8 @@ namespace ComCross.Shared.Models;
 /// This is intentionally generic: the plugin may return arbitrary JSON state
 /// which the main process can use to render bus-specific panels.
 /// </summary>
+using System.Text.Json;
+
 public sealed record PluginHostGetUiStatePayload(
     string CapabilityId,
     string? SessionId = null,
@@ -13,4 +15,5 @@ public sealed record PluginHostGetUiStatePayload(
     string? ViewInstanceId = null,
     string? PluginId = null,
     string? ResourceKind = null,
-    string? ResourceId = null);
+    string? ResourceId = null,
+    IReadOnlyDictionary<string, JsonElement>? Settings = null);

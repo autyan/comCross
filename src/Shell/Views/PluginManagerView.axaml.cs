@@ -1,7 +1,6 @@
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -41,6 +40,12 @@ public partial class PluginManagerView : BaseUserControl
 
     private async Task ShowTestConnectDialogAsync(PluginManagerViewModel pluginManager, PluginItemViewModel plugin)
     {
-        await ShellUiServices.TestConnectDialogService.ShowAsync(this, pluginManager, plugin);
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
+        {
+            return;
+        }
+
+        await ShellContext.TestConnectDialogs.ShowAsync(owner, pluginManager, plugin);
     }
 }

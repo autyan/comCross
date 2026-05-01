@@ -21,8 +21,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ComCross.PluginSdk.UI.PluginUiRenderer, ComCross.Shell.Plugins.UI.AvaloniaPluginUiRenderer>();
         services.AddSingleton<ComCross.PluginSdk.UI.IPluginCommunicationLink, ComCross.Shell.Plugins.UI.ShellPluginCommunicationLink>();
 
-        // Host-side helpers for plugin UI.
-        services.AddSingleton<SerialPortsHostService>();
         services.AddSingleton<PluginManagementService>();
         services.AddSingleton<BusAdapterConnectionService>();
 
@@ -35,10 +33,12 @@ public static class ServiceCollectionExtensions
         // Dialog factories
         services.AddTransient<ITextInputDialogFactory, TextInputDialogFactory>();
         services.AddTransient<IMessageBoxDialogFactory, MessageBoxDialogFactory>();
+        services.AddTransient<IMessageDialogService, MessageDialogService>();
         services.AddTransient<IProgressDialogFactory, ProgressDialogFactory>();
         services.AddTransient<IConnectDialogService, ConnectDialogService>();
         services.AddTransient<ISessionRenameDialogService, SessionRenameDialogService>();
         services.AddTransient<ITestConnectDialogService, TestConnectDialogService>();
+        services.AddSingleton<IShellViewContext, ShellViewContext>();
         
         // 3. ViewModels (Scoped to MainWindow scope)
         services.AddScoped<MainWindowViewModel>();

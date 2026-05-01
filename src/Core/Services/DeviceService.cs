@@ -1,14 +1,11 @@
 using System.Collections.Concurrent;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Channels;
 using ComCross.PluginSdk;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
-using ComCross.Core.Services;
 
 namespace ComCross.Core.Services;
 
@@ -24,6 +21,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
     private readonly NotificationService _notificationService;
     private readonly SharedMemorySessionService _shmSessionService;
     private readonly SessionHostRuntimeService _sessionHostRuntimeService;
+    private readonly PluginHostProtocolService _pluginHostProtocol;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
     private readonly object _sessionOrderGate = new();
     private readonly List<string> _sessionOrder = new();
@@ -40,7 +38,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         IFrameStore frameStore,
         NotificationService notificationService,
         SharedMemorySessionService shmSessionService,
-        SessionHostRuntimeService sessionHostRuntimeService)
+        SessionHostRuntimeService sessionHostRuntimeService,
+        PluginHostProtocolService pluginHostProtocol)
     {
         _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
@@ -49,6 +48,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _shmSessionService = shmSessionService ?? throw new ArgumentNullException(nameof(shmSessionService));
         _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
+        _pluginHostProtocol = pluginHostProtocol ?? throw new ArgumentNullException(nameof(pluginHostProtocol));
         
         // Subscribe to data events for all sessions (to update stats)
         _eventBus.Subscribe<DataReceivedEvent>(e => {
@@ -106,99 +106,24 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
         session.Status = SessionStatus.Connecting;
 
-        var capability = runtime.Capabilities.FirstOrDefault(c => string.Equals(c.Id, capabilityId, StringComparison.Ordinal));
-        var sessionHostModel = ResolveSessionHostModel(capability);
-        var supportsMultiSession = sessionHostModel is not SessionHostModel.DedicatedPerSession;
-
-        var multiSessionGroupId = ComputeMultiSessionGroupId(sessionId, sessionHostModel, capability, parameters, scopeSessionId);
-
-        // 1. Allocate Shared Memory (segment allocation is safe before connect; applying it requires an active session)
-        var requestedBytes = capability?.SharedMemoryRequest?.PreferredBytes is > 0
-            ? capability.SharedMemoryRequest.PreferredBytes
-            : capability?.SharedMemoryRequest?.MinBytes is > 0
-                ? capability.SharedMemoryRequest.MinBytes
-                : 256 * 1024;
-
-        var descriptor = await _shmSessionService.AllocateOrReplaceAsync(sessionId, requestedBytes);
-
-        // 2. Start Session Host
-        // Default: 1 session : 1 process.
-        // Capability may declare a shared session-host model (SharedPerCapability / SharedPerScope).
-        var sessionHost = await _sessionHostRuntimeService.EnsureStartedAsync(
-            runtime.Info,
-            sessionId,
+        var result = await _pluginHostProtocol.ConnectSessionAsync(
+            runtime,
             capabilityId,
-            supportsMultiSession,
-            multiSessionGroupId,
+            sessionId,
+            parameters,
+            scopeSessionId,
+            resourceKind,
+            resourceId,
+            TimeSpan.FromSeconds(10),
             cancellationToken);
 
-        try
+        if (!result.Ok)
         {
-            // 3. Connect via Session Host
-            var connectPayload = new PluginHostConnectPayload(
-                capabilityId,
-                parameters,
-                sessionId,
-                scopeSessionId,
-                resourceKind,
-                resourceId);
-            var response = await sessionHost.Client.SendAsync(
-                new PluginHostRequest(
-                    Guid.NewGuid().ToString("N"),
-                    PluginHostMessageTypes.Connect,
-                    SessionId: sessionId,
-                    Payload: JsonSerializer.SerializeToElement(connectPayload)),
-                TimeSpan.FromSeconds(10));
-
-            if (response is not { Ok: true })
-            {
-                session.Status = SessionStatus.Disconnected;
-                throw new InvalidOperationException(response?.Error ?? "Plugin connection failed");
-            }
-
-            if (response.Payload is { ValueKind: JsonValueKind.Object } resultPayload)
-            {
-                ApplyConnectResultMetadata(session, resultPayload);
-            }
-
-            // 4. Apply segment to Session Host (requires active session in plugin host)
-            var applyResponse = await sessionHost.Client.SendAsync(
-                new PluginHostRequest(
-                    Guid.NewGuid().ToString("N"),
-                    PluginHostMessageTypes.ApplySharedMemorySegment,
-                    SessionId: sessionId,
-                    Payload: JsonSerializer.SerializeToElement(new PluginHostApplySharedMemorySegmentPayload(sessionId, descriptor))),
-                TimeSpan.FromSeconds(2));
-
-            if (applyResponse is not { Ok: true })
-            {
-                session.Status = SessionStatus.Disconnected;
-                throw new InvalidOperationException(applyResponse?.Error ?? "Apply shared memory segment failed");
-            }
-        }
-        catch
-        {
-            // Hard cleanup on connect/apply failure.
-            try
-            {
-                await sessionHost.Client.SendAsync(
-                    new PluginHostRequest(
-                        Guid.NewGuid().ToString("N"),
-                        PluginHostMessageTypes.Disconnect,
-                        SessionId: sessionId,
-                        Payload: JsonSerializer.SerializeToElement(new PluginHostDisconnectPayload(sessionId, "connect-failed"))),
-                    TimeSpan.FromSeconds(2));
-            }
-            catch
-            {
-                // best-effort
-            }
-
-            await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: "connect-failed");
-            await _shmSessionService.ReleaseSegmentAsync(sessionId);
-            throw;
+            session.Status = SessionStatus.Disconnected;
+            throw new InvalidOperationException(result.Error ?? "Plugin connection failed");
         }
 
+        ApplyConnectResultMetadata(session, result);
         session.Status = SessionStatus.Connected;
         session.StartTime = DateTime.UtcNow;
 
@@ -229,29 +154,23 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
                 _eventBus.Publish(new ConnectionStatusChangedEvent(sessionId, oldStatus, SessionStatus.Closing));
             }
 
-            var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
-            if (sessionHost is not null)
+            var runtime = string.IsNullOrWhiteSpace(state.Session.PluginId)
+                ? null
+                : _pluginManager.GetRuntime(state.Session.PluginId);
+
+            if (runtime is not null)
             {
-                try
-                {
-                    var payload = new PluginHostDisconnectPayload(sessionId, reason);
-                    await sessionHost.Client.SendAsync(
-                        new PluginHostRequest(
-                            Guid.NewGuid().ToString("N"),
-                            PluginHostMessageTypes.Disconnect,
-                            SessionId: sessionId,
-                            Payload: JsonSerializer.SerializeToElement(payload)),
-                        TimeSpan.FromSeconds(5));
-                }
-                catch
-                {
-                    // best-effort
-                }
-
-                await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: reason);
+                await _pluginHostProtocol.DisconnectAsync(
+                    runtime,
+                    sessionId,
+                    reason,
+                    TimeSpan.FromSeconds(5));
             }
-
-            await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            else
+            {
+                await _sessionHostRuntimeService.StopAsync(sessionId, TimeSpan.FromSeconds(1), reason: reason);
+                await _shmSessionService.ReleaseSegmentAsync(sessionId);
+            }
             oldStatus = state.Session.Status;
             state.Session.Status = SessionStatus.Disconnected;
             if (oldStatus != SessionStatus.Disconnected)
@@ -320,49 +239,12 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
         data ??= Array.Empty<byte>();
 
-        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
-        if (sessionHost is null)
-        {
-            throw new InvalidOperationException($"Session host not running for session {sessionId}");
-        }
-
-        // Send via Session Host (real TX)
-        var payload = JsonSerializer.SerializeToElement(new PluginHostSendDataPayload(sessionId, data, transmitTargetId));
-        var response = await sessionHost.Client.SendAsync(
-            new PluginHostRequest(
-                Guid.NewGuid().ToString("N"),
-                PluginHostMessageTypes.SendData,
-                SessionId: sessionId,
-                Payload: payload),
-            TimeSpan.FromSeconds(3));
-
-        if (response is null)
-        {
-            return new PluginCommandResult(false, "Session host unavailable.", ErrorCode: "session-host-unavailable");
-        }
-
-        if (!response.Ok)
-        {
-            return new PluginCommandResult(false, response.Error ?? "Send failed.", ErrorCode: "transport-error");
-        }
-
-        PluginCommandResult result;
-        if (response.Payload is { } responsePayload)
-        {
-            try
-            {
-                result = responsePayload.Deserialize<PluginCommandResult>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                         ?? new PluginCommandResult(response.Ok, response.Error);
-            }
-            catch
-            {
-                result = new PluginCommandResult(response.Ok, response.Error);
-            }
-        }
-        else
-        {
-            result = new PluginCommandResult(response.Ok, response.Error);
-        }
+        var result = await _pluginHostProtocol.SendDataAsync(
+            sessionId,
+            data,
+            transmitTargetId,
+            TimeSpan.FromSeconds(3),
+            cancellationToken);
 
         if (!result.Ok)
         {
@@ -388,35 +270,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
         }
 
-        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
-        if (sessionHost is null)
-        {
-            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
-        }
-
-        var response = await sessionHost.Client.SendAsync(
-            new PluginHostRequest(
-                Guid.NewGuid().ToString("N"),
-                PluginHostMessageTypes.GetTransmitTargets,
-                SessionId: sessionId,
-                Payload: JsonSerializer.SerializeToElement(new PluginTransmitTargetQuery(sessionId))),
-            TimeSpan.FromSeconds(3));
-
-        if (response is not { Ok: true } || response.Payload is null)
-        {
-            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
-        }
-
-        try
-        {
-            return response.Payload.Value.Deserialize<PluginTransmitTargetSnapshot>(
-                       new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                   ?? new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
-        }
-        catch
-        {
-            return new PluginTransmitTargetSnapshot(Array.Empty<PluginTransmitTarget>());
-        }
+        return await _pluginHostProtocol.GetTransmitTargetsAsync(
+            sessionId,
+            TimeSpan.FromSeconds(3),
+            cancellationToken);
     }
 
     public Session? GetSession(string sessionId) => _sessions.TryGetValue(sessionId, out var state) ? state.Session : null;
@@ -673,42 +530,29 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
     }
 
-    private static void ApplyConnectResultMetadata(Session session, JsonElement payload)
+    private static void ApplyConnectResultMetadata(Session session, PluginConnectResult result)
     {
-        try
+        if (result.CommittedParameters is { ValueKind: JsonValueKind.Object } committed)
         {
-            var result = payload.Deserialize<PluginConnectResult>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (result is null)
-            {
-                return;
-            }
-
-            if (result.CommittedParameters is { ValueKind: JsonValueKind.Object } committed)
-            {
-                session.ParametersJson = committed.GetRawText();
-            }
-
-            session.DisplayTitle = result.DisplayTitle;
-            session.DisplaySubtitle = result.DisplaySubtitle;
-            session.DisplayIcon = result.SessionIcon;
-            if (result.CanReconnect is { } canReconnect)
-            {
-                session.CanReconnect = canReconnect;
-            }
-            session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
-
-            if (!string.IsNullOrWhiteSpace(result.ParentSessionId))
-            {
-                session.ParentSessionId = result.ParentSessionId;
-            }
-            else
-            {
-                session.ParentSessionId = null;
-            }
+            session.ParametersJson = committed.GetRawText();
         }
-        catch
+
+        session.DisplayTitle = result.DisplayTitle;
+        session.DisplaySubtitle = result.DisplaySubtitle;
+        session.DisplayIcon = result.SessionIcon;
+        if (result.CanReconnect is { } canReconnect)
         {
-            // Optional plugin metadata must not turn a successful connect into a failure.
+            session.CanReconnect = canReconnect;
+        }
+        session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
+
+        if (!string.IsNullOrWhiteSpace(result.ParentSessionId))
+        {
+            session.ParentSessionId = result.ParentSessionId;
+        }
+        else
+        {
+            session.ParentSessionId = null;
         }
     }
 
@@ -726,102 +570,4 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         return $"{display} #{index}";
     }
 
-    private static string? TryGetString(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        if (!element.TryGetProperty(propertyName, out var property))
-        {
-            return null;
-        }
-
-        return property.ValueKind == JsonValueKind.String ? property.GetString() : property.ToString();
-    }
-
-    private static SessionHostModel ResolveSessionHostModel(PluginCapabilityDescriptor? capability)
-    {
-        if (capability is null)
-        {
-            return SessionHostModel.DedicatedPerSession;
-        }
-
-        if (capability.SessionHostModel != SessionHostModel.Unspecified)
-        {
-            return capability.SessionHostModel;
-        }
-
-        // Backward compatibility: SupportsMultiSession implied shared-per-capability.
-        return capability.SupportsMultiSession
-            ? SessionHostModel.SharedPerCapability
-            : SessionHostModel.DedicatedPerSession;
-    }
-
-    private static string? ComputeMultiSessionGroupId(
-        string sessionId,
-        SessionHostModel model,
-        PluginCapabilityDescriptor? capability,
-        JsonElement parameters,
-        string? scopeSessionId = null)
-    {
-        if (model is SessionHostModel.DedicatedPerSession)
-        {
-            return null;
-        }
-
-        if (model is SessionHostModel.SharedPerCapability)
-        {
-            return null;
-        }
-
-        if (model is SessionHostModel.SharedPerScope)
-        {
-            var keyParam = capability?.SessionHostGroupKeyParameter;
-            if (!string.IsNullOrWhiteSpace(keyParam))
-            {
-                var key = TryGetString(parameters, keyParam);
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    return key;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(scopeSessionId))
-            {
-                return scopeSessionId;
-            }
-
-            // Listener session itself may not provide a scope key; fall back to its own sessionId.
-            return sessionId;
-        }
-
-        return null;
-    }
-
-    private static int? TryGetInt(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        if (!element.TryGetProperty(propertyName, out var property))
-        {
-            return null;
-        }
-
-        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value))
-        {
-            return value;
-        }
-
-        if (property.ValueKind == JsonValueKind.String && int.TryParse(property.GetString(), out value))
-        {
-            return value;
-        }
-
-        return null;
-    }
 }

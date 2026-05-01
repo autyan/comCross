@@ -19,7 +19,8 @@ public partial class App : Application
     private IServiceScope? _mainWindowScope;
     private Core.Application.IAppHost? _appHost;
     private MainWindowViewModel? _viewModel;
-    private bool _isShuttingDown = false;
+    private bool _isShuttingDown;
+    private bool _shutdownReady;
     
     /// <summary>
     /// Global service provider for accessing DI services.
@@ -133,66 +134,72 @@ public partial class App : Application
     
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
+        if (_shutdownReady)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+
         if (_isShuttingDown)
         {
             return;
         }
 
         _isShuttingDown = true;
-        
-        // Cancel the first shutdown to run async cleanup
-        e.Cancel = true;
-        
-        // Run cleanup asynchronously with timeout protection
-        Task.Run(async () =>
+
+        _ = ShutdownApplicationAsync();
+    }
+
+    private async Task ShutdownApplicationAsync()
+    {
+        try
         {
+            var isHeadlessRegressionShutdown =
+                string.Equals(Environment.GetEnvironmentVariable("COMCROSS_SHELL_AUTO_EXIT_AFTER_SCREENSHOT"), "1", StringComparison.Ordinal);
+
+            // 1. UI Cleanup
+            if (_viewModel != null)
+            {
+                var cleanupTask = isHeadlessRegressionShutdown
+                    ? _viewModel.CleanupAsync(showProgress: false)
+                    : _viewModel.CleanupWithProgressAsync();
+                // i18n-ignore
+                await RunWithTimeoutBestEffortAsync(cleanupTask, TimeSpan.FromSeconds(2), "UI cleanup");
+            }
+
+            // 2. Core Cleanup (Stop Plugins, Drivers, DB)
+            if (_appHost != null)
+            {
+                // i18n-ignore
+                await RunWithTimeoutBestEffortAsync(_appHost.ShutdownAsync(), TimeSpan.FromSeconds(12), "Core cleanup");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Cleanup error: {ex.Message}");
+        }
+        finally
+        {
+            await DisposeMainWindowScopeBestEffortAsync();
+
+            // Always shutdown on UI thread. Mark ready first so the second ShutdownRequested pass is allowed through.
             try
             {
-                var isHeadlessRegressionShutdown =
-                    string.Equals(Environment.GetEnvironmentVariable("COMCROSS_SHELL_AUTO_EXIT_AFTER_SCREENSHOT"), "1", StringComparison.Ordinal);
-
-                // 1. UI Cleanup
-                if (_viewModel != null)
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    var cleanupTask = isHeadlessRegressionShutdown
-                        ? _viewModel.CleanupAsync(showProgress: false)
-                        : _viewModel.CleanupWithProgressAsync();
-                    // i18n-ignore
-                    await RunWithTimeoutBestEffortAsync(cleanupTask, TimeSpan.FromSeconds(2), "UI cleanup");
-                }
-
-                // 2. Core Cleanup (Stop Plugins, Drivers, DB)
-                if (_appHost != null)
-                {
-                    // i18n-ignore
-                    await RunWithTimeoutBestEffortAsync(_appHost.ShutdownAsync(), TimeSpan.FromSeconds(10), "Core cleanup");
-                }
+                    _shutdownReady = true;
+                    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        desktop.Shutdown();
+                    }
+                });
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Cleanup error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Final UI shutdown error: {ex.Message}");
             }
-            finally
-            {
-                await DisposeMainWindowScopeBestEffortAsync();
-
-                // Always shutdown on UI thread
-                try
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                        {
-                            desktop.Shutdown();
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Final UI shutdown error: {ex.Message}");
-                }
-            }
-        });
+        }
     }
 
     private static async Task RunWithTimeoutBestEffortAsync(Task task, TimeSpan timeout, string operation)
