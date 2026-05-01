@@ -140,46 +140,53 @@ public sealed class PluginRuntimeService
         TimeSpan timeout,
         Action<PluginRuntime, Exception?>? onError)
     {
-        if (runtime.State != PluginLoadState.Loaded)
-        {
-            return;
-        }
-
         var process = runtime.Process;
-        if (process is null || process.HasExited)
+        if (runtime.State != PluginLoadState.Loaded && process is null)
         {
             return;
         }
 
-        // Deterministic cleanup: don't leak shared-memory segments/readers across shutdown.
-        await CleanupRuntimeSessionBestEffortAsync(runtime, "shutdown");
-
         try
         {
-            var requestTimeout = timeout <= TimeSpan.Zero
-                ? TimeSpan.FromMilliseconds(1)
-                : (timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1));
-
-            _ = await runtime.Client?.SendAsync(
-                new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Shutdown, null),
-                requestTimeout)!;
-        }
-        catch (Exception ex)
-        {
-            onError?.Invoke(runtime, ex);
-        }
-
-        try
-        {
-            if (timeout > TimeSpan.Zero)
+            if (process is null || process.HasExited)
             {
-                using var cts = new CancellationTokenSource(timeout);
-                await process.WaitForExitAsync(cts.Token);
+                return;
+            }
+
+            // Deterministic cleanup: don't leak shared-memory segments/readers across shutdown.
+            await CleanupRuntimeSessionBestEffortAsync(runtime, "shutdown");
+
+            try
+            {
+                var requestTimeout = timeout <= TimeSpan.Zero
+                    ? TimeSpan.FromMilliseconds(1)
+                    : (timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1));
+
+                _ = await runtime.Client?.SendAsync(
+                    new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.Shutdown, null),
+                    requestTimeout)!;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(runtime, ex);
+            }
+
+            try
+            {
+                if (timeout > TimeSpan.Zero)
+                {
+                    using var cts = new CancellationTokenSource(timeout);
+                    await process.WaitForExitAsync(cts.Token);
+                }
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(runtime, ex);
             }
         }
-        catch (Exception ex)
+        finally
         {
-            onError?.Invoke(runtime, ex);
+            runtime.DisposeHost();
         }
     }
 

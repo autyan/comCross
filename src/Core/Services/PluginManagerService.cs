@@ -201,8 +201,43 @@ public sealed class PluginManagerService
 
     public async Task ShutdownAsync()
     {
-        await _runtimeService.ShutdownAsync(_activeRuntimes.Values.ToList(), TimeSpan.FromSeconds(2));
-        await _extensionRuntimeService.ShutdownAsync(TimeSpan.FromSeconds(2));
+        try
+        {
+            await _runtimeService.ShutdownAsync(
+                _activeRuntimes.Values.ToList(),
+                TimeSpan.FromSeconds(2),
+                (runtime, ex) =>
+                {
+                    if (ex is null)
+                    {
+                        return;
+                    }
+
+                    _logger.LogWarning(ex, "Bus plugin shutdown reported an error: {PluginId}", runtime.Info.Manifest.Id);
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Bus plugin shutdown failed.");
+        }
+
+        try
+        {
+            await _extensionRuntimeService.ShutdownAsync(
+                TimeSpan.FromSeconds(2),
+                ex =>
+                {
+                    if (ex is not null)
+                    {
+                        _logger.LogWarning(ex, "Extension plugin shutdown reported an error.");
+                    }
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Extension plugin shutdown failed.");
+        }
+
         _activeRuntimes.Clear();
         _knownRuntimes.Clear();
     }

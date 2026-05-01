@@ -143,17 +143,26 @@ public class AppHost : IAppHost
                 return;
             }
 
-            var descriptorPersistence = _serviceProvider.GetService<SessionDescriptorPersistenceService>();
-            if (descriptorPersistence is not null)
+            await RunShutdownStepAsync("flush session descriptors", async () =>
             {
-                await descriptorPersistence.FlushAsync();
-            }
+                var descriptorPersistence = _serviceProvider.GetService<SessionDescriptorPersistenceService>();
+                if (descriptorPersistence is not null)
+                {
+                    await descriptorPersistence.FlushAsync();
+                }
+            });
 
-            var deviceService = _serviceProvider.GetRequiredService<DeviceService>();
-            await deviceService.DisposeAsync();
+            await RunShutdownStepAsync("dispose device service", async () =>
+            {
+                var deviceService = _serviceProvider.GetRequiredService<DeviceService>();
+                await deviceService.DisposeAsync();
+            });
 
-            var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
-            await pluginManager.ShutdownAsync();
+            await RunShutdownStepAsync("shutdown plugin manager", async () =>
+            {
+                var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
+                await pluginManager.ShutdownAsync();
+            });
 
             _isShutdown = true;
             _logger.LogInformation("Core Engine shutdown complete.");
@@ -165,6 +174,18 @@ public class AppHost : IAppHost
         finally
         {
             _shutdownGate.Release();
+        }
+    }
+
+    private async Task RunShutdownStepAsync(string stepName, Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Core Engine shutdown step: {StepName}", stepName);
         }
     }
 

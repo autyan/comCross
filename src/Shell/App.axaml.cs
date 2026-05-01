@@ -157,14 +157,15 @@ public partial class App : Application
                     var cleanupTask = isHeadlessRegressionShutdown
                         ? _viewModel.CleanupAsync(showProgress: false)
                         : _viewModel.CleanupWithProgressAsync();
-                    var timeoutTask = Task.Delay(2000);
-                    await Task.WhenAny(cleanupTask, timeoutTask);
+                    // i18n-ignore
+                    await RunWithTimeoutBestEffortAsync(cleanupTask, TimeSpan.FromSeconds(2), "UI cleanup");
                 }
 
                 // 2. Core Cleanup (Stop Plugins, Drivers, DB)
                 if (_appHost != null)
                 {
-                    await _appHost.ShutdownAsync();
+                    // i18n-ignore
+                    await RunWithTimeoutBestEffortAsync(_appHost.ShutdownAsync(), TimeSpan.FromSeconds(10), "Core cleanup");
                 }
             }
             catch (Exception ex)
@@ -173,26 +174,73 @@ public partial class App : Application
             }
             finally
             {
-                if (_mainWindowScope is IAsyncDisposable asyncDisposable)
-                {
-                    await asyncDisposable.DisposeAsync();
-                }
-                else
-                {
-                    _mainWindowScope?.Dispose();
-                }
-
-                _mainWindowScope = null;
+                await DisposeMainWindowScopeBestEffortAsync();
 
                 // Always shutdown on UI thread
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                try
                 {
-                    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        desktop.Shutdown();
-                    }
-                });
+                        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                        {
+                            desktop.Shutdown();
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Final UI shutdown error: {ex.Message}");
+                }
             }
         });
+    }
+
+    private static async Task RunWithTimeoutBestEffortAsync(Task task, TimeSpan timeout, string operation)
+    {
+        try
+        {
+            var timeoutTask = Task.Delay(timeout);
+            var completedTask = await Task.WhenAny(task, timeoutTask);
+            if (completedTask == task)
+            {
+                await task;
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"{operation} timed out after {timeout.TotalSeconds:0.#}s.");
+            _ = task.ContinueWith(
+                static t =>
+                {
+                    _ = t.Exception;
+                },
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"{operation} error: {ex.Message}");
+        }
+    }
+
+    private async Task DisposeMainWindowScopeBestEffortAsync()
+    {
+        try
+        {
+            if (_mainWindowScope is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync();
+            }
+            else
+            {
+                _mainWindowScope?.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Main window scope dispose error: {ex.Message}");
+        }
+        finally
+        {
+            _mainWindowScope = null;
+        }
     }
 }
