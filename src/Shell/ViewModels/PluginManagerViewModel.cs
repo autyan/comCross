@@ -105,14 +105,6 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public IReadOnlyList<PluginRuntime> GetAllRuntimes() => _plugins.GetAllRuntimes();
 
-    /// <summary>
-    /// 向插件发送请求
-    /// </summary>
-    public async Task<PluginHostResponse?> SendRequestAsync(string pluginId, PluginHostRequest request)
-    {
-        return await _plugins.SendRequestAsync(pluginId, request, TimeSpan.FromSeconds(5));
-    }
-
     public async Task ToggleAsync(PluginItemViewModel plugin)
     {
         var result = await _plugins.SetPluginEnabledAsync(plugin.Id, plugin.IsEnabled);

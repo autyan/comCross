@@ -219,7 +219,6 @@ public sealed class WorkspaceService
     
     /// <summary>
     /// Load workspace state from persistent storage.
-    /// Performs migration if needed (v0.3 → v0.4).
     /// </summary>
     public async Task<WorkspaceState> LoadStateAsync(CancellationToken cancellationToken = default)
     {
@@ -238,55 +237,15 @@ public sealed class WorkspaceService
 
     private void RestoreSessionsFromState(WorkspaceState state)
     {
-        // Prefer v0.4+ descriptors.
-        if (state.SessionDescriptors is { Count: > 0 })
+        if (state.SessionDescriptors is not { Count: > 0 })
         {
-            foreach (var descriptor in state.SessionDescriptors)
-            {
-                _deviceService.RestoreSession(descriptor);
-            }
-
             return;
         }
 
-        // Legacy v0.3 sessions: best-effort map to serial.adapter/serial.
-        #pragma warning disable CS0618 // Type or member is obsolete
-        if (state.Sessions is { Count: > 0 })
+        foreach (var descriptor in state.SessionDescriptors)
         {
-            foreach (var legacy in state.Sessions)
-            {
-                if (string.IsNullOrWhiteSpace(legacy.Id))
-                {
-                    continue;
-                }
-
-                var parameters = new
-                {
-                    port = legacy.Port,
-                    baudRate = legacy.Settings.BaudRate,
-                    dataBits = legacy.Settings.DataBits,
-                    parity = legacy.Settings.Parity.ToString(),
-                    stopBits = legacy.Settings.StopBits.ToString(),
-                    flowControl = legacy.Settings.FlowControl.ToString()
-                };
-
-                state.SessionDescriptors.Add(new SessionDescriptor
-                {
-                    Id = legacy.Id,
-                    Name = legacy.Name,
-                    AdapterId = "plugin:serial.adapter:serial",
-                    PluginId = "serial.adapter",
-                    CapabilityId = "serial",
-                    ParametersJson = System.Text.Json.JsonSerializer.Serialize(parameters)
-                });
-            }
-
-            foreach (var descriptor in state.SessionDescriptors)
-            {
-                _deviceService.RestoreSession(descriptor);
-            }
+            _deviceService.RestoreSession(descriptor);
         }
-        #pragma warning restore CS0618
     }
     
     /// <summary>

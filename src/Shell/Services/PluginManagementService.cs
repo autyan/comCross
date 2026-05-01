@@ -36,17 +36,6 @@ public sealed class PluginManagementService
 
     public Task ShutdownAsync() => _pluginManagerService.ShutdownAsync();
 
-    public async Task<PluginHostResponse?> SendRequestAsync(string pluginId, PluginHostRequest request, TimeSpan timeout)
-    {
-        var runtime = GetRuntime(pluginId);
-        if (runtime?.Client is null)
-        {
-            return null;
-        }
-
-        return await runtime.Client.SendAsync(request, timeout);
-    }
-
     public Task<PluginConnectResult> ConnectAsync(
         PluginRuntime runtime,
         string capabilityId,
