@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Input;
@@ -12,30 +13,88 @@ namespace ComCross.Shell.Views;
 public partial class MessageStreamView : BaseUserControl
 {
     private INotifyCollectionChanged? _currentMessages;
+    private int _messageSubscriptionVersion;
+    private bool _isDetached;
 
     public MessageStreamView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        AttachedToVisualTree += OnAttachedToVisualTree;
+        DetachedFromVisualTree += OnDetachedFromVisualTree;
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _isDetached = false;
+        AttachCurrentMessages();
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        DetachCurrentMessages();
+        _isDetached = true;
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (_currentMessages != null)
+        AttachCurrentMessages();
+    }
+
+    private void AttachCurrentMessages()
+    {
+        DetachCurrentMessages();
+
+        if (_isDetached)
         {
-            _currentMessages.CollectionChanged -= OnMessagesChanged;
-            _currentMessages = null;
+            return;
         }
 
         if (DataContext is MessageStreamViewModel vm)
         {
             _currentMessages = vm.MessageItems;
             _currentMessages.CollectionChanged += OnMessagesChanged;
+            unchecked
+            {
+                _messageSubscriptionVersion++;
+            }
+        }
+    }
+
+    private void DetachCurrentMessages()
+    {
+        if (_currentMessages != null)
+        {
+            _currentMessages.CollectionChanged -= OnMessagesChanged;
+            _currentMessages = null;
+            unchecked
+            {
+                _messageSubscriptionVersion++;
+            }
         }
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        var version = _messageSubscriptionVersion;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnMessagesChangedOnUiThread(sender, version));
+            return;
+        }
+
+        OnMessagesChangedOnUiThread(sender, version);
+    }
+
+    private void OnMessagesChangedOnUiThread(object? sender, int version)
+    {
+        if (_isDetached
+            || version != _messageSubscriptionVersion
+            || !ReferenceEquals(sender, _currentMessages))
+        {
+            return;
+        }
+
         if (DataContext is not MessageStreamViewModel vm)
         {
             return;
@@ -48,8 +107,27 @@ public partial class MessageStreamView : BaseUserControl
 
         Dispatcher.UIThread.Post(() =>
         {
-            MessageList.ScrollIntoView(vm.MessageItems.Last());
+            ScrollToLatestMessage(vm, sender, version);
         });
+    }
+
+    private void ScrollToLatestMessage(MessageStreamViewModel vm, object? sender, int version)
+    {
+        if (_isDetached
+            || version != _messageSubscriptionVersion
+            || !ReferenceEquals(sender, _currentMessages)
+            || !ReferenceEquals(DataContext, vm)
+            || !vm.Display.AutoScrollEnabled
+            || vm.MessageItems.Count == 0)
+        {
+            return;
+        }
+
+        var latest = vm.MessageItems.LastOrDefault();
+        if (latest is not null)
+        {
+            MessageList.ScrollIntoView(latest);
+        }
     }
 
     private void OnToggleDisplayMode(object? sender, PointerPressedEventArgs e)
