@@ -22,6 +22,9 @@ public sealed class Session : INotifyPropertyChanged
     private long _txBytes;
     private bool _enableDatabaseStorage;
     private string? _parentSessionId;
+    private bool _canReconnect = true;
+    private SessionInitializationState _initializationState = SessionInitializationState.Ready;
+    private string? _initializationError;
     private IReadOnlyList<string> _managedResourceKinds = Array.Empty<string>();
 
     public required string Id { get; init; }
@@ -110,6 +113,24 @@ public sealed class Session : INotifyPropertyChanged
     {
         get => _parentSessionId;
         set => SetField(ref _parentSessionId, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+
+    public bool CanReconnect
+    {
+        get => _canReconnect;
+        set => SetField(ref _canReconnect, value);
+    }
+
+    public SessionInitializationState InitializationState
+    {
+        get => _initializationState;
+        set => SetField(ref _initializationState, value);
+    }
+
+    public string? InitializationError
+    {
+        get => _initializationError;
+        set => SetField(ref _initializationError, string.IsNullOrWhiteSpace(value) ? null : value);
     }
 
     public IReadOnlyList<string> ManagedResourceKinds
@@ -310,4 +331,13 @@ public enum SessionStatus
     Closing,
     Connected,
     Error
+}
+
+public enum SessionInitializationState
+{
+    Pending,
+    Updating,
+    Ready,
+    Failed,
+    PluginUnavailable
 }

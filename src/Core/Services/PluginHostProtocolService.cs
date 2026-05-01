@@ -32,6 +32,50 @@ public sealed class PluginHostProtocolService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    public async Task<(bool Ok, string? Error, PluginSessionStateInitializationResult? Result)> InitializeSessionStateAsync(
+        PluginRuntime runtime,
+        PluginSessionStateInitializationContext context,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (runtime.State != PluginLoadState.Loaded || runtime.Client is null)
+        {
+            return (false, "Plugin not loaded.", null);
+        }
+
+        var payload = JsonSerializer.SerializeToElement(context, JsonOptions);
+        var response = await runtime.Client.SendAsync(
+            new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.InitializeSessionState, Payload: payload),
+            timeout);
+
+        if (response is null)
+        {
+            return (false, "Plugin host unavailable.", null);
+        }
+
+        if (!response.Ok)
+        {
+            return (false, response.Error, null);
+        }
+
+        if (response.Payload is null)
+        {
+            return (true, null, new PluginSessionStateInitializationResult(true));
+        }
+
+        try
+        {
+            var result = response.Payload.Value.Deserialize<PluginSessionStateInitializationResult>(JsonOptions);
+            return result is null
+                ? (false, "Invalid session initialization payload.", null)
+                : (true, null, result);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Invalid session initialization payload: {ex.Message}", null);
+        }
+    }
+
     public async Task<(bool Ok, string? Error)> SetBackpressureAsync(
         PluginRuntime runtime,
         string sessionId,

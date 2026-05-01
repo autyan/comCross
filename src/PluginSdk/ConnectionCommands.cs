@@ -27,4 +27,5 @@ public sealed record PluginConnectResult(
     string? DisplaySubtitle = null,
     string? ParentSessionId = null,
     string? SessionIcon = null,
+    bool? CanReconnect = null,
     IReadOnlyList<string>? ManagedResourceKinds = null);

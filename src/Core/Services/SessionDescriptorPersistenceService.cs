@@ -15,6 +15,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
     private readonly ILogger<SessionDescriptorPersistenceService> _logger;
 
     private readonly IDisposable _sessionUpsertSubscription;
+    private readonly IDisposable _sessionUpdatedSubscription;
     private readonly IDisposable _sessionRenamedSubscription;
 
     private readonly object _gate = new();
@@ -32,6 +33,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
         _logger = logger;
 
         _sessionUpsertSubscription = eventBus.Subscribe<SessionCreatedEvent>(_ => DebouncedSave());
+        _sessionUpdatedSubscription = eventBus.Subscribe<SessionUpdatedEvent>(_ => DebouncedSave());
         _sessionRenamedSubscription = eventBus.Subscribe<SessionRenamedEvent>(_ => DebouncedSave());
     }
 
@@ -109,6 +111,9 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
                 DisplayTitle = s.DisplayTitle,
                 DisplaySubtitle = s.DisplaySubtitle,
                 DisplayIcon = s.DisplayIcon,
+                CanReconnect = s.CanReconnect,
+                InitializationState = s.InitializationState,
+                InitializationError = s.InitializationError,
                 EnableDatabaseStorage = s.EnableDatabaseStorage,
                 ParentSessionId = s.ParentSessionId,
                 ManagedResourceKinds = s.ManagedResourceKinds.ToList()
@@ -118,7 +123,18 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
         await _workspaceStateStore.UpdateAsync(state =>
         {
             var runtimeIds = descriptors.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var existingById = state.SessionDescriptors
+                .Where(d => !string.IsNullOrWhiteSpace(d.Id))
+                .ToDictionary(d => d.Id, StringComparer.Ordinal);
             var merged = new List<SessionDescriptor>(descriptors.Count + state.SessionDescriptors.Count);
+            foreach (var descriptor in descriptors)
+            {
+                if (existingById.TryGetValue(descriptor.Id, out var existing))
+                {
+                    descriptor.LastInitializedPluginVersion = existing.LastInitializedPluginVersion;
+                    descriptor.StorageSchemaVersion = existing.StorageSchemaVersion;
+                }
+            }
             merged.AddRange(descriptors);
 
             foreach (var existing in state.SessionDescriptors)
@@ -136,6 +152,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
     public void Dispose()
     {
         _sessionUpsertSubscription.Dispose();
+        _sessionUpdatedSubscription.Dispose();
         _sessionRenamedSubscription.Dispose();
 
         lock (_gate)

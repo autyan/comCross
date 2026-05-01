@@ -217,6 +217,7 @@ public sealed class WorkspaceStateFlowTests
             parametersJson: """{"host":"127.0.0.1","port":5020}""");
         descriptor.DisplayTitle = "TCP Client";
         descriptor.DisplaySubtitle = "127.0.0.1:58004 -> 127.0.0.1:5020";
+        descriptor.CanReconnect = false;
 
         deviceService.RestoreSession(descriptor);
         await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("display-session"));
@@ -225,6 +226,7 @@ public sealed class WorkspaceStateFlowTests
         var persisted = Assert.Single(state.SessionDescriptors, d => d.Id == "display-session");
         Assert.Equal("TCP Client", persisted.DisplayTitle);
         Assert.Equal("127.0.0.1:58004 -> 127.0.0.1:5020", persisted.DisplaySubtitle);
+        Assert.False(persisted.CanReconnect);
     }
 
     [Fact]

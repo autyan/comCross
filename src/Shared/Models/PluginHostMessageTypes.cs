@@ -10,6 +10,7 @@ public static class PluginHostMessageTypes
     public const string Connect = "connect";
     public const string Disconnect = "disconnect";
     public const string GetUiState = "get-ui-state";
+    public const string InitializeSessionState = "initialize-session-state";
     public const string ApplySharedMemorySegment = "apply-shared-memory-segment";
     public const string SetBackpressure = "set-backpressure";
     public const string ExecuteAction = "execute-action";

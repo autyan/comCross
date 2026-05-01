@@ -12,6 +12,7 @@ public sealed class NetworkBusAdapterPlugin :
     IPluginUiStateProvider,
     IPluginUiStateEventSource,
     IPluginSessionLifecycleEventSource,
+    IPluginSessionStateInitializer,
     IMultiSessionDevicePlugin
 {
     private const string PendingResourceKind = PluginResourceKinds.Pending;
@@ -58,6 +59,43 @@ public sealed class NetworkBusAdapterPlugin :
 
     public event EventHandler<PluginUiStateInvalidatedEvent>? UiStateInvalidated;
     public event EventHandler<PluginSessionClosedEvent>? SessionClosed;
+
+    public Task<PluginSessionStateInitializationResult> InitializeSessionStateAsync(
+        PluginSessionStateInitializationContext context,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(context.ParametersJson))
+        {
+            return Task.FromResult(new PluginSessionStateInitializationResult(true));
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(context.ParametersJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return Task.FromResult(new PluginSessionStateInitializationResult(true));
+            }
+
+            var patch = context.CapabilityId switch
+            {
+                "tcp" => BuildTcpClientSessionPatch(doc.RootElement),
+                "udp" => BuildUdpClientSessionPatch(doc.RootElement),
+                "tcp.server" or "udp.listen" => BuildScopedSessionPatch(doc.RootElement),
+                _ => null
+            };
+
+            var storagePatch = new PluginSessionStoragePatch(SchemaVersion: 1);
+            return Task.FromResult(new PluginSessionStateInitializationResult(
+                true,
+                StoragePatch: storagePatch,
+                SessionPatch: patch));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new PluginSessionStateInitializationResult(false, ex.Message));
+        }
+    }
 
     public IReadOnlyList<PluginCapabilityDescriptor> GetCapabilities()
     {
@@ -383,18 +421,19 @@ public sealed class NetworkBusAdapterPlugin :
             var local = client.Client.LocalEndPoint as IPEndPoint;
             var remote = client.Client.RemoteEndPoint as IPEndPoint;
             var subtitle = FormatEndpointPair(local, remote);
+            var requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim();
             var committed = JsonSerializer.SerializeToElement(new
             {
                 host = FormatAddress(remote?.Address) ?? host,
                 port = remote?.Port ?? port,
                 remoteHost = FormatAddress(remote?.Address) ?? host,
                 remotePort = remote?.Port ?? port,
-                localHost = FormatAddress(local?.Address),
-                localPort = local?.Port,
+                localHost = requestedLocalHost,
+                localPort,
                 actualLocalHost = FormatAddress(local?.Address),
                 actualLocalPort = local?.Port,
-                requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim(),
-                requestedLocalPort = local?.Port ?? localPort,
+                requestedLocalHost = requestedLocalHost,
+                requestedLocalPort = localPort,
                 endpoint = subtitle,
                 connectTimeoutMs = timeoutMs
             });
@@ -478,16 +517,17 @@ public sealed class NetworkBusAdapterPlugin :
             var local = udp.Client.LocalEndPoint as IPEndPoint;
             var remote = udp.Client.RemoteEndPoint as IPEndPoint;
             var subtitle = FormatEndpointPair(local, remote);
+            var requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim();
             var committed = JsonSerializer.SerializeToElement(new
             {
                 remoteHost = FormatAddress(remote?.Address) ?? remoteHost,
                 remotePort = remote?.Port ?? remotePort,
-                localHost = FormatAddress(local?.Address),
-                localPort = local?.Port ?? localPort,
+                localHost = requestedLocalHost,
+                localPort,
                 actualLocalHost = FormatAddress(local?.Address),
                 actualLocalPort = local?.Port,
-                requestedLocalHost = string.IsNullOrWhiteSpace(localHost) ? string.Empty : localHost.Trim(),
-                requestedLocalPort = local?.Port ?? localPort,
+                requestedLocalHost = requestedLocalHost,
+                requestedLocalPort = localPort,
                 endpoint = subtitle
             });
 
@@ -731,7 +771,8 @@ public sealed class NetworkBusAdapterPlugin :
                 DisplayTitle: "Inbound TCP",
                 DisplaySubtitle: subtitle,
                 ParentSessionId: listenerSessionId,
-                SessionIcon: "NetworkIcon");
+                SessionIcon: "NetworkIcon",
+                CanReconnect: false);
         }
         catch (Exception ex)
         {
@@ -795,7 +836,8 @@ public sealed class NetworkBusAdapterPlugin :
             DisplayTitle: "Inbound UDP",
             DisplaySubtitle: subtitle,
             ParentSessionId: listenerSessionId,
-            SessionIcon: "NetworkIcon");
+            SessionIcon: "NetworkIcon",
+            CanReconnect: false);
     }
 
     private PluginCommandResult RejectPending(PluginActionCommand command)
@@ -1607,6 +1649,154 @@ public sealed class NetworkBusAdapterPlugin :
             MaxBytes = 4 * 1024 * 1024,
             SupportsWriterSwitch = true,
             GrowthStepBytes = 256 * 1024
+        };
+    }
+
+    private static PluginSessionMetadataPatch? BuildTcpClientSessionPatch(JsonElement parameters)
+    {
+        var changed = false;
+        var normalized = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        CopyOrMapString(parameters, normalized, "remoteHost", "host", ref changed);
+        CopyOrMapInt(parameters, normalized, "remotePort", "port", ref changed);
+        CopyRequestedOrCanonicalString(parameters, normalized, "localHost", "requestedLocalHost", ref changed);
+        CopyRequestedOrCanonicalInt(parameters, normalized, "localPort", "requestedLocalPort", ref changed);
+        CopyIfPresent(parameters, normalized, "connectTimeoutMs");
+        CopyIfPresent(parameters, normalized, "sessionName");
+
+        return changed
+            ? new PluginSessionMetadataPatch(ParametersJson: JsonSerializer.Serialize(normalized))
+            : null;
+    }
+
+    private static PluginSessionMetadataPatch? BuildUdpClientSessionPatch(JsonElement parameters)
+    {
+        var changed = false;
+        var normalized = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        CopyOrMapString(parameters, normalized, "remoteHost", "host", ref changed);
+        CopyOrMapInt(parameters, normalized, "remotePort", "port", ref changed);
+        CopyRequestedOrCanonicalString(parameters, normalized, "localHost", "requestedLocalHost", ref changed);
+        CopyRequestedOrCanonicalInt(parameters, normalized, "localPort", "requestedLocalPort", ref changed);
+        CopyIfPresent(parameters, normalized, "sessionName");
+
+        return changed
+            ? new PluginSessionMetadataPatch(ParametersJson: JsonSerializer.Serialize(normalized))
+            : null;
+    }
+
+    private static PluginSessionMetadataPatch? BuildScopedSessionPatch(JsonElement parameters)
+    {
+        var hasParent = !string.IsNullOrWhiteSpace(TryReadString(parameters, "listenerSessionId"));
+        return hasParent ? new PluginSessionMetadataPatch(CanReconnect: false) : null;
+    }
+
+    private static void CopyOrMapString(
+        JsonElement source,
+        Dictionary<string, object?> target,
+        string canonicalKey,
+        string fallbackKey,
+        ref bool changed)
+    {
+        var value = TryReadString(source, canonicalKey);
+        if (value is null)
+        {
+            value = TryReadString(source, fallbackKey);
+            if (value is not null)
+            {
+                changed = true;
+            }
+        }
+
+        if (value is not null)
+        {
+            target[canonicalKey] = value;
+        }
+    }
+
+    private static void CopyOrMapInt(
+        JsonElement source,
+        Dictionary<string, object?> target,
+        string canonicalKey,
+        string fallbackKey,
+        ref bool changed)
+    {
+        if (TryReadInt(source, canonicalKey, out var value))
+        {
+            target[canonicalKey] = value;
+            return;
+        }
+
+        if (TryReadInt(source, fallbackKey, out value))
+        {
+            target[canonicalKey] = value;
+            changed = true;
+        }
+    }
+
+    private static void CopyRequestedOrCanonicalString(
+        JsonElement source,
+        Dictionary<string, object?> target,
+        string canonicalKey,
+        string requestedKey,
+        ref bool changed)
+    {
+        if (TryReadString(source, requestedKey) is { } requested)
+        {
+            target[canonicalKey] = requested;
+            if (!string.Equals(TryReadString(source, canonicalKey), requested, StringComparison.Ordinal))
+            {
+                changed = true;
+            }
+
+            return;
+        }
+
+        if (TryReadString(source, canonicalKey) is { } canonical)
+        {
+            target[canonicalKey] = canonical;
+        }
+    }
+
+    private static void CopyRequestedOrCanonicalInt(
+        JsonElement source,
+        Dictionary<string, object?> target,
+        string canonicalKey,
+        string requestedKey,
+        ref bool changed)
+    {
+        if (TryReadInt(source, requestedKey, out var requested))
+        {
+            target[canonicalKey] = requested;
+            if (!TryReadInt(source, canonicalKey, out var canonical) || canonical != requested)
+            {
+                changed = true;
+            }
+
+            return;
+        }
+
+        if (TryReadInt(source, canonicalKey, out var value))
+        {
+            target[canonicalKey] = value;
+        }
+    }
+
+    private static void CopyIfPresent(JsonElement source, Dictionary<string, object?> target, string key)
+    {
+        if (!source.TryGetProperty(key, out var prop))
+        {
+            return;
+        }
+
+        target[key] = prop.ValueKind switch
+        {
+            JsonValueKind.String => prop.GetString(),
+            JsonValueKind.Number when prop.TryGetInt32(out var i) => i,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            _ => prop.Clone()
         };
     }
 

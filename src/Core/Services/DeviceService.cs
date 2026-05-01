@@ -93,6 +93,15 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             throw new InvalidOperationException("Cannot reconnect an existing session with a different plugin capability.");
         }
 
+        if (_sessions.TryGetValue(sessionId, out var reconnectState)
+            && !reconnectState.Session.CanReconnect
+            && string.IsNullOrWhiteSpace(scopeSessionId)
+            && string.IsNullOrWhiteSpace(resourceKind)
+            && string.IsNullOrWhiteSpace(resourceId))
+        {
+            throw new InvalidOperationException("This session does not support reconnect.");
+        }
+
         // Sessions are host-level entries. ParametersJson is committed only on successful connect.
         var session = GetOrCreateSession(sessionId, finalName, pluginId, capabilityId);
         session.Status = SessionStatus.Connecting;
@@ -385,6 +394,9 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             DisplayTitle = descriptor.DisplayTitle,
             DisplaySubtitle = descriptor.DisplaySubtitle,
             DisplayIcon = descriptor.DisplayIcon,
+            CanReconnect = descriptor.CanReconnect ?? string.IsNullOrWhiteSpace(descriptor.ParentSessionId),
+            InitializationState = descriptor.InitializationState,
+            InitializationError = descriptor.InitializationError,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
             ParentSessionId = descriptor.ParentSessionId,
             ManagedResourceKinds = descriptor.ManagedResourceKinds,
@@ -413,6 +425,9 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.DisplayTitle = session.DisplayTitle;
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.DisplayIcon = session.DisplayIcon;
+            state.Session.CanReconnect = session.CanReconnect;
+            state.Session.InitializationState = session.InitializationState;
+            state.Session.InitializationError = session.InitializationError;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
             state.Session.ParentSessionId = session.ParentSessionId;
             state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
@@ -423,6 +438,36 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         }
 
         _eventBus.Publish(new SessionCreatedEvent(state.Session));
+    }
+
+    public void UpdateSession(Session session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        if (!_sessions.TryGetValue(session.Id, out var state))
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(state.Session, session))
+        {
+            state.Session.Name = session.Name;
+            state.Session.AdapterId = session.AdapterId;
+            state.Session.PluginId = session.PluginId;
+            state.Session.CapabilityId = session.CapabilityId;
+            state.Session.ParametersJson = session.ParametersJson;
+            state.Session.DisplayTitle = session.DisplayTitle;
+            state.Session.DisplaySubtitle = session.DisplaySubtitle;
+            state.Session.DisplayIcon = session.DisplayIcon;
+            state.Session.CanReconnect = session.CanReconnect;
+            state.Session.InitializationState = session.InitializationState;
+            state.Session.InitializationError = session.InitializationError;
+            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.ParentSessionId = session.ParentSessionId;
+            state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
+        }
+
+        _eventBus.Publish(new SessionUpdatedEvent(state.Session));
     }
 
     public bool RemoveSession(string sessionId)
@@ -574,6 +619,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             session.DisplayTitle = result.DisplayTitle;
             session.DisplaySubtitle = result.DisplaySubtitle;
             session.DisplayIcon = result.SessionIcon;
+            session.CanReconnect = result.CanReconnect ?? string.IsNullOrWhiteSpace(result.ParentSessionId);
             session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
 
             if (!string.IsNullOrWhiteSpace(result.ParentSessionId))

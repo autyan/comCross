@@ -162,6 +162,7 @@ public sealed class ExtensionBridgeService : IDisposable
                 session.DisplayTitle,
                 session.DisplaySubtitle,
                 session.DisplayIcon,
+                session.CanReconnect,
                 session.ManagedResourceKinds,
                 session.ParametersJson,
                 session.RxBytes,

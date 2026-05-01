@@ -19,6 +19,7 @@ public sealed class WorkspaceService
     private readonly NotificationService _notificationService;
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
+    private readonly PluginSessionInitializationService _sessionInitializationService;
     private readonly IEventBus _eventBus;
 
     private bool _sessionsRestored;
@@ -30,6 +31,7 @@ public sealed class WorkspaceService
         NotificationService notificationService,
         WorkspaceStateStore workspaceStateStore,
         WorkloadService workloadService,
+        PluginSessionInitializationService sessionInitializationService,
         IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
@@ -38,6 +40,7 @@ public sealed class WorkspaceService
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
+        _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
     }
 
@@ -235,6 +238,7 @@ public sealed class WorkspaceService
         {
             RestoreSessionsFromState(state);
             _sessionsRestored = true;
+            await _sessionInitializationService.InitializeRestoredSessionsAsync(cancellationToken);
         }
         
         return state;
@@ -398,6 +402,9 @@ public sealed class WorkspaceService
                 DisplayTitle = s.DisplayTitle,
                 DisplaySubtitle = s.DisplaySubtitle,
                 DisplayIcon = s.DisplayIcon,
+                CanReconnect = s.CanReconnect,
+                InitializationState = s.InitializationState,
+                InitializationError = s.InitializationError,
                 EnableDatabaseStorage = s.EnableDatabaseStorage,
                 ParentSessionId = s.ParentSessionId,
                 ManagedResourceKinds = s.ManagedResourceKinds.ToList()
@@ -407,9 +414,20 @@ public sealed class WorkspaceService
         return _workspaceStateStore.UpdateAsync(state =>
         {
             var runtimeIds = sessionDescriptors.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var existingById = state.SessionDescriptors
+                .Where(d => !string.IsNullOrWhiteSpace(d.Id))
+                .ToDictionary(d => d.Id, StringComparer.Ordinal);
             var merged = new List<SessionDescriptor>(sessionDescriptors.Count + state.SessionDescriptors.Count);
 
             // The caller-provided session sequence is the current UI/runtime order and is authoritative.
+            foreach (var descriptor in sessionDescriptors)
+            {
+                if (existingById.TryGetValue(descriptor.Id, out var existing))
+                {
+                    descriptor.LastInitializedPluginVersion = existing.LastInitializedPluginVersion;
+                    descriptor.StorageSchemaVersion = existing.StorageSchemaVersion;
+                }
+            }
             merged.AddRange(sessionDescriptors);
 
             // Preserve descriptors that are not currently materialized in DeviceService, without letting

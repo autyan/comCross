@@ -140,6 +140,11 @@ public class MainWindowViewModel : BaseViewModel
         get => _isSessionReconnectEditorOpen;
         set
         {
+            if (value && !LeftSidebar.CanShowConnectionParameters)
+            {
+                value = false;
+            }
+
             if (SetProperty(ref _isSessionReconnectEditorOpen, value) && value && SessionDetailSession is not null)
             {
                 LeftSidebar.ReconnectEditorSelectorViewModel.PrepareReconnect(SessionDetailSession);
@@ -338,7 +343,7 @@ public class MainWindowViewModel : BaseViewModel
         OpenSessionDetailCommand = new RelayCommand(() => OpenSessionDetail(LeftSidebar.ActiveSession));
         ToggleSessionReconnectEditorCommand = new RelayCommand(
             () => IsSessionReconnectEditorOpen = !IsSessionReconnectEditorOpen,
-            () => SessionDetailSession is not null);
+            () => SessionDetailSession is not null && LeftSidebar.CanShowConnectionParameters);
         DirectReconnectCommand = new AsyncRelayCommand(
             async () =>
             {
@@ -464,7 +469,7 @@ public class MainWindowViewModel : BaseViewModel
         IsNotificationsOpen = false;
         ActiveSession = session;
         SessionDetailSession = session;
-        IsSessionReconnectEditorOpen = openReconnectEditor;
+        IsSessionReconnectEditorOpen = openReconnectEditor && LeftSidebar.CanShowConnectionParameters;
         IsSessionDetailOpen = true;
         (ToggleSessionReconnectEditorCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (DirectReconnectCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

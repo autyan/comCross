@@ -40,6 +40,8 @@ internal sealed class PluginHostRequestRouter
                 return await DisconnectHandler.HandleAsync(request, _state, _jsonOptions, cancellationToken);
             case PluginHostMessageTypes.GetUiState:
                 return GetUiStateHandler.Handle(request, _state, _jsonOptions);
+            case PluginHostMessageTypes.InitializeSessionState:
+                return await InitializeSessionStateHandler.HandleAsync(request, _state, _jsonOptions, cancellationToken);
             case PluginHostMessageTypes.ApplySharedMemorySegment:
                 return ApplySharedMemorySegmentHandler.Handle(request, _state, _jsonOptions);
             case PluginHostMessageTypes.SetBackpressure:

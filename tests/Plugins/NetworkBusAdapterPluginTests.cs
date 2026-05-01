@@ -56,6 +56,7 @@ public sealed class NetworkBusAdapterPluginTests
         Assert.True(bindResult.Ok, bindResult.Error);
         Assert.Equal("listener-tcp", bindResult.ParentSessionId);
         Assert.Equal("NetworkIcon", bindResult.SessionIcon);
+        Assert.False(bindResult.CanReconnect);
 
         await plugin.DisconnectAsync(new PluginDisconnectCommand("child-tcp"), CancellationToken.None);
         await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-tcp"), CancellationToken.None);
@@ -108,6 +109,7 @@ public sealed class NetworkBusAdapterPluginTests
         Assert.True(bindResult.Ok, bindResult.Error);
         Assert.Equal("listener-udp", bindResult.ParentSessionId);
         Assert.Equal("NetworkIcon", bindResult.SessionIcon);
+        Assert.False(bindResult.CanReconnect);
 
         await plugin.DisconnectAsync(new PluginDisconnectCommand("child-udp"), CancellationToken.None);
         await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-udp"), CancellationToken.None);
@@ -307,7 +309,7 @@ public sealed class NetworkBusAdapterPluginTests
     }
 
     [Fact]
-    public async Task TcpClient_ConnectResult_CommitsEphemeralLocalPortForReconnect()
+    public async Task TcpClient_ConnectResult_PreservesRequestedLocalPortForReconnect()
     {
         var plugin = new NetworkBusAdapterPlugin();
         var listenPort = GetFreeTcpPort();
@@ -334,8 +336,8 @@ public sealed class NetworkBusAdapterPluginTests
             var committed = result.CommittedParameters!.Value;
             var actualLocalPort = committed.GetProperty("actualLocalPort").GetInt32();
             Assert.True(actualLocalPort > 0);
-            Assert.Equal(actualLocalPort, committed.GetProperty("localPort").GetInt32());
-            Assert.Equal(actualLocalPort, committed.GetProperty("requestedLocalPort").GetInt32());
+            Assert.Equal(0, committed.GetProperty("localPort").GetInt32());
+            Assert.Equal(0, committed.GetProperty("requestedLocalPort").GetInt32());
 
             using var accepted = await acceptTask;
             await plugin.DisconnectAsync(new PluginDisconnectCommand("tcp-client-ephemeral-local"), CancellationToken.None);
@@ -344,6 +346,58 @@ public sealed class NetworkBusAdapterPluginTests
         {
             listener.Stop();
         }
+    }
+
+    [Fact]
+    public async Task StartupInitialization_NormalizesTcpClientReconnectParameters()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var parameters = JsonSerializer.Serialize(new
+        {
+            remoteHost = "127.0.0.1",
+            remotePort = 9000,
+            localHost = "127.0.0.1",
+            localPort = 54321,
+            requestedLocalHost = "127.0.0.1",
+            requestedLocalPort = 0,
+            connectTimeoutMs = 3000
+        });
+
+        var result = await plugin.InitializeSessionStateAsync(
+            NewInitializationContext("tcp", parameters),
+            CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Equal(1, result.StoragePatch?.SchemaVersion);
+        Assert.NotNull(result.SessionPatch?.ParametersJson);
+
+        using var doc = JsonDocument.Parse(result.SessionPatch!.ParametersJson!);
+        var normalized = doc.RootElement;
+        Assert.Equal("127.0.0.1", normalized.GetProperty("remoteHost").GetString());
+        Assert.Equal(9000, normalized.GetProperty("remotePort").GetInt32());
+        Assert.Equal("127.0.0.1", normalized.GetProperty("localHost").GetString());
+        Assert.Equal(0, normalized.GetProperty("localPort").GetInt32());
+        Assert.Equal(3000, normalized.GetProperty("connectTimeoutMs").GetInt32());
+    }
+
+    [Fact]
+    public async Task StartupInitialization_MarksScopedSessionsAsNonReconnectable()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var parameters = JsonSerializer.Serialize(new
+        {
+            mode = "bind",
+            listenerSessionId = "listener-tcp",
+            pendingId = "pending-1"
+        });
+
+        var result = await plugin.InitializeSessionStateAsync(
+            NewInitializationContext("tcp.server", parameters),
+            CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.False(result.SessionPatch?.CanReconnect);
+        Assert.Equal(1, result.StoragePatch?.SchemaVersion);
     }
 
     [Fact]
@@ -467,6 +521,20 @@ public sealed class NetworkBusAdapterPluginTests
         }
 
         return null;
+    }
+
+    private static PluginSessionStateInitializationContext NewInitializationContext(
+        string capabilityId,
+        string parametersJson)
+    {
+        return new PluginSessionStateInitializationContext(
+            "network.adapter",
+            capabilityId,
+            $"session-{capabilityId}",
+            "1.0.0",
+            PreviousPluginVersion: null,
+            parametersJson,
+            new PluginSessionStorageSnapshot(0, new Dictionary<string, JsonElement>()));
     }
 
     private static async Task<PluginSessionClosedEvent> WaitForSessionClosedAsync(

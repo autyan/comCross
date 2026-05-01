@@ -250,6 +250,7 @@
                                                         VerticalAlignment="Center">
                                                 <Button Classes="prototype-plain prototype-lift"
                                                         Padding="0"
+                                                        IsVisible="{Binding CanShowConnectionParameters}"
                                                         Click="OnSessionConnectionParametersClick">
                                                     <TextBlock Text="连接参数"
                                                                FontSize="11"

@@ -12,25 +12,25 @@
             BorderThickness="1"
             CornerRadius="8"
             Padding="12"
-            IsVisible="{Binding IsNetworkSelectionMode}">
+            IsVisible="{Binding IsSessionContextMode}">
       <StackPanel Spacing="10">
         <StackPanel Spacing="4">
-          <TextBlock Text="{Binding NetworkSelectionTitle}"
+          <TextBlock Text="{Binding SessionContextTitle}"
                      FontSize="13"
                      FontWeight="SemiBold"
                      Foreground="#E6EDF3" />
-          <TextBlock Text="{Binding NetworkSelectionEndpoint}"
+          <TextBlock Text="{Binding SessionContextEndpoint}"
                      FontSize="11"
                      FontFamily="JetBrains Mono, Consolas, monospace"
                      Foreground="#93A0AC"
-                     IsVisible="{Binding NetworkSelectionEndpoint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                     IsVisible="{Binding SessionContextEndpoint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
 
         <Grid ColumnDefinitions="*,*">
           <Border Grid.Column="0" Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,4,0">
             <StackPanel Spacing="2">
               <TextBlock Text="{Binding L[network.session.status]}" FontSize="10" Foreground="#87909B" />
-              <TextBlock Text="{Binding NetworkSelectionStatus}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+              <TextBlock Text="{Binding SessionContextStatus}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
             </StackPanel>
           </Border>
           <Border Grid.Column="1" Background="#11181D" BorderBrush="#25303A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="4,0,0,0"
@@ -47,10 +47,10 @@
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="10,8"
-                IsVisible="{Binding NetworkParentDisplayName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                IsVisible="{Binding ParentSessionDisplayName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <StackPanel Spacing="2">
             <TextBlock Text="{Binding L[network.session.parent]}" FontSize="10" Foreground="#87909B" />
-            <TextBlock Text="{Binding NetworkParentDisplayName}" FontSize="12" Foreground="#E6EDF3" />
+            <TextBlock Text="{Binding ParentSessionDisplayName}" FontSize="12" Foreground="#E6EDF3" />
           </StackPanel>
         </Border>
 

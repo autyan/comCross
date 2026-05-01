@@ -91,6 +91,11 @@ public sealed class SessionDescriptor
     public string? DisplaySubtitle { get; set; }
     public string? DisplayIcon { get; set; }
     public bool EnableDatabaseStorage { get; set; }
+    public bool? CanReconnect { get; set; }
+    public SessionInitializationState InitializationState { get; set; } = SessionInitializationState.Pending;
+    public string? InitializationError { get; set; }
+    public string? LastInitializedPluginVersion { get; set; }
+    public int StorageSchemaVersion { get; set; }
 
     public string? ParentSessionId { get; set; }
     public List<string> ManagedResourceKinds { get; set; } = new();

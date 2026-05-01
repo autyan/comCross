@@ -22,6 +22,7 @@ public sealed record ExtensionSessionSnapshot(
     string? DisplayTitle,
     string? DisplaySubtitle,
     string? DisplayIcon,
+    bool CanReconnect,
     IReadOnlyList<string> ManagedResourceKinds,
     string? ParametersJson,
     long RxBytes,

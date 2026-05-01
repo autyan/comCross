@@ -28,6 +28,13 @@ public sealed record SessionCreatedEvent(
 ) : SystemEvent;
 
 /// <summary>
+/// Session metadata or operational state changed after initial creation.
+/// </summary>
+public sealed record SessionUpdatedEvent(
+    Session Session
+) : SystemEvent;
+
+/// <summary>
 /// Connection status changed event
 /// </summary>
 public sealed record ConnectionStatusChangedEvent(

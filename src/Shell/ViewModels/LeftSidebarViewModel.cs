@@ -41,6 +41,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private readonly IItemVmFactory<SessionListItemViewModel, Session> _sessionItemFactory;
 
     private readonly IDisposable _sessionCreatedSubscription;
+    private readonly IDisposable _sessionUpdatedSubscription;
     private readonly IDisposable _sessionClosedSubscription;
     private readonly IDisposable _sessionDeletedSubscription;
     private readonly IDisposable _workloadSessionMembershipChangedSubscription;
@@ -87,6 +88,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         _sessionItemFactory = sessionItemFactory;
 
         _sessionCreatedSubscription = _eventBus.Subscribe<SessionCreatedEvent>(OnSessionCreated);
+        _sessionUpdatedSubscription = _eventBus.Subscribe<SessionUpdatedEvent>(OnSessionUpdated);
         _sessionClosedSubscription = _eventBus.Subscribe<SessionClosedEvent>(OnSessionClosed);
         _sessionDeletedSubscription = _eventBus.Subscribe<SessionDeletedEvent>(OnSessionDeleted);
         _workloadSessionMembershipChangedSubscription = _eventBus.Subscribe<WorkloadSessionMembershipChangedEvent>(OnWorkloadSessionMembershipChanged);
@@ -126,7 +128,10 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     private void HandleActiveSessionPropertyChanged(string? propertyName)
     {
-        if (propertyName == nameof(Session.Status) || string.IsNullOrEmpty(propertyName))
+        if (propertyName == nameof(Session.Status)
+            || propertyName == nameof(Session.CanReconnect)
+            || propertyName == nameof(Session.InitializationState)
+            || string.IsNullOrEmpty(propertyName))
         {
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
             SyncReconnectSurface();
@@ -217,7 +222,15 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public bool CanReconnectActiveSession
         => _activeSession?.Id is { Length: > 0 }
+           && _activeSession.InitializationState == SessionInitializationState.Ready
            && _activeSession.Status != SessionStatus.Connected
+           && _activeSession.CanReconnect
+           && !string.IsNullOrWhiteSpace(_activeSession.AdapterId);
+
+    public bool CanShowConnectionParameters
+        => _activeSession?.Id is { Length: > 0 }
+           && _activeSession.InitializationState == SessionInitializationState.Ready
+           && _activeSession.CanReconnect
            && !string.IsNullOrWhiteSpace(_activeSession.AdapterId);
 
     public string QuickCreateTabLabel => L["sidebar.tab.quickCreate"];
@@ -323,6 +336,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
             OnPropertyChanged(nameof(HasActiveSession));
             OnPropertyChanged(nameof(CanReconnectActiveSession));
+            OnPropertyChanged(nameof(CanShowConnectionParameters));
             OnPropertyChanged(nameof(CurrentSessionName));
             OnPropertyChanged(nameof(CurrentSessionEndpoint));
             OnPropertyChanged(nameof(CurrentSessionRxBytes));
@@ -350,6 +364,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     private void SyncReconnectSurface()
     {
         var editableSession = _activeSession is not null
+            && _activeSession.CanReconnect
             && !string.IsNullOrWhiteSpace(_activeSession.AdapterId)
             ? _activeSession
             : null;
@@ -362,6 +377,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         }
 
         OnPropertyChanged(nameof(CanReconnectActiveSession));
+        OnPropertyChanged(nameof(CanShowConnectionParameters));
         DirectReconnectCommand.RaiseCanExecuteChanged();
     }
 
@@ -469,18 +485,24 @@ public sealed class LeftSidebarViewModel : BaseViewModel
     }
 
     private void OnSessionCreated(SessionCreatedEvent e)
+        => UpsertSession(e.Session);
+
+    private void OnSessionUpdated(SessionUpdatedEvent e)
+        => UpsertSession(e.Session);
+
+    private void UpsertSession(Session session)
     {
         Dispatcher.UIThread.Post(() =>
         {
-            var existing = Sessions.FirstOrDefault(s => s.Id == e.Session.Id);
+            var existing = Sessions.FirstOrDefault(s => s.Id == session.Id);
             if (existing is null)
             {
-                Sessions.Add(e.Session);
-                existing = e.Session;
+                Sessions.Add(session);
+                existing = session;
             }
             else
             {
-                ApplySessionUpdate(existing, e.Session);
+                ApplySessionUpdate(existing, session);
             }
 
             EnsureConnectionIndex(existing);
@@ -526,6 +548,9 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         target.DisplayTitle = source.DisplayTitle;
         target.DisplaySubtitle = source.DisplaySubtitle;
         target.DisplayIcon = source.DisplayIcon;
+        target.CanReconnect = source.CanReconnect;
+        target.InitializationState = source.InitializationState;
+        target.InitializationError = source.InitializationError;
         target.EnableDatabaseStorage = source.EnableDatabaseStorage;
         target.ParentSessionId = source.ParentSessionId;
         target.ManagedResourceKinds = source.ManagedResourceKinds;
@@ -737,6 +762,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         {
             _pluginManager.PluginsReloaded -= _pluginsReloadedHandler;
             _sessionCreatedSubscription.Dispose();
+            _sessionUpdatedSubscription.Dispose();
             _sessionClosedSubscription.Dispose();
             _sessionDeletedSubscription.Dispose();
             _workloadSessionMembershipChangedSubscription.Dispose();

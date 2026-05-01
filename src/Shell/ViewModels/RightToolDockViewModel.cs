@@ -133,7 +133,10 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
     public bool IsSendTabActive => _selectedToolTab == ToolDockTab.Send;
     public bool IsCommandsTabActive => _selectedToolTab == ToolDockTab.Commands;
-    public bool CanSend => IsConnected && !string.IsNullOrWhiteSpace(MessageInput);
+    public bool CanSend
+        => IsConnected
+           && _activeSession?.InitializationState == SessionInitializationState.Ready
+           && !string.IsNullOrWhiteSpace(MessageInput);
     public bool CanClearInput => !string.IsNullOrWhiteSpace(MessageInput);
 
     public bool HasQuickCommands => QuickCommands.Count > 0;
@@ -171,7 +174,8 @@ public sealed class RightToolDockViewModel : BaseViewModel
             return;
         }
 
-        if (string.Equals(e.PropertyName, nameof(Session.Status), StringComparison.Ordinal))
+        if (string.Equals(e.PropertyName, nameof(Session.Status), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(Session.InitializationState), StringComparison.Ordinal))
         {
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
             OnPropertyChanged(nameof(CanSend));

@@ -137,12 +137,32 @@ Common metadata:
 - `DisplayTitle`: user-facing title for the session.
 - `DisplaySubtitle`: user-facing endpoint or detail text.
 - `SessionIcon`: icon resource key such as `NetworkIcon`, `ServerIcon`, `CableIcon`, or a plugin-provided icon reference.
+- `CanReconnect`: whether the created session can be reconnected by the host. Omit it for the default `true`.
 - `ParentSessionId`: parent session id when the new session belongs under another session.
 - `ManagedResourceKinds`: resource kinds the session owns, such as `pending`.
 
 Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
+Passive child sessions created from an accepted resource should set `CanReconnect` to `false` when the host cannot actively recreate that session.
 
-## 11) Notes
+## 11) Startup Session State Initialization
+
+Plugins can implement `IPluginSessionStateInitializer` when persisted session state needs plugin-owned validation, normalization, or migration at startup.
+
+Core restores session descriptors first, then calls the owning plugin once during startup initialization. While this is running, the session is unavailable to Shell actions. Core applies the returned session metadata patch and session-scoped storage patch as one update, publishes `SessionUpdatedEvent`, and then marks the session ready.
+
+The initializer receives:
+- plugin id, capability id, session id, and plugin version
+- the persisted session `ParametersJson`
+- plugin-owned session storage as a schema version plus JSON values
+
+The initializer returns:
+- `PluginSessionMetadataPatch` for host-visible session fields such as parameters, display metadata, reconnect policy, parent session id, and managed resource kinds
+- `PluginSessionStoragePatch` for plugin-owned session storage
+- `Ok=false` with `Error` when the session cannot be made usable
+
+Core owns the state transition and persistence. Plugins should not access workspace files directly for this flow. If the plugin is unavailable or the initializer fails, the session remains visible but unavailable until the user deletes it or a later startup can initialize it.
+
+## 12) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.
