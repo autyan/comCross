@@ -57,8 +57,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly IDisposable _pluginUiInvalidatedSubscription;
     private int _managedSessionCount;
     private string? _parentSessionDisplayName;
-    private bool _forceCreateMode;
-    private string? _reconnectTargetSessionId;
+    private ConnectionEditorContext _editorContext = ConnectionEditorContext.Create();
     private PluginResourceActionDescriptor? _rejectAllPendingAction;
 
     public BusAdapterSelectorViewModel(
@@ -121,7 +120,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             // Refresh current config panel so plugin UI labels/layout switch with language.
             if (_selectedAdapter?.PluginId != null && _selectedAdapter.CapabilityId != null)
             {
-                _uiRenderer.ClearCache(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, _activeSessionId, _viewKind, _viewInstanceId);
+                _uiRenderer.ClearCache(_selectedAdapter.PluginId, _selectedAdapter.CapabilityId, _editorContext.StateSessionId, _viewKind, _viewInstanceId);
                 _ = LoadConfigPanelAsync();
             }
         };
@@ -157,9 +156,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public bool IsConnected => _activeSession?.Status == SessionStatus.Connected;
 
     public bool IsSessionContextMode
-        => !_forceCreateMode && _activeSession is not null;
+        => _editorContext.Mode == ConnectionEditorMode.SessionContext && _activeSession is not null;
 
-    public bool IsCreateMode => _forceCreateMode || _activeSession is null;
+    public bool IsCreateMode => _editorContext.Mode is ConnectionEditorMode.Create or ConnectionEditorMode.Reconnect;
 
     public bool IsManagedResourceMode
         => IsSessionContextMode && _activeSession?.HasManagedResourceKind(PluginResourceKinds.Pending) == true;
@@ -335,9 +334,9 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        _forceCreateMode = session is not null;
-        _reconnectTargetSessionId = session?.Id;
-        SetActiveSession(session);
+        SetEditorContext(session is null
+            ? ConnectionEditorContext.Create()
+            : ConnectionEditorContext.Reconnect(session));
         _ = LoadConfigPanelAsync();
     }
 
@@ -429,6 +428,13 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
+        SetEditorContext(session is null
+            ? ConnectionEditorContext.Create()
+            : ConnectionEditorContext.SessionContext(session));
+    }
+
+    private void SetEditorContext(ConnectionEditorContext context)
+    {
         var previousSessionId = _activeSessionId;
 
         if (_activeSession != null)
@@ -436,27 +442,14 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             _activeSession.PropertyChanged -= _activeSessionPropertyChangedHandler;
         }
 
+        _editorContext = context;
+        var session = context.Session;
         _activeSession = session;
-        _activeSessionId = session?.Id;
-
-        _logger?.LogInformation(
-            "BusAdapter VM SetActiveSession: prev={PrevSessionId} next={NextSessionId} adapterId={AdapterId} hasParams={HasParams}",
-            previousSessionId,
-            _activeSessionId,
-            session?.AdapterId,
-            !string.IsNullOrWhiteSpace(session?.ParametersJson));
+        _activeSessionId = context.SessionId;
 
         if (_activeSession != null)
         {
             _activeSession.PropertyChanged += _activeSessionPropertyChangedHandler;
-        }
-
-        if (_activeSession is not null && _activeSession.ParentSessionId is not null && _activeSession.CanReconnect)
-        {
-            _logger?.LogDebug(
-                "Session has parent topology but allows reconnect: SessionId={SessionId}, ParentSessionId={ParentSessionId}",
-                _activeSession.Id,
-                _activeSession.ParentSessionId);
         }
 
         RefreshConnectionCommandState();
@@ -497,7 +490,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         // (Controls registered after UpdateStates won't receive values until SwitchContext is called.)
         {
             var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
-            _stateManager.SwitchContext(viewScope, _activeSessionId);
+            _stateManager.SwitchContext(viewScope, _editorContext.StateSessionId);
         }
     }
 
@@ -515,19 +508,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
 
             ApplyCommittedSessionState(session);
-
-            var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
-            var seeded = _stateManager.GetState(viewScope, session.Id);
-            seeded.TryGetValue("port", out var seededPort);
-            seeded.TryGetValue("remoteHost", out var seededRemoteHost);
-            seeded.TryGetValue("remotePort", out var seededRemotePort);
-            _logger?.LogInformation(
-                "Prepared reconnect editor state: session={SessionId} keys={KeyCount} port={Port} remoteHost={RemoteHost} remotePort={RemotePort}",
-                session.Id,
-                seeded.Count,
-                seededPort?.ToString(),
-                seededRemoteHost?.ToString(),
-                seededRemotePort?.ToString());
         }
         finally
         {
@@ -948,8 +928,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        // Use the currently bound state bucket (active session if present, otherwise default).
-        var stateKey = _reconnectTargetSessionId ?? _activeSessionId;
+        var stateKey = _editorContext.StateSessionId;
         var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
         var currentState = _stateManager.GetState(viewScope, stateKey);
 
@@ -983,7 +962,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         // Only explicit reconnect reuses a session id. Plain connect always creates a new session.
-        var targetSessionId = _reconnectTargetSessionId;
+        var targetSessionId = _editorContext.ReconnectSessionId;
         if (targetSessionId is not null && _activeSession?.CanReconnect != true)
         {
             return;
@@ -1140,14 +1119,16 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private void ApplyActiveSessionSnapshot(Session session)
     {
         if (!string.Equals(_activeSessionId, session.Id, StringComparison.Ordinal)
-            && !string.Equals(_reconnectTargetSessionId, session.Id, StringComparison.Ordinal))
+            && !string.Equals(_editorContext.ReconnectSessionId, session.Id, StringComparison.Ordinal))
         {
             return;
         }
 
         if (!ReferenceEquals(_activeSession, session))
         {
-            SetActiveSession(session);
+            SetEditorContext(_editorContext.Mode == ConnectionEditorMode.Reconnect
+                ? ConnectionEditorContext.Reconnect(session)
+                : ConnectionEditorContext.SessionContext(session));
             return;
         }
 
@@ -1242,15 +1223,16 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
 
         var generation = System.Threading.Interlocked.Increment(ref _panelLoadGeneration);
+        var expectedContext = _editorContext;
         var adapter = _selectedAdapter;
-        var expectedSessionId = _activeSessionId;
+        var stateSessionId = expectedContext.StateSessionId;
         var expectedAdapterId = adapter?.Id;
         var viewScope = PluginUiViewScope.From(_viewKind, _viewInstanceId);
         ConfigPanel = null;
 
         bool IsStale()
             => generation != System.Threading.Volatile.Read(ref _panelLoadGeneration)
-               || !string.Equals(expectedSessionId, _activeSessionId, StringComparison.Ordinal)
+               || !Equals(expectedContext, _editorContext)
                || !string.Equals(expectedAdapterId, _selectedAdapter?.Id, StringComparison.Ordinal);
 
         if (adapter?.ConfigPanelType != null)
@@ -1309,14 +1291,14 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                      var uiState = await _pluginManager.TryGetUiStateAsync(
                          adapter.PluginId,
                          adapter.CapabilityId,
-                         sessionId: _activeSessionId,
+                         sessionId: stateSessionId,
                          viewKind: _viewKind,
                          viewInstanceId: _viewInstanceId,
                          resourceKind: null,
                          resourceId: null,
                          timeout: TimeSpan.FromSeconds(2));
 
-                     if (uiState is null && !string.IsNullOrWhiteSpace(_activeSessionId))
+                     if (uiState is null && !string.IsNullOrWhiteSpace(stateSessionId))
                      {
                          uiState = await _pluginManager.TryGetUiStateAsync(
                              adapter.PluginId,
@@ -1339,11 +1321,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                              // Merge strategy:
                              // - Always apply option keys (e.g. select options like "ports")
                              // - For all other keys, only fill when the current state is missing/blank
-                             var current = _stateManager.GetState(viewScope, _activeSessionId);
+                             var current = _stateManager.GetState(viewScope, stateSessionId);
                              var toApply = new Dictionary<string, object>(StringComparer.Ordinal);
-                             var forced = 0;
-                             var filled = 0;
-                             var skipped = 0;
 
                              foreach (var kvp in dict)
                              {
@@ -1358,34 +1337,19 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                                  if (forceUpdate)
                                  {
                                      toApply[kvp.Key] = kvp.Value;
-                                     forced++;
                                      continue;
                                  }
 
                                  if (!current.TryGetValue(kvp.Key, out var existing) || IsNullOrBlank(existing))
                                  {
                                      toApply[kvp.Key] = kvp.Value;
-                                     filled++;
-                                 }
-                                 else
-                                 {
-                                     skipped++;
                                  }
                              }
 
                              if (toApply.Count > 0)
                              {
-                                 _stateManager.UpdateStates(viewScope, _activeSessionId, toApply);
+                                 _stateManager.UpdateStates(viewScope, stateSessionId, toApply);
                              }
-
-                             _logger?.LogInformation(
-                                 "Merged uiState into session state: session={SessionId} total={Total} applied={Applied} forced={Forced} filled={Filled} skipped={Skipped}",
-                                 _activeSessionId,
-                                 dict.Count,
-                                 toApply.Count,
-                                 forced,
-                                 filled,
-                                 skipped);
 
                              if (fields is { Count: > 0 })
                              {
@@ -1393,7 +1357,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                                  var projected = ProjectDefaults(dict, fields);
                                  if (projected.Count > 0)
                                  {
-                                     var after = _stateManager.GetState(viewScope, _activeSessionId);
+                                     var after = _stateManager.GetState(viewScope, stateSessionId);
                                      var projectedToApply = new Dictionary<string, object>(StringComparer.Ordinal);
                                      foreach (var kvp in projected)
                                      {
@@ -1405,14 +1369,8 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
                                      if (projectedToApply.Count > 0)
                                      {
-                                         _stateManager.UpdateStates(viewScope, _activeSessionId, projectedToApply);
+                                         _stateManager.UpdateStates(viewScope, stateSessionId, projectedToApply);
                                      }
-
-                                     _logger?.LogInformation(
-                                         "Applied projected defaults: session={SessionId} total={Total} applied={Applied}",
-                                         _activeSessionId,
-                                         projected.Count,
-                                         projectedToApply.Count);
                                  }
                              }
                          }
@@ -1433,7 +1391,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                  var schema = uiSchema ?? new PluginUiSchema { Fields = fields };
                  schema.Fields = fields;
 
-                 if (_activeSessionId is null)
+                 if (stateSessionId is null)
                  {
                      await _pluginUiConfigService.SeedStateAsync(
                          pluginId,
@@ -1449,51 +1407,15 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                      && string.Equals(adapter.PluginId, SerialPluginId, StringComparison.Ordinal)
                      && string.Equals(adapter.CapabilityId, SerialCapabilityId, StringComparison.Ordinal))
                  {
-                     try
-                     {
-                         var before = _stateManager.GetState(viewScope, _activeSessionId);
-                         before.TryGetValue("port", out var beforePort);
-                         before.TryGetValue("ports", out var beforePorts);
-                         _logger?.LogInformation(
-                             "Serial UI init (before): session={SessionId} port={Port} portType={PortType} portsType={PortsType} portsCount={PortsCount}",
-                             _activeSessionId,
-                             beforePort?.ToString(),
-                             beforePort?.GetType().FullName,
-                             beforePorts?.GetType().FullName,
-                             TryGetEnumerableCount(beforePorts));
-                     }
-                     catch
-                     {
-                         // best-effort diagnostics
-                     }
-
                      await _serialPorts.InitializeSerialUiAsync(
                          pluginId,
                          capabilityId,
-                         _activeSessionId,
+                         stateSessionId,
                          schema);
-
-                     try
-                     {
-                         var after = _stateManager.GetState(viewScope, _activeSessionId);
-                         after.TryGetValue("port", out var afterPort);
-                         after.TryGetValue("ports", out var afterPorts);
-                         _logger?.LogInformation(
-                             "Serial UI init (after): session={SessionId} port={Port} portType={PortType} portsType={PortsType} portsCount={PortsCount}",
-                             _activeSessionId,
-                             afterPort?.ToString(),
-                             afterPort?.GetType().FullName,
-                             afterPorts?.GetType().FullName,
-                             TryGetEnumerableCount(afterPorts));
-                     }
-                     catch
-                     {
-                         // best-effort diagnostics
-                     }
                  }
 
-                 _uiRenderer.ClearCache(pluginId, capabilityId, _activeSessionId, _viewKind, _viewInstanceId);
-                 var container = _uiRenderer.GetOrRender(pluginId, capabilityId, schema, _activeSessionId, _viewKind, _viewInstanceId);
+                 _uiRenderer.ClearCache(pluginId, capabilityId, stateSessionId, _viewKind, _viewInstanceId);
+                 var container = _uiRenderer.GetOrRender(pluginId, capabilityId, schema, stateSessionId, _viewKind, _viewInstanceId);
                  if (container is AvaloniaPluginUiContainer avaloniaContainer)
                  {
                      if (IsStale())
@@ -1504,28 +1426,11 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                      ConfigPanel = avaloniaContainer.GetPanel();
 
                      // Ensure newly created/registered controls receive cached state.
-                     _stateManager.SwitchContext(viewScope, _activeSessionId);
-                     if (_activeSession is not null && string.Equals(_activeSession.Id, _activeSessionId, StringComparison.Ordinal))
+                     _stateManager.SwitchContext(viewScope, stateSessionId);
+                     if (_activeSession is not null && string.Equals(_activeSession.Id, stateSessionId, StringComparison.Ordinal))
                      {
                          ApplyCommittedSessionState(_activeSession);
-                         _stateManager.SwitchContext(viewScope, _activeSessionId);
-                     }
-
-                     try
-                     {
-                         var refreshed = _stateManager.GetState(viewScope, _activeSessionId);
-                         refreshed.TryGetValue("port", out var refreshedPort);
-                         refreshed.TryGetValue("ports", out var refreshedPorts);
-                         _logger?.LogInformation(
-                             "After SwitchContext: session={SessionId} port={Port} portType={PortType} portsCount={PortsCount}",
-                             _activeSessionId,
-                             refreshedPort?.ToString(),
-                             refreshedPort?.GetType().FullName,
-                             TryGetEnumerableCount(refreshedPorts));
-                     }
-                     catch
-                     {
-                         // best-effort diagnostics
+                         _stateManager.SwitchContext(viewScope, stateSessionId);
                      }
                  }
                  else
@@ -1563,7 +1468,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private void OnSessionCreated(SessionCreatedEvent evt)
     {
         if (string.Equals(evt.Session.Id, _activeSessionId, StringComparison.Ordinal)
-            || string.Equals(evt.Session.Id, _reconnectTargetSessionId, StringComparison.Ordinal))
+            || string.Equals(evt.Session.Id, _editorContext.ReconnectSessionId, StringComparison.Ordinal))
         {
             Dispatcher.UIThread.Post(() => ApplyActiveSessionSnapshot(evt.Session));
             return;
@@ -1751,44 +1656,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         return true;
     }
 
-    private static int? TryGetEnumerableCount(object? value)
-    {
-        if (value is null)
-        {
-            return null;
-        }
-
-        if (value is System.Collections.ICollection c)
-        {
-            return c.Count;
-        }
-
-        if (value is System.Text.Json.JsonElement je)
-        {
-            if (je.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                return je.GetArrayLength();
-            }
-
-            return null;
-        }
-
-        if (value is System.Collections.IEnumerable e)
-        {
-            var count = 0;
-            foreach (var _ in e)
-            {
-                count++;
-                if (count > 10_000)
-                {
-                    break;
-                }
-            }
-            return count;
-        }
-
-        return null;
-    }
 }
 
 public sealed class ManagedSessionRow
