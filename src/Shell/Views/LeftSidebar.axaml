@@ -249,14 +249,19 @@
                                                         Spacing="10"
                                                         VerticalAlignment="Center">
                                                 <Button Classes="prototype-plain prototype-lift"
+                                                        Width="22"
+                                                        Height="22"
                                                         Padding="0"
                                                         IsVisible="{Binding CanShowConnectionParameters}"
+                                                        ToolTip.Tip="{Binding L[session.connectionParameters]}"
                                                         Click="OnSessionConnectionParametersClick">
-                                                    <TextBlock Text="{Binding L[session.connectionParameters]}"
-                                                               FontSize="11"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{StaticResource AccentBlueBrush}"
-                                                               VerticalAlignment="Center" />
+                                                    <Path Classes="prototype-icon"
+                                                          Data="{StaticResource SlidersHorizontalIcon}"
+                                                          Width="13"
+                                                          Height="13"
+                                                          Stroke="{StaticResource AccentBlueBrush}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
                                                 </Button>
                                                 <Button Classes="prototype-plain prototype-lift"
                                                         Width="22"

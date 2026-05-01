@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StreamGeometry x:Key="InfoIcon">M12 2a10 10 0 1 0 0 20a10 10 0 0 0 0-20M12 10.2v5.1M12 7.2h.01</StreamGeometry>
     <StreamGeometry x:Key="SettingsIcon">M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6</StreamGeometry>
+    <StreamGeometry x:Key="SlidersHorizontalIcon">M21 6h-7M10 6H3M14 6a2 2 0 1 1-4 0a2 2 0 0 1 4 0M21 12h-9M8 12H3M12 12a2 2 0 1 1-4 0a2 2 0 0 1 4 0M21 18h-5M12 18H3M16 18a2 2 0 1 1-4 0a2 2 0 0 1 4 0</StreamGeometry>
     <StreamGeometry x:Key="BellIcon">M8 9a4 4 0 1 1 8 0c0 1.9.42 3.55.9 4.82c.35.91.76 1.62 1.1 2.18H5.99c.35-.56.76-1.27 1.11-2.18C7.58 12.55 8 10.9 8 9M10.5 19a1.5 1.5 0 0 0 3 0</StreamGeometry>
     <StreamGeometry x:Key="SearchIcon">M11 4a7 7 0 1 0 4.47 12.39l4.07 4.07l1.41-1.41l-4.07-4.07A7 7 0 0 0 11 4m0 2a5 5 0 1 1 0 10a5 5 0 0 1 0-10</StreamGeometry>
     <StreamGeometry x:Key="RotateCwIcon">M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6</StreamGeometry>
