@@ -16,12 +16,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 {
     private const string SegmentUpgradeBytesEnvVar = "COMCROSS_DEV_SEGMENT_UPGRADE_BYTES";
 
-    private readonly PluginDiscoveryService _discoveryService;
-    private readonly PluginRuntimeService _runtimeService;
-    private readonly PluginManagerService _pluginManagerService;
-    private readonly PluginHostProtocolService _protocolService;
-    private readonly SettingsService _settingsService;
-    private readonly NotificationService _notificationService;
+    private readonly PluginManagementFacade _plugins;
     private readonly IItemVmFactory<PluginItemViewModel, PluginItemContext> _itemFactory;
     private string _pluginsDirectory;
 
@@ -29,21 +24,11 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public PluginManagerViewModel(
         ILocalizationService localization,
-        PluginDiscoveryService discoveryService,
-        PluginRuntimeService runtimeService,
-        PluginManagerService pluginManagerService,
-        PluginHostProtocolService protocolService,
-        SettingsService settingsService,
-        NotificationService notificationService,
+        PluginManagementFacade plugins,
         IItemVmFactory<PluginItemViewModel, PluginItemContext> itemFactory)
         : base(localization)
     {
-        _discoveryService = discoveryService;
-        _runtimeService = runtimeService;
-        _pluginManagerService = pluginManagerService;
-        _protocolService = protocolService;
-        _settingsService = settingsService;
-        _notificationService = notificationService;
+        _plugins = plugins;
         _itemFactory = itemFactory;
         _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
 
@@ -74,12 +59,12 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         Plugins.Clear();
         
-        var runtimes = _pluginManagerService.GetAllRuntimes();
+        var runtimes = _plugins.GetAllRuntimes();
 
         foreach (var runtime in runtimes)
         {
             var id = runtime.Info.Manifest.Id;
-            var isEnabled = _settingsService.Current.Plugins.Enabled.TryGetValue(id, out var enabled) ? enabled : true;
+            var isEnabled = _plugins.IsPluginEnabled(id);
             Plugins.Add(new PluginItemContext(runtime, isEnabled));
         }
 
@@ -102,14 +87,14 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         try
         {
-            await _pluginManagerService.ShutdownAsync();
+            await _plugins.ShutdownAsync();
         }
         catch
         {
             // best-effort
         }
 
-        foreach (var runtime in _pluginManagerService.GetAllRuntimes())
+        foreach (var runtime in _plugins.GetAllRuntimes())
         {
             runtime.DisposeHost();
         }
@@ -118,27 +103,21 @@ public sealed class PluginManagerViewModel : BaseViewModel
     /// <summary>
     /// 获取特定插件的运行时
     /// </summary>
-    public PluginRuntime? GetRuntime(string pluginId) => _pluginManagerService.GetRuntime(pluginId);
+    public PluginRuntime? GetRuntime(string pluginId) => _plugins.GetRuntime(pluginId);
 
-    public IReadOnlyList<PluginRuntime> GetAllRuntimes() => _pluginManagerService.GetAllRuntimes();
+    public IReadOnlyList<PluginRuntime> GetAllRuntimes() => _plugins.GetAllRuntimes();
 
     /// <summary>
     /// 向插件发送请求
     /// </summary>
     public async Task<PluginHostResponse?> SendRequestAsync(string pluginId, PluginHostRequest request)
     {
-        var runtime = GetRuntime(pluginId);
-        if (runtime?.Client == null)
-        {
-            return null;
-        }
-
-        return await runtime.Client.SendAsync(request, TimeSpan.FromSeconds(5));
+        return await _plugins.SendRequestAsync(pluginId, request, TimeSpan.FromSeconds(5));
     }
 
     public async Task ToggleAsync(PluginItemViewModel plugin)
     {
-        var result = await _pluginManagerService.SetPluginEnabledAsync(plugin.Id, plugin.IsEnabled);
+        var result = await _plugins.SetPluginEnabledAsync(plugin.Id, plugin.IsEnabled);
         if (!result.Success)
         {
             await LoadAsync();
@@ -162,7 +141,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task TestConnectAsync(PluginItemViewModel plugin)
     {
-        var runtime = _pluginManagerService.GetRuntime(plugin.Id);
+        var runtime = _plugins.GetRuntime(plugin.Id);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(
@@ -189,7 +168,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         }
 
         var parameters = CreateParametersFromDefault(capability.DefaultParametersJson);
-        var result = await _protocolService.ConnectAsync(
+        var result = await _plugins.ConnectAsync(
             runtime,
             capability.Id,
             parameters,
@@ -203,7 +182,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                     && TryGetSegmentUpgradeBytes(out var requestedBytes)
                     && requestedBytes > 0)
                 {
-                    var upgrade = await _protocolService.AllocateAndApplySharedMemorySegmentAsync(
+                    var upgrade = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
                         runtime,
                         result.SessionId,
                         requestedBytes,
@@ -221,7 +200,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             finally
             {
                 // Best-effort cleanup: connect test should not leave an open session.
-                await _protocolService.DisconnectAsync(
+                await _plugins.DisconnectAsync(
                     runtime,
                     sessionId: result.SessionId,
                     reason: "connect-test",
@@ -239,7 +218,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task TestConnectAsync(PluginItemViewModel plugin, string capabilityId, string? parametersJson)
     {
-        var runtime = _pluginManagerService.GetRuntime(plugin.Id);
+        var runtime = _plugins.GetRuntime(plugin.Id);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(
@@ -269,7 +248,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             return;
         }
 
-        var result = await _protocolService.ConnectAsync(
+        var result = await _plugins.ConnectAsync(
             runtime,
             capabilityId,
             parameters,
@@ -283,7 +262,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                     && TryGetSegmentUpgradeBytes(out var requestedBytes)
                     && requestedBytes > 0)
                 {
-                    var upgrade = await _protocolService.AllocateAndApplySharedMemorySegmentAsync(
+                    var upgrade = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
                         runtime,
                         result.SessionId,
                         requestedBytes,
@@ -301,7 +280,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             finally
             {
                 // Best-effort cleanup: connect test should not leave an open session.
-                await _protocolService.DisconnectAsync(
+                await _plugins.DisconnectAsync(
                     runtime,
                     sessionId: result.SessionId,
                     reason: "connect-test",
@@ -332,7 +311,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public IReadOnlyList<CapabilityOption> GetCapabilityOptions(string pluginId)
     {
-        var runtime = _pluginManagerService.GetRuntime(pluginId);
+        var runtime = _plugins.GetRuntime(pluginId);
         if (runtime is null || runtime.State != PluginLoadState.Loaded)
         {
             return Array.Empty<CapabilityOption>();
@@ -345,7 +324,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public IReadOnlyList<PluginCapabilityLaunchOption> GetAllCapabilityOptions()
     {
-        return _pluginManagerService.GetAllRuntimes()
+        return _plugins.GetAllRuntimes()
             .Where(r => r.State == PluginLoadState.Loaded)
             .SelectMany(r => r.Capabilities.Select(c => new PluginCapabilityLaunchOption(
                 r.Info.Manifest.Id,
@@ -384,13 +363,13 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         try
         {
-            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            var runtime = _plugins.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 return null;
             }
 
-            var (ok, _, snapshot) = await _protocolService.GetUiStateAsync(
+            var (ok, _, snapshot) = await _plugins.GetUiStateAsync(
                 runtime,
                 capabilityId,
                 sessionId,
@@ -417,7 +396,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         try
         {
-            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            var runtime = _plugins.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 return (false, "Plugin runtime not available.");
@@ -427,7 +406,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 ? null
                 : JsonSerializer.SerializeToElement(parameters);
 
-            var (ok, error, _) = await _protocolService.ExecuteActionAsync(
+            var (ok, error, _) = await _plugins.ExecuteActionAsync(
                 runtime,
                 actionName,
                 sessionId,
@@ -446,7 +425,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         try
         {
-            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            var runtime = _plugins.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 return null;
@@ -489,7 +468,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         try
         {
-            var runtime = _pluginManagerService.GetRuntime(pluginId);
+            var runtime = _plugins.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
                 // If runtime isn't available, we cannot validate; be conservative and reject.
@@ -533,7 +512,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task ConnectByIdsAsync(string pluginId, string capabilityId, string? parametersJson)
     {
-        var runtime = _pluginManagerService.GetRuntime(pluginId);
+        var runtime = _plugins.GetRuntime(pluginId);
         if (runtime is null)
         {
             await MessageBoxService.ShowErrorAsync(
@@ -563,7 +542,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             return;
         }
 
-        var result = await _protocolService.ConnectAsync(runtime, capabilityId, parameters, TimeSpan.FromSeconds(3));
+        var result = await _plugins.ConnectAsync(runtime, capabilityId, parameters, TimeSpan.FromSeconds(3));
         if (result.Ok)
         {
             try
@@ -574,7 +553,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                     // Keep a dev-only override path to force a larger segment for stress testing.
                     if (TryGetSegmentUpgradeBytes(out var overrideBytes) && overrideBytes > 0)
                     {
-                        _ = await _protocolService.AllocateAndApplySharedMemorySegmentAsync(
+                        _ = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
                             runtime,
                             result.SessionId,
                             overrideBytes,
@@ -607,13 +586,13 @@ public sealed class PluginManagerViewModel : BaseViewModel
         string? viewInstanceId,
         TimeSpan timeout)
     {
-        var runtime = _pluginManagerService.GetRuntime(pluginId);
+        var runtime = _plugins.GetRuntime(pluginId);
         if (runtime is null || runtime.State != PluginLoadState.Loaded)
         {
             return null;
         }
 
-        var result = await _protocolService.GetUiStateAsync(
+        var result = await _plugins.GetUiStateAsync(
             runtime,
             capabilityId,
             sessionId,
@@ -697,7 +676,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public async Task NotifyPluginsAsync(PluginNotification notification, Action<PluginRuntime, Exception, bool>? onError = null)
     {
-        await _pluginManagerService.NotifyPluginsAsync(notification, onError);
+        await _plugins.NotifyPluginsAsync(notification, onError);
         RefreshRuntimeStates();
     }
 
@@ -705,157 +684,11 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         foreach (var plugin in Plugins)
         {
-            var runtime = _pluginManagerService.GetRuntime(plugin.Id);
+            var runtime = _plugins.GetRuntime(plugin.Id);
             if (runtime != null)
             {
                 plugin.UpdateState(runtime);
             }
         }
-    }
-}
-
-public sealed record CapabilityOption(
-    string Id,
-    string Name,
-    string? Description,
-    string? DefaultParametersJson);
-
-public sealed record PluginCapabilityLaunchOption(
-    string PluginId,
-    string PluginName,
-    string CapabilityId,
-    string CapabilityName,
-    string? CapabilityDescription,
-    string? Icon,
-    string? DefaultParametersJson,
-    string? JsonSchema,
-    string? UiSchema);
-
-public sealed record PluginItemContext(
-    PluginRuntime Runtime,
-    bool IsEnabled);
-
-public sealed class PluginItemViewModel : LocalizedItemViewModelBase<PluginItemContext>
-{
-    private bool _isEnabled;
-    private PluginLoadState _state;
-    private int _capabilityCount;
-    private bool _capabilitiesError;
-    private string _name;
-
-    private string _id = string.Empty;
-    private string _version = string.Empty;
-    private string _permissions = string.Empty;
-    private string _assemblyPath = string.Empty;
-
-    public PluginItemViewModel(ILocalizationService localization)
-        : base(localization)
-    {
-        _name = string.Empty;
-    }
-
-    protected override void OnInit(PluginItemContext context)
-    {
-        _id = context.Runtime.Info.Manifest.Id;
-        _name = context.Runtime.Info.Manifest.Name;
-        _version = context.Runtime.Info.Manifest.Version;
-        _permissions = string.Join(", ", context.Runtime.Info.Manifest.Permissions);
-        _assemblyPath = context.Runtime.Info.AssemblyPath;
-        _isEnabled = context.IsEnabled;
-        _state = context.Runtime.State;
-
-        UpdateState(context.Runtime);
-    }
-
-    public string Id => _id;
-    public string Name => _name;
-
-    public string DisplayName
-    {
-        get
-        {
-            var key = Id + ".name";
-            var localized = L[key];
-            return string.Equals(localized, $"[{key}]", StringComparison.Ordinal) ? Name : localized;
-        }
-    }
-    public string Version => _version;
-    public string Permissions => _permissions;
-    public string AssemblyPath => _assemblyPath;
-    public PluginLoadState State
-    {
-        get => _state;
-        private set
-        {
-            if (_state == value)
-            {
-                return;
-            }
-
-            _state = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public string StatusText
-    {
-        get => State switch
-        {
-            PluginLoadState.Loaded => L["settings.plugins.status.loaded"],
-            PluginLoadState.Disabled => L["settings.plugins.status.disabled"],
-            PluginLoadState.Failed => L["settings.plugins.status.failed"],
-            _ => L["settings.plugins.status.failed"]
-        };
-    }
-
-    public string CapabilitiesText
-    {
-        get
-        {
-            if (State != PluginLoadState.Loaded)
-            {
-                return string.Empty;
-            }
-
-            return _capabilitiesError
-                ? string.Format(L["settings.plugins.capabilities.error"], _capabilityCount)
-                : string.Format(L["settings.plugins.capabilities"], _capabilityCount);
-        }
-    }
-
-    public bool CanConnect
-    {
-        get => State == PluginLoadState.Loaded && _capabilityCount > 0;
-    }
-
-    public bool IsEnabled
-    {
-        get => _isEnabled;
-        set
-        {
-            if (_isEnabled == value)
-            {
-                return;
-            }
-
-            _isEnabled = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public void UpdateState(PluginRuntime runtime)
-    {
-        State = runtime.State;
-
-        _name = runtime.Info.Manifest.Name;
-        _capabilityCount = runtime.Capabilities?.Count ?? 0;
-        _capabilitiesError = !string.IsNullOrWhiteSpace(runtime.CapabilitiesError);
-
-        // Ensure dependents refresh.
-        OnPropertyChanged(nameof(Name));
-        OnPropertyChanged(nameof(DisplayName));
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(CapabilitiesText));
-        OnPropertyChanged(nameof(CanConnect));
     }
 }

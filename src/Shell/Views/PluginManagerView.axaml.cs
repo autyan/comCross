@@ -41,29 +41,6 @@ public partial class PluginManagerView : BaseUserControl
 
     private async Task ShowTestConnectDialogAsync(PluginManagerViewModel pluginManager, PluginItemViewModel plugin)
     {
-        var options = pluginManager.GetCapabilityOptions(plugin.Id);
-        if (options.Count == 0)
-        {
-            await pluginManager.TestConnectAsync(plugin);
-            return;
-        }
-
-            var objectFactory = ShellUiServices.ObjectFactory;
-            var dialog = objectFactory.Create<TestConnectDialog>();
-        dialog.DataContext = objectFactory.Create<TestConnectDialogViewModel>(options);
-
-        if (TopLevel.GetTopLevel(this) is not Window owner)
-        {
-            dialog.Show();
-            return;
-        }
-
-        var result = await dialog.ShowDialog<TestConnectDialogResult?>(owner);
-        if (result is null)
-        {
-            return;
-        }
-
-        await pluginManager.TestConnectAsync(plugin, result.CapabilityId, result.ParametersJson);
+        await ShellUiServices.TestConnectDialogService.ShowAsync(this, pluginManager, plugin);
     }
 }

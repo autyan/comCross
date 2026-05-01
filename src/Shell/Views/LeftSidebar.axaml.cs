@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using ComCross.PluginSdk.UI;
 using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
@@ -27,16 +26,7 @@ public partial class LeftSidebar : BaseUserControl
 
         if (owner.DataContext is MainWindowViewModel vm)
         {
-            var objectFactory = ShellUiServices.ObjectFactory;
-            var dialog = objectFactory.Create<ConnectDialog>();
-            var viewInstanceId = Guid.NewGuid().ToString("N");
-            var selectorVm = objectFactory.Create<BusAdapterSelectorViewModel>(vm.PluginManager, BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId);
-            dialog.DataContext = objectFactory.Create<ConnectDialogViewModel>(vm.PluginManager, selectorVm);
-
-            await dialog.ShowDialog(owner);
-
-            var stateManager = ShellUiServices.PluginUiStateManager;
-            stateManager.ClearViewScope(new PluginUiViewScope(BusAdapterSelectorViewModel.BusAdapterViewKind, viewInstanceId));
+            await ShellUiServices.ConnectDialogService.ShowAsync(owner, vm.PluginManager);
         }
     }
 
@@ -162,16 +152,7 @@ public partial class LeftSidebar : BaseUserControl
             return;
         }
 
-        var dialogFactory = ShellUiServices.TextInputDialogFactory;
-        var result = await dialogFactory.ShowAsync(
-            owner,
-            vm.Localization,
-            vm.L["dialog.renameSession.title"],
-            vm.L["dialog.renameSession.label"],
-            session.Name,
-            vm.L["dialog.renameSession.placeholder"],
-            vm.L["dialog.renameSession.ok"],
-            vm.L["dialog.renameSession.cancel"]);
+        var result = await ShellUiServices.SessionRenameDialogService.ShowAsync(owner, session, vm);
         if (!string.IsNullOrWhiteSpace(result))
         {
             if (DataContext is LeftSidebarViewModel sidebarVm)

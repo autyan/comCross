@@ -89,10 +89,10 @@ public partial class App : Application
                 Shell.Services.MessageBoxService.Initialize(localization, messageBoxDialogFactory);
                 Shell.Services.LocalizationManager.Initialize(localization);
 
-                var objectFactory = _serviceProvider!.GetRequiredService<IObjectFactory>();
-                var pluginUiStateManager = _serviceProvider!.GetRequiredService<PluginUiStateManager>();
-                var textInputDialogFactory = _serviceProvider!.GetRequiredService<ITextInputDialogFactory>();
-                Shell.Services.ShellUiServices.Initialize(objectFactory, pluginUiStateManager, textInputDialogFactory);
+                var connectDialogService = _serviceProvider!.GetRequiredService<IConnectDialogService>();
+                var sessionRenameDialogService = _serviceProvider!.GetRequiredService<ISessionRenameDialogService>();
+                var testConnectDialogService = _serviceProvider!.GetRequiredService<ITestConnectDialogService>();
+                Shell.Services.ShellUiServices.Initialize(connectDialogService, sessionRenameDialogService, testConnectDialogService);
                 Console.Error.WriteLine("[Shell] Services initialized");
 
                 // 5. Build UI

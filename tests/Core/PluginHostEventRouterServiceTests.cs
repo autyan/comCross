@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ComCross.Core.Models;
 using ComCross.Core.Services;
 using ComCross.PluginSdk;
 using ComCross.PluginSdk.UI;

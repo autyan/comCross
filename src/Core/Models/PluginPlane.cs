@@ -1,4 +1,4 @@
-namespace ComCross.Core.Services;
+namespace ComCross.Core.Models;
 
 public enum PluginPlane
 {

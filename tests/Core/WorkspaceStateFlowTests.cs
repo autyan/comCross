@@ -1,4 +1,5 @@
 using ComCross.Core.Extensions;
+using ComCross.Core.Models;
 using ComCross.Core.Services;
 using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;

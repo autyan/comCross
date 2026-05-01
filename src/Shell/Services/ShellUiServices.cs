@@ -1,29 +1,28 @@
 using System;
-using ComCross.PluginSdk.UI;
-
 namespace ComCross.Shell.Services;
 
 public static class ShellUiServices
 {
-    private static IObjectFactory? _objectFactory;
-    private static PluginUiStateManager? _pluginUiStateManager;
-    private static ITextInputDialogFactory? _textInputDialogFactory;
+    private static IConnectDialogService? _connectDialogService;
+    private static ISessionRenameDialogService? _sessionRenameDialogService;
+    private static ITestConnectDialogService? _testConnectDialogService;
 
     public static void Initialize(
-        IObjectFactory objectFactory,
-        PluginUiStateManager pluginUiStateManager,
-        ITextInputDialogFactory textInputDialogFactory)
+        IConnectDialogService connectDialogService,
+        ISessionRenameDialogService sessionRenameDialogService,
+        ITestConnectDialogService testConnectDialogService)
     {
-        _objectFactory = objectFactory;
-        _pluginUiStateManager = pluginUiStateManager;
-        _textInputDialogFactory = textInputDialogFactory;
+        _connectDialogService = connectDialogService;
+        _sessionRenameDialogService = sessionRenameDialogService;
+        _testConnectDialogService = testConnectDialogService;
     }
 
-    public static IObjectFactory ObjectFactory => _objectFactory ?? throw new InvalidOperationException("ShellUiServices not initialized");
+    public static IConnectDialogService ConnectDialogService
+        => _connectDialogService ?? throw new InvalidOperationException("ShellUiServices not initialized");
 
-    public static PluginUiStateManager PluginUiStateManager
-        => _pluginUiStateManager ?? throw new InvalidOperationException("ShellUiServices not initialized");
+    public static ISessionRenameDialogService SessionRenameDialogService
+        => _sessionRenameDialogService ?? throw new InvalidOperationException("ShellUiServices not initialized");
 
-    public static ITextInputDialogFactory TextInputDialogFactory
-        => _textInputDialogFactory ?? throw new InvalidOperationException("ShellUiServices not initialized");
+    public static ITestConnectDialogService TestConnectDialogService
+        => _testConnectDialogService ?? throw new InvalidOperationException("ShellUiServices not initialized");
 }

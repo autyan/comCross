@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
 
         // Host-side helpers for plugin UI.
         services.AddSingleton<SerialPortsHostService>();
+        services.AddSingleton<PluginManagementFacade>();
 
         // Cross-cutting factories (avoid manual `new` for Views/ViewModels)
         services.AddTransient<IObjectFactory, ComCross.Shell.Services.ObjectFactory>();
@@ -34,6 +35,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ITextInputDialogFactory, TextInputDialogFactory>();
         services.AddTransient<IMessageBoxDialogFactory, MessageBoxDialogFactory>();
         services.AddTransient<IProgressDialogFactory, ProgressDialogFactory>();
+        services.AddTransient<IConnectDialogService, ConnectDialogService>();
+        services.AddTransient<ISessionRenameDialogService, SessionRenameDialogService>();
+        services.AddTransient<ITestConnectDialogService, TestConnectDialogService>();
         
         // 3. ViewModels (Scoped to MainWindow scope)
         services.AddScoped<MainWindowViewModel>();

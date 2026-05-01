@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ComCross.PluginSdk;
 
-namespace ComCross.Core.Services;
+namespace ComCross.Core.Models;
 
 public sealed class PluginManifest
 {

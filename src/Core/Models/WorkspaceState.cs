@@ -1,8 +1,7 @@
 using System.Text.Json;
 using ComCross.Shared.Models;
-using ComCross.Core.Models;
 
-namespace ComCross.Core.Services;
+namespace ComCross.Core.Models;
 
 /// <summary>
 /// Workspace state for persistence (v0.4+)

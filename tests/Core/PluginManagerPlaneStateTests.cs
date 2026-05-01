@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ComCross.Core.Models;
 using ComCross.Core.Services;
 using ComCross.PluginSdk;
 using Xunit;
