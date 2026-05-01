@@ -8,13 +8,13 @@ using ComCross.Shared.Models;
 
 namespace ComCross.Shell.Services;
 
-public sealed class PluginManagementFacade
+public sealed class PluginManagementService
 {
     private readonly PluginManagerService _pluginManagerService;
     private readonly PluginHostProtocolService _protocolService;
     private readonly SettingsService _settingsService;
 
-    public PluginManagementFacade(
+    public PluginManagementService(
         PluginManagerService pluginManagerService,
         PluginHostProtocolService protocolService,
         SettingsService settingsService)

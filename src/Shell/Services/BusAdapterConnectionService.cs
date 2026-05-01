@@ -8,12 +8,12 @@ using ComCross.Shared.Models;
 
 namespace ComCross.Shell.Services;
 
-public sealed class BusAdapterConnectionFacade
+public sealed class BusAdapterConnectionService
 {
     private readonly ICapabilityDispatcher _dispatcher;
     private readonly IWorkspaceCoordinator _workspaceCoordinator;
 
-    public BusAdapterConnectionFacade(
+    public BusAdapterConnectionService(
         ICapabilityDispatcher dispatcher,
         IWorkspaceCoordinator workspaceCoordinator)
     {

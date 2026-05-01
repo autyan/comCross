@@ -16,7 +16,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 {
     private const string SegmentUpgradeBytesEnvVar = "COMCROSS_DEV_SEGMENT_UPGRADE_BYTES";
 
-    private readonly PluginManagementFacade _plugins;
+    private readonly PluginManagementService _plugins;
     private readonly IItemVmFactory<PluginItemViewModel, PluginItemContext> _itemFactory;
     private string _pluginsDirectory;
 
@@ -24,7 +24,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
     public PluginManagerViewModel(
         ILocalizationService localization,
-        PluginManagementFacade plugins,
+        PluginManagementService plugins,
         IItemVmFactory<PluginItemViewModel, PluginItemContext> itemFactory)
         : base(localization)
     {

@@ -43,7 +43,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private readonly PluginManagerViewModel _pluginManager;
     private readonly PluginUiConfigService _pluginUiConfigService;
     private readonly SerialPortsHostService _serialPorts;
-    private readonly BusAdapterConnectionFacade _connections;
+    private readonly BusAdapterConnectionService _connections;
     private readonly IEventBus _eventBus;
     private readonly IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> _adapterItemFactory;
     private readonly ILogger<BusAdapterSelectorViewModel>? _logger;
@@ -67,7 +67,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         PluginManagerViewModel pluginManager,
         PluginUiConfigService pluginUiConfigService,
         SerialPortsHostService serialPorts,
-        BusAdapterConnectionFacade connections,
+        BusAdapterConnectionService connections,
         IEventBus eventBus,
         IItemVmFactory<BusAdapterListItemViewModel, BusAdapterInfo> adapterItemFactory,
         string viewKind = BusAdapterViewKind,
