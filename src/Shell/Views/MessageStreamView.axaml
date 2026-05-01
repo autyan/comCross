@@ -44,7 +44,7 @@
                         Padding="10,0"
                         Margin="8,0,0,0"
                         Click="OnToggleMetricsClick">
-                    <TextBlock Text="统计"
+                    <TextBlock Text="{Binding L[stream.metrics.toggle]}"
                                FontSize="11"
                                Foreground="{StaticResource Text1Brush}"
                                VerticalAlignment="Center" />

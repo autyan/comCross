@@ -151,6 +151,7 @@ public sealed class SessionListItemViewModel : BaseViewModel, IInitializable<Ses
         if (string.IsNullOrWhiteSpace(Name)
             || string.Equals(Name, Session.Endpoint, StringComparison.Ordinal)
             || (!string.IsNullOrWhiteSpace(Session.CapabilityId)
+                // i18n-ignore (non-UI generated session id prefix match)
                 && Name.StartsWith($"{Session.CapabilityId} #", StringComparison.Ordinal)))
         {
             return Session.DisplayTitle!;

@@ -69,7 +69,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="400" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.logs.directory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding LogDirectory}" Watermark="Default: Logs" />
+                        <TextBox Text="{Binding LogDirectory}" Watermark="{Binding L[settings.logs.directory.defaultWatermark]}" />
                     </StackPanel>
                     <StackPanel Width="160" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.logs.maxFileSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
@@ -104,7 +104,7 @@
                                    Margin="24,0,0,0" />
                         <StackPanel Width="400" HorizontalAlignment="Left" Margin="24,4,0,0" IsEnabled="{Binding IsDatabaseDirectoryEnabled}">
                             <TextBlock Text="{Binding L[settings.logs.databaseDirectory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                            <TextBox Text="{Binding LogDatabaseDirectory}" Watermark="Default: AppData" />
+                            <TextBox Text="{Binding LogDatabaseDirectory}" Watermark="{Binding L[settings.logs.databaseDirectory.defaultWatermark]}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -117,7 +117,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="400" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.appLogs.directory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding AppLogDirectory}" Watermark="Default: AppLogs" />
+                        <TextBox Text="{Binding AppLogDirectory}" Watermark="{Binding L[settings.appLogs.directory.defaultWatermark]}" />
                     </StackPanel>
                     <StackPanel Width="160" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.appLogs.format]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />

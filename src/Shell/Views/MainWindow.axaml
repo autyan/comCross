@@ -215,15 +215,15 @@
                                 <Grid ColumnDefinitions="*,*"
                                       RowDefinitions="Auto,Auto">
                                     <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,14">
-                                        <TextBlock Text="会话名称" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding L[session.detail.name]}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                         <TextBlock Text="{Binding SessionDetailName}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text0Brush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,14">
-                                        <TextBlock Text="类型" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding L[session.detail.type]}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                         <TextBlock Text="{Binding SessionDetailType}" FontSize="13" Foreground="{StaticResource Text0Brush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="4">
-                                        <TextBlock Text="端点" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                        <TextBlock Text="{Binding L[session.detail.endpoint]}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                         <TextBlock Text="{Binding SessionDetailEndpoint}" FontSize="13" Foreground="{StaticResource Text0Brush}" />
                                     </StackPanel>
                                 </Grid>
@@ -248,11 +248,11 @@
 
                                         <Grid ColumnDefinitions="*,*">
                                             <StackPanel Spacing="4" Margin="0,0,12,0">
-                                                <TextBlock Text="接收" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                                <TextBlock Text="{Binding L[session.detail.rx]}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                                 <TextBlock Text="{Binding SessionDetailRxBytes}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentCyanBrush}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Spacing="4" Margin="12,0,0,0">
-                                                <TextBlock Text="发送" FontSize="11" Foreground="{StaticResource Text2Brush}" />
+                                                <TextBlock Text="{Binding L[session.detail.tx]}" FontSize="11" Foreground="{StaticResource Text2Brush}" />
                                                 <TextBlock Text="{Binding SessionDetailTxBytes}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" />
                                             </StackPanel>
                                         </Grid>

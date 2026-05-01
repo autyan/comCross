@@ -257,8 +257,10 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public string CurrentSessionEndpoint => _activeSession?.Endpoint ?? string.Empty;
 
+    // i18n-ignore (data format)
     public string CurrentSessionRxBytes => $"{_activeSession?.RxBytes ?? 0:N0}";
 
+    // i18n-ignore (data format)
     public string CurrentSessionTxBytes => $"{_activeSession?.TxBytes ?? 0:N0}";
 
     public SessionListItemViewModel? SelectedSessionItem
@@ -648,7 +650,9 @@ public sealed class LeftSidebarViewModel : BaseViewModel
                     var childItem = SessionItems.Add(child);
                     childItem.IndentLevel = 1;
                     childItem.OverrideName = IsDefaultInboundConnectionName(child)
-                        ? idx > 0 ? $"Conn #{idx}" : "Conn"
+                        ? idx > 0
+                            ? Localization.GetString("session.inboundConnection.nameWithIndex", idx)
+                            : Localization.GetString("session.inboundConnection.name")
                         : null;
                 }
             }
@@ -689,6 +693,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         if (string.IsNullOrWhiteSpace(session.Name)
             || string.Equals(session.Name, session.Endpoint, StringComparison.Ordinal)
             || (!string.IsNullOrWhiteSpace(session.CapabilityId)
+                // i18n-ignore (non-UI generated session id prefix match)
                 && session.Name.StartsWith($"{session.CapabilityId} #", StringComparison.Ordinal)))
         {
             return session.DisplayTitle!;

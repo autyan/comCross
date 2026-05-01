@@ -18,7 +18,7 @@
                                 BorderBrush="{StaticResource BorderSubtleBrush}"
                                 BorderThickness="0,0,0,1"
                                 Padding="16,14">
-                            <TextBlock Text="发送消息"
+                            <TextBlock Text="{Binding L[tool.send.message]}"
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource Text1Brush}" />
@@ -27,7 +27,7 @@
                         <StackPanel Spacing="12" Margin="12">
                             <TextBox x:Name="SendMessageBox"
                                  Text="{Binding MessageInput, Mode=TwoWay}"
-                                 Watermark="输入消息... (Ctrl+Enter 发送)"
+                                 Watermark="{Binding L[tool.send.message.placeholderWithShortcut]}"
                                  Height="116"
                                  Classes="prototype-editor"
                                  KeyDown="OnSendMessageBoxKeyDown"
@@ -95,7 +95,7 @@
                                               HorizontalAlignment="Center" />
                                         <TextBlock Grid.Column="1"
                                                    Margin="8,0,0,0"
-                                                   Text="发送"
+                                                   Text="{Binding L[tool.send.button]}"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
                                                    Foreground="{StaticResource WhiteBrush}"
@@ -130,7 +130,7 @@
                             </Grid>
 
                         <StackPanel Spacing="10" Margin="0,6,0,0">
-                            <TextBlock Text="快捷命令"
+                            <TextBlock Text="{Binding L[tool.send.quickcommands]}"
                                        FontSize="11"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource Text1Brush}" />
@@ -163,7 +163,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <Button Content="查看所有命令..."
+                            <Button Content="{Binding L[tool.commands.viewAll]}"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding CanOpenCommandEditor}"
                                     Click="OnOpenAllCommandsClick" />

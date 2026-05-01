@@ -182,8 +182,8 @@ public class MainWindowViewModel : BaseViewModel
 
     public string SessionDetailTitle
         => SessionDetailSession?.ManagedResourceKinds.Count > 0
-                ? "监听器详情"
-                : "会话详情";
+                ? L["stream.session.detail.listenerTitle"]
+                : L["stream.session.detail.sessionTitle"];
 
     public string SessionDetailName => SessionDetailSession?.Name ?? L["stream.session.none"];
 
@@ -213,8 +213,10 @@ public class MainWindowViewModel : BaseViewModel
         ? (Avalonia.Media.IBrush)Application.Current?.FindResource("AccentCyanBrush")!
         : (Avalonia.Media.IBrush)Application.Current?.FindResource("Text1Brush")!;
 
+    // i18n-ignore (data format, unit symbol)
     public string SessionDetailRxBytes => $"{SessionDetailSession?.RxBytes ?? 0:N0} B";
 
+    // i18n-ignore (data format, unit symbol)
     public string SessionDetailTxBytes => $"{SessionDetailSession?.TxBytes ?? 0:N0} B";
 
     public ToolDockTab SelectedToolTab

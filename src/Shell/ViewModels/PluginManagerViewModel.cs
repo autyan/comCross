@@ -399,7 +399,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
             var runtime = _plugins.GetRuntime(pluginId);
             if (runtime is null || runtime.State != PluginLoadState.Loaded)
             {
-                return (false, "Plugin runtime not available.");
+                return (false, Localization.GetString("settings.plugins.connectTest.error.pluginRuntimeNotLoaded"));
             }
 
             JsonElement? payload = parameters is null
