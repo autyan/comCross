@@ -13,6 +13,7 @@ using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shell.Models;
 using ComCross.Shared.Services;
+using ComCross.PluginSdk;
 using ComCross.PluginSdk.UI;
 using ComCross.Shell.Plugins.UI;
 using ComCross.Shell.Services;
@@ -27,8 +28,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public const string BusAdapterViewKind = "bus-adapter";
 
     private const string PluginAdapterPrefix = "plugin:";
-    private const string NetworkRejectPendingAction = "network.reject-pending";
-    private const string NetworkRejectAllPendingAction = "network.reject-all-pending";
     private const string SerialPluginId = SerialPortsHostService.SerialPluginId;
     private const string SerialCapabilityId = SerialPortsHostService.SerialCapabilityId;
     private readonly string _viewKind;
@@ -59,6 +58,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private string? _networkParentDisplayName;
     private bool _forceCreateMode;
     private string? _reconnectTargetSessionId;
+    private PluginResourceActionDescriptor? _rejectAllPendingAction;
 
     public BusAdapterSelectorViewModel(
         ILocalizationService localization,
@@ -243,7 +243,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
 
     public bool CanDisconnectAllManagedSessions => IsListenerManagerMode && HasListenerConnections;
 
-    public bool CanRejectAllPending => IsListenerManagerMode && HasListenerPendingItems;
+    public bool CanRejectAllPending => IsListenerManagerMode && HasListenerPendingItems && _rejectAllPendingAction is not null;
 
     public int ListenerPendingCount => ListenerPendingItems.Count;
 
@@ -562,6 +562,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         {
             NetworkParentDisplayName = null;
             ListenerConnectionCount = 0;
+            _rejectAllPendingAction = null;
             ListenerConnections.Clear();
             ListenerPendingItems.Clear();
             OnPropertyChanged(nameof(HasListenerConnections));
@@ -605,6 +606,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             }
 
             ListenerConnectionCount = 0;
+            _rejectAllPendingAction = null;
             ListenerConnections.Clear();
             ListenerPendingItems.Clear();
             if (!string.IsNullOrWhiteSpace(_activeSession.ParentSessionId))
@@ -621,6 +623,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         catch
         {
             ListenerConnectionCount = 0;
+            _rejectAllPendingAction = null;
             NetworkParentDisplayName = null;
             ListenerConnections.Clear();
             ListenerPendingItems.Clear();
@@ -663,20 +666,24 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     private async Task RefreshPendingResourceRowsAsync()
     {
         ListenerPendingItems.Clear();
+        _rejectAllPendingAction = null;
 
-        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(_activeSession.CapabilityId))
+        if (!IsListenerManagerMode
+            || _activeSession is null
+            || string.IsNullOrWhiteSpace(_activeSession.PluginId)
+            || string.IsNullOrWhiteSpace(_activeSession.CapabilityId))
         {
             return;
         }
 
         var state = await _pluginManager.TryGetUiStateAsync(
-            "network.adapter",
+            _activeSession.PluginId,
             _activeSession.CapabilityId,
             _activeSession.Id,
             viewKind: "listener",
             viewInstanceId: null,
-            resourceKind: "pending",
-            resourceId: "all",
+            resourceKind: PluginResourceKinds.Pending,
+            resourceId: PluginResourceIds.All,
             timeout: TimeSpan.FromSeconds(1));
 
         if (state is null || state.Value.ValueKind != System.Text.Json.JsonValueKind.Object)
@@ -684,38 +691,65 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        if (!state.Value.TryGetProperty("items", out var items) || items.ValueKind != System.Text.Json.JsonValueKind.Array)
+        PluginResourceListState? resourceState;
+        try
+        {
+            resourceState = System.Text.Json.JsonSerializer.Deserialize<PluginResourceListState>(
+                state.Value.GetRawText(),
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
         {
             return;
         }
 
-        foreach (var item in items.EnumerateArray())
+        if (resourceState is null
+            || resourceState.Items is null
+            || !string.Equals(resourceState.ResourceKind, PluginResourceKinds.Pending, StringComparison.Ordinal))
         {
-            if (item.ValueKind != System.Text.Json.JsonValueKind.Object)
+            return;
+        }
+
+        _rejectAllPendingAction = FindResourceAction(resourceState.BulkActions, PluginResourceActionIds.RejectAll);
+
+        foreach (var item in resourceState.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Id))
             {
                 continue;
             }
 
-            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-            var display = item.TryGetProperty("displayName", out var displayEl)
-                ? displayEl.GetString()
-                : item.TryGetProperty("display", out var displayAlt) ? displayAlt.GetString() : null;
-
-            if (!string.IsNullOrWhiteSpace(id))
-            {
-                ListenerPendingItems.Add(new NetworkPendingResourceRow(
-                    id!,
-                    display ?? id!,
-                    GetPendingActionLabel(),
-                    L["network.session.manager.rejectPending"],
-                    AcceptPendingResourceAsync,
-                    RejectPendingResourceAsync));
-            }
+            var acceptAction = FindResourceAction(item.Actions, PluginResourceActionIds.Accept);
+            var rejectAction = FindResourceAction(item.Actions, PluginResourceActionIds.Reject);
+            ListenerPendingItems.Add(new NetworkPendingResourceRow(
+                item.Id,
+                string.IsNullOrWhiteSpace(item.DisplayName) ? item.Id : item.DisplayName,
+                ResolveResourceActionLabel(acceptAction, GetPendingActionLabel()),
+                ResolveResourceActionLabel(rejectAction, L["network.session.manager.rejectPending"]),
+                acceptAction,
+                rejectAction,
+                AcceptPendingResourceAsync,
+                RejectPendingResourceAsync));
         }
 
         OnPropertyChanged(nameof(HasListenerPendingItems));
         OnPropertyChanged(nameof(ListenerPendingSummary));
     }
+
+    private string ResolveResourceActionLabel(PluginResourceActionDescriptor? action, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(action?.LabelKey))
+        {
+            return L[action.LabelKey];
+        }
+
+        return string.IsNullOrWhiteSpace(action?.Label) ? fallback : action.Label;
+    }
+
+    private static PluginResourceActionDescriptor? FindResourceAction(
+        IReadOnlyList<PluginResourceActionDescriptor>? actions,
+        string actionId)
+        => actions?.FirstOrDefault(action => string.Equals(action.Id, actionId, StringComparison.Ordinal));
 
     private string GetPendingActionLabel()
         => _activeSession?.CapabilityId switch
@@ -734,7 +768,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         var pendingSnapshot = ListenerPendingItems.ToList();
         foreach (var item in pendingSnapshot)
         {
-            await AcceptPendingResourceCoreAsync(item.PendingId, item.DisplayName, refreshAfter: false);
+            await AcceptPendingResourceCoreAsync(item.PendingId, item.DisplayName, item.ConnectAction, refreshAfter: false);
         }
 
         await RefreshNetworkSelectionContextAsync();
@@ -755,11 +789,12 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        var (ok, error) = await _pluginManager.ExecutePluginActionAsync(
-            "network.adapter",
-            _activeSession.Id,
-            NetworkRejectAllPendingAction,
-            new { });
+        if (_rejectAllPendingAction is null)
+        {
+            return;
+        }
+
+        var (ok, error) = await ExecuteResourceActionAsync(_activeSession, _rejectAllPendingAction);
 
         if (!ok)
         {
@@ -772,21 +807,20 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         await RefreshNetworkSelectionContextAsync();
     }
 
-    private async Task AcceptPendingResourceAsync(string? pendingId, string? displayName)
-        => await AcceptPendingResourceCoreAsync(pendingId, displayName, refreshAfter: true);
+    private async Task AcceptPendingResourceAsync(
+        string? pendingId,
+        string? displayName,
+        PluginResourceActionDescriptor? action)
+        => await AcceptPendingResourceCoreAsync(pendingId, displayName, action, refreshAfter: true);
 
-    private async Task RejectPendingResourceAsync(string? pendingId)
+    private async Task RejectPendingResourceAsync(string? pendingId, PluginResourceActionDescriptor? action)
     {
-        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId))
+        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId) || action is null)
         {
             return;
         }
 
-        var (ok, error) = await _pluginManager.ExecutePluginActionAsync(
-            "network.adapter",
-            _activeSession.Id,
-            NetworkRejectPendingAction,
-            new { pendingId });
+        var (ok, error) = await ExecuteResourceActionAsync(_activeSession, action);
 
         if (!ok)
         {
@@ -799,24 +833,37 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         await RefreshNetworkSelectionContextAsync();
     }
 
-    private async Task AcceptPendingResourceCoreAsync(string? pendingId, string? displayName, bool refreshAfter)
+    private async Task AcceptPendingResourceCoreAsync(
+        string? pendingId,
+        string? displayName,
+        PluginResourceActionDescriptor? action,
+        bool refreshAfter)
     {
-        if (!IsListenerManagerMode || _activeSession is null || string.IsNullOrWhiteSpace(pendingId))
+        if (!IsListenerManagerMode
+            || _activeSession is null
+            || action is null
+            || string.IsNullOrWhiteSpace(pendingId)
+            || string.IsNullOrWhiteSpace(_activeSession.PluginId)
+            || string.IsNullOrWhiteSpace(_activeSession.CapabilityId)
+            || !string.Equals(action.Kind, PluginResourceActionKinds.ConnectScopedResource, StringComparison.Ordinal))
         {
             return;
         }
 
-        var parameters = BuildPendingConnectionParameters(_activeSession.CapabilityId, displayName);
-        var parametersJson = System.Text.Json.JsonSerializer.Serialize(parameters);
-        var sessionName = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+        var parametersJson = action.Parameters is { } parameters
+            ? parameters.GetRawText()
+            : "{}";
+        var sessionName = string.IsNullOrWhiteSpace(action.SessionName)
+            ? string.IsNullOrWhiteSpace(displayName) ? null : displayName
+            : action.SessionName;
 
         await _connections.ConnectScopedResourceAsync(
-            "network.adapter",
-            _activeSession.CapabilityId ?? string.Empty,
+            _activeSession.PluginId,
+            _activeSession.CapabilityId,
             parametersJson,
             sessionName,
             _activeSession.Id,
-            "pending",
+            PluginResourceKinds.Pending,
             pendingId);
 
         if (refreshAfter)
@@ -825,52 +872,23 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
         }
     }
 
-    private static object BuildPendingConnectionParameters(string? capabilityId, string? displayName)
+    private async Task<(bool Ok, string? Error)> ExecuteResourceActionAsync(
+        Session session,
+        PluginResourceActionDescriptor action)
     {
-        object parameters = new
+        if (!string.Equals(action.Kind, PluginResourceActionKinds.ExecuteAction, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(session.PluginId)
+            || string.IsNullOrWhiteSpace(action.ActionName))
         {
-            endpoint = displayName
-        };
-
-        if (!TryParseHostPort(displayName, out var host, out var port))
-        {
-            return parameters;
+            return (false, L["error.unknown"]);
         }
 
-        return capabilityId switch
-        {
-            "tcp.server" => new { host, port, endpoint = displayName },
-            "udp.listen" => new { remoteHost = host, remotePort = port, endpoint = displayName },
-            _ => parameters
-        };
-    }
-
-    private static bool TryParseHostPort(string? displayName, out string host, out int port)
-    {
-        host = string.Empty;
-        port = 0;
-
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            return false;
-        }
-
-        var lastColon = displayName.LastIndexOf(':');
-        if (lastColon <= 0 || lastColon >= displayName.Length - 1)
-        {
-            return false;
-        }
-
-        var h = displayName[..lastColon].Trim();
-        var p = displayName[(lastColon + 1)..].Trim();
-        if (string.IsNullOrWhiteSpace(h) || !int.TryParse(p, out var parsed) || parsed is < 1 or > 65535)
-        {
-            return false;
-        }
-
-        host = h;
-        port = parsed;
-        return true;
+        object parameters = action.Parameters is { } value ? value : new { };
+        return await _pluginManager.ExecutePluginActionAsync(
+            session.PluginId,
+            session.Id,
+            action.ActionName,
+            parameters);
     }
 
     private static bool IsNullOrBlank(object? value)
@@ -1874,10 +1892,12 @@ public sealed record NetworkPendingResourceRow(
     string DisplayName,
     string ActionLabel,
     string RejectLabel,
-    Func<string?, string?, Task> ConnectAsync,
-    Func<string?, Task> RejectAsync)
+    PluginResourceActionDescriptor? ConnectAction,
+    PluginResourceActionDescriptor? RejectAction,
+    Func<string?, string?, PluginResourceActionDescriptor?, Task> ConnectAsync,
+    Func<string?, PluginResourceActionDescriptor?, Task> RejectAsync)
 {
-    public AsyncRelayCommand ConnectCommand { get; } = new(() => ConnectAsync(PendingId, DisplayName));
+    public AsyncRelayCommand ConnectCommand { get; } = new(() => ConnectAsync(PendingId, DisplayName, ConnectAction));
 
-    public AsyncRelayCommand RejectCommand { get; } = new(() => RejectAsync(PendingId));
+    public AsyncRelayCommand RejectCommand { get; } = new(() => RejectAsync(PendingId, RejectAction));
 }

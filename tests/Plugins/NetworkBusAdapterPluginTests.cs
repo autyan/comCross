@@ -155,6 +155,61 @@ public sealed class NetworkBusAdapterPluginTests
     }
 
     [Fact]
+    public async Task TcpListener_PendingResourceSnapshot_ExposesGenericResourceActions()
+    {
+        var plugin = new NetworkBusAdapterPlugin();
+        var listenPort = GetFreeTcpPort();
+
+        var listenParams = JsonSerializer.SerializeToElement(new
+        {
+            listenHost = "127.0.0.1",
+            listenPort,
+            backlog = 8
+        });
+
+        var listenResult = await plugin.ConnectAsync(
+            new PluginConnectCommand("tcp.server", listenParams, "listener-tcp-contract"),
+            CancellationToken.None);
+
+        Assert.True(listenResult.Ok, listenResult.Error);
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, listenPort);
+
+        var pendingId = await WaitForPendingAsync(plugin, "tcp.server", "listener-tcp-contract");
+        Assert.False(string.IsNullOrWhiteSpace(pendingId));
+
+        var snapshot = plugin.GetUiState(new PluginUiStateQuery(
+            "tcp.server",
+            "listener-tcp-contract",
+            ViewKind: "listener",
+            ViewInstanceId: null,
+            ResourceKind: PluginResourceKinds.Pending,
+            ResourceId: PluginResourceIds.All));
+
+        Assert.Equal(PluginResourceKinds.Pending, snapshot.State.GetProperty("resourceKind").GetString());
+
+        var item = Assert.Single(snapshot.State.GetProperty("items").EnumerateArray());
+        Assert.Equal(pendingId, item.GetProperty("id").GetString());
+
+        var actions = item.GetProperty("actions").EnumerateArray().ToArray();
+        Assert.Contains(actions, action =>
+            action.GetProperty("id").GetString() == PluginResourceActionIds.Accept
+            && action.GetProperty("kind").GetString() == PluginResourceActionKinds.ConnectScopedResource);
+        Assert.Contains(actions, action =>
+            action.GetProperty("id").GetString() == PluginResourceActionIds.Reject
+            && action.GetProperty("kind").GetString() == PluginResourceActionKinds.ExecuteAction
+            && action.GetProperty("actionName").GetString() == "network.reject-pending");
+
+        var bulkAction = Assert.Single(snapshot.State.GetProperty("bulkActions").EnumerateArray());
+        Assert.Equal(PluginResourceActionIds.RejectAll, bulkAction.GetProperty("id").GetString());
+        Assert.Equal(PluginResourceActionKinds.ExecuteAction, bulkAction.GetProperty("kind").GetString());
+        Assert.Equal("network.reject-all-pending", bulkAction.GetProperty("actionName").GetString());
+
+        await plugin.DisconnectAsync(new PluginDisconnectCommand("listener-tcp-contract"), CancellationToken.None);
+    }
+
+    [Fact]
     public async Task TcpClient_RemoteClose_RaisesSessionClosedEvent()
     {
         var plugin = new NetworkBusAdapterPlugin();

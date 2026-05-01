@@ -14,8 +14,8 @@ public sealed class NetworkBusAdapterPlugin :
     IPluginSessionLifecycleEventSource,
     IMultiSessionDevicePlugin
 {
-    private const string PendingResourceKind = "pending";
-    private const string PendingListResourceId = "all";
+    private const string PendingResourceKind = PluginResourceKinds.Pending;
+    private const string PendingListResourceId = PluginResourceIds.All;
     private const string RejectPendingAction = "network.reject-pending";
     private const string RejectAllPendingAction = "network.reject-all-pending";
 
@@ -1003,22 +1003,96 @@ public sealed class NetworkBusAdapterPlugin :
             {
                 kind = "pending-item",
                 protocol,
+                resourceKind = PendingResourceKind,
                 item = string.IsNullOrWhiteSpace(selected.Id)
                     ? null
-                    : new { id = selected.Id, displayName = selected.DisplayName }
+                    : BuildPendingResourceItem(protocol, selected.Id, selected.DisplayName)
             };
 
             return new PluginUiStateSnapshot(JsonSerializer.SerializeToElement(itemState), DateTimeOffset.UtcNow);
         }
 
-        var state = new
-        {
-            kind = "pending-list",
-            protocol,
-            items = pending.Select(p => new { id = p.Id, displayName = p.DisplayName }).ToArray()
-        };
+        var state = new PluginResourceListState(
+            "pending-list",
+            PendingResourceKind,
+            pending.Select(p => BuildPendingResourceItem(protocol, p.Id, p.DisplayName)).ToArray(),
+            new[]
+            {
+                new PluginResourceActionDescriptor(
+                    PluginResourceActionIds.RejectAll,
+                    PluginResourceActionKinds.ExecuteAction,
+                    LabelKey: "network.session.manager.clearAllPending",
+                    ActionName: RejectAllPendingAction,
+                    Parameters: JsonSerializer.SerializeToElement(new { }))
+            });
 
         return new PluginUiStateSnapshot(JsonSerializer.SerializeToElement(state), DateTimeOffset.UtcNow);
+    }
+
+    private static PluginManagedResourceItem BuildPendingResourceItem(
+        string protocol,
+        string pendingId,
+        string displayName)
+        => new(
+            pendingId,
+            displayName,
+            new[]
+            {
+                new PluginResourceActionDescriptor(
+                    PluginResourceActionIds.Accept,
+                    PluginResourceActionKinds.ConnectScopedResource,
+                    LabelKey: string.Equals(protocol, "udp", StringComparison.Ordinal)
+                        ? "network.session.manager.bindPending"
+                        : "network.session.manager.acceptPending",
+                    Parameters: JsonSerializer.SerializeToElement(BuildPendingConnectionParameters(protocol, displayName)),
+                    SessionName: displayName),
+                new PluginResourceActionDescriptor(
+                    PluginResourceActionIds.Reject,
+                    PluginResourceActionKinds.ExecuteAction,
+                    LabelKey: "network.session.manager.rejectPending",
+                    ActionName: RejectPendingAction,
+                    Parameters: JsonSerializer.SerializeToElement(new { pendingId }))
+            });
+
+    private static object BuildPendingConnectionParameters(string protocol, string displayName)
+    {
+        var endpoint = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+        if (!TryParseHostPort(displayName, out var host, out var port))
+        {
+            return new { endpoint };
+        }
+
+        return string.Equals(protocol, "udp", StringComparison.Ordinal)
+            ? new { remoteHost = host, remotePort = port, endpoint }
+            : new { host, port, endpoint };
+    }
+
+    private static bool TryParseHostPort(string? displayName, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return false;
+        }
+
+        var lastColon = displayName.LastIndexOf(':');
+        if (lastColon <= 0 || lastColon >= displayName.Length - 1)
+        {
+            return false;
+        }
+
+        var h = displayName[..lastColon].Trim();
+        var p = displayName[(lastColon + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(h) || !int.TryParse(p, out var parsed) || parsed is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        host = h;
+        port = parsed;
+        return true;
     }
 
     private static (string? ListenerSessionId, string? PendingId) ResolvePendingTarget(PluginConnectCommand command)

@@ -113,7 +113,23 @@ plugins/
     tool.dll
 ```
 
-## 9) Notes
+## 9) Session-Owned Resources
+
+Plugins that own transient resources under an active session can expose them through the PluginSdk resource management contract.
+
+Typical examples:
+- a TCP listener with pending clients
+- a UDP listener with pending peers
+
+Use `IPluginUiStateProvider.GetUiState` with `PluginUiStateQuery.ResourceKind` and `ResourceId` to return a `PluginResourceListState`. Each `PluginManagedResourceItem` can include `PluginResourceActionDescriptor` entries that describe what the host UI can do with the resource.
+
+Supported generic action kinds:
+- `connect-scoped-resource`: promote or bind a session-owned resource through the scoped connect flow.
+- `execute-action`: execute a plugin-owned action name with plugin-owned parameters.
+
+The host UI must consume the generic descriptors and should not hardcode a plugin's private action names or payload shape.
+
+## 10) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.
