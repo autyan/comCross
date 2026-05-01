@@ -248,30 +248,30 @@
                                                         Orientation="Horizontal"
                                                         Spacing="10"
                                                         VerticalAlignment="Center">
-                                                <Button Classes="prototype-plain prototype-lift"
-                                                        Width="22"
-                                                        Height="22"
-                                                        Padding="0"
+                                                <Button Classes="prototype-icon-button"
+                                                        Width="30"
+                                                        Height="28"
                                                         IsVisible="{Binding CanShowConnectionParameters}"
-                                                        ToolTip.Tip="{Binding L[session.connectionParameters]}"
+                                                        IsEnabled="{Binding CanOpenConnectionParameters}"
+                                                        ToolTip.Tip="{Binding ConnectionParametersTooltip}"
                                                         Click="OnSessionConnectionParametersClick">
                                                     <Path Classes="prototype-icon"
                                                           Data="{StaticResource SlidersHorizontalIcon}"
-                                                          Width="13"
-                                                          Height="13"
+                                                          Width="14"
+                                                          Height="14"
                                                           Stroke="{StaticResource AccentBlueBrush}"
                                                           HorizontalAlignment="Center"
                                                           VerticalAlignment="Center" />
                                                 </Button>
-                                                <Button Classes="prototype-plain prototype-lift"
-                                                        Width="22"
-                                                        Height="22"
-                                                        Padding="0"
+                                                <Button Classes="prototype-icon-button"
+                                                        Width="30"
+                                                        Height="28"
+                                                        ToolTip.Tip="{Binding L[session.detail.open]}"
                                                         Click="OnSessionSettingsClick">
                                                     <Path Classes="prototype-icon"
                                                           Data="{StaticResource InfoIcon}"
-                                                          Width="13"
-                                                          Height="13"
+                                                          Width="14"
+                                                          Height="14"
                                                           Stroke="{StaticResource Text2Brush}"
                                                           HorizontalAlignment="Center"
                                                           VerticalAlignment="Center" />
@@ -283,6 +283,17 @@
                                                    FontSize="11"
                                                    Foreground="{StaticResource Text2Brush}"
                                                    FontFamily="JetBrains Mono, Consolas, monospace" />
+
+                                        <Border Background="{StaticResource Bg0Brush}"
+                                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="8,4"
+                                                IsVisible="{Binding ShowCurrentSessionInitializationState}">
+                                            <TextBlock Text="{Binding CurrentSessionInitializationStateLabel}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource Text2Brush}" />
+                                        </Border>
 
                                         <StackPanel Orientation="Horizontal" Spacing="12">
                                             <TextBlock FontSize="11" Foreground="{StaticResource AccentCyanBrush}">

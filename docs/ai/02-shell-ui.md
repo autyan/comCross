@@ -34,3 +34,6 @@
 - Keep interaction workflows ergonomic and predictable.
 - Avoid broad visual redesigns inside architecture or service-boundary commits.
 - When changing UI workflow services, preserve existing ViewModel public properties and command behavior unless the task explicitly changes UI behavior.
+- Icon buttons must use a single interactive outer control that owns size, hit testing, hover, pressed, disabled, focus, and tooltip states. The visible icon must be passive content inside that control.
+- Visual feedback must match the clickable region: never make a small `Path` or nested visual look like the control while the actual clickable area is a different or smaller XAML layer.
+- Related icon actions in the same toolbar/row must use the same component structure, sizing, tooltip pattern, and disabled-state expression. Compact icon buttons should use at least a 28px hit area unless an existing component style defines a larger one.

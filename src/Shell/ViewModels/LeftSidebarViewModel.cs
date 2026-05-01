@@ -131,6 +131,7 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         if (propertyName == nameof(Session.Status)
             || propertyName == nameof(Session.CanReconnect)
             || propertyName == nameof(Session.InitializationState)
+            || propertyName == nameof(Session.InitializationError)
             || string.IsNullOrEmpty(propertyName))
         {
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
@@ -229,9 +230,48 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
     public bool CanShowConnectionParameters
         => _activeSession?.Id is { Length: > 0 }
-           && _activeSession.InitializationState == SessionInitializationState.Ready
            && _activeSession.CanReconnect
            && !string.IsNullOrWhiteSpace(_activeSession.AdapterId);
+
+    public bool CanOpenConnectionParameters
+        => CanShowConnectionParameters
+           && _activeSession?.InitializationState == SessionInitializationState.Ready;
+
+    public bool IsCurrentSessionInitializing
+        => _activeSession?.InitializationState is SessionInitializationState.Pending
+            or SessionInitializationState.Updating;
+
+    public bool HasCurrentSessionInitializationProblem
+        => _activeSession?.InitializationState is SessionInitializationState.Failed
+            or SessionInitializationState.PluginUnavailable;
+
+    public bool ShowCurrentSessionInitializationState
+        => IsCurrentSessionInitializing || HasCurrentSessionInitializationProblem;
+
+    public string ConnectionParametersTooltip
+        => _activeSession?.InitializationState switch
+        {
+            SessionInitializationState.Pending or SessionInitializationState.Updating
+                => L["session.initialization.updating"],
+            SessionInitializationState.Failed
+                => string.IsNullOrWhiteSpace(_activeSession.InitializationError)
+                    ? L["session.initialization.failed"]
+                    : string.Format(L["session.initialization.failedWithError"], _activeSession.InitializationError),
+            SessionInitializationState.PluginUnavailable
+                => string.IsNullOrWhiteSpace(_activeSession.InitializationError)
+                    ? L["session.initialization.pluginUnavailable"]
+                    : string.Format(L["session.initialization.failedWithError"], _activeSession.InitializationError),
+            _ => L["session.connectionParameters"]
+        };
+
+    public string CurrentSessionInitializationStateLabel
+        => _activeSession?.InitializationState switch
+        {
+            SessionInitializationState.Pending or SessionInitializationState.Updating => L["session.initialization.updating"],
+            SessionInitializationState.Failed => L["session.initialization.failed"],
+            SessionInitializationState.PluginUnavailable => L["session.initialization.pluginUnavailable"],
+            _ => string.Empty
+        };
 
     public string QuickCreateTabLabel => L["sidebar.tab.quickCreate"];
 
@@ -339,6 +379,12 @@ public sealed class LeftSidebarViewModel : BaseViewModel
             OnPropertyChanged(nameof(HasActiveSession));
             OnPropertyChanged(nameof(CanReconnectActiveSession));
             OnPropertyChanged(nameof(CanShowConnectionParameters));
+            OnPropertyChanged(nameof(CanOpenConnectionParameters));
+            OnPropertyChanged(nameof(IsCurrentSessionInitializing));
+            OnPropertyChanged(nameof(HasCurrentSessionInitializationProblem));
+            OnPropertyChanged(nameof(ShowCurrentSessionInitializationState));
+            OnPropertyChanged(nameof(ConnectionParametersTooltip));
+            OnPropertyChanged(nameof(CurrentSessionInitializationStateLabel));
             OnPropertyChanged(nameof(CurrentSessionName));
             OnPropertyChanged(nameof(CurrentSessionEndpoint));
             OnPropertyChanged(nameof(CurrentSessionRxBytes));
@@ -380,6 +426,12 @@ public sealed class LeftSidebarViewModel : BaseViewModel
 
         OnPropertyChanged(nameof(CanReconnectActiveSession));
         OnPropertyChanged(nameof(CanShowConnectionParameters));
+        OnPropertyChanged(nameof(CanOpenConnectionParameters));
+        OnPropertyChanged(nameof(IsCurrentSessionInitializing));
+        OnPropertyChanged(nameof(HasCurrentSessionInitializationProblem));
+        OnPropertyChanged(nameof(ShowCurrentSessionInitializationState));
+        OnPropertyChanged(nameof(ConnectionParametersTooltip));
+        OnPropertyChanged(nameof(CurrentSessionInitializationStateLabel));
         DirectReconnectCommand.RaiseCanExecuteChanged();
     }
 
