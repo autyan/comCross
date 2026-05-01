@@ -88,49 +88,13 @@ public class WorkspaceStateTests
 public class WorkspaceMigrationTests
 {
     [Fact]
-    public void Migration_From_v03_CreatesDefaultWorkload()
+    public void Migration_FromOldVersion_CreatesEmptyDefaultWorkload()
     {
         // Arrange
         var migration = new WorkspaceMigrationService(NullLogger<WorkspaceMigrationService>.Instance);
         var oldState = new WorkspaceState
         {
-            Version = "0.3.2",
-            WorkspaceId = "test",
-#pragma warning disable CS0618 // Type or member is obsolete
-            Sessions = new List<SessionState>
-            {
-                new SessionState { Id = "session-1", Name = "COM3" },
-                new SessionState { Id = "session-2", Name = "COM5" }
-            }
-#pragma warning restore CS0618
-        };
-        
-        // Act
-        var newState = migration.Migrate(oldState);
-        
-        // Assert
-        Assert.Equal("0.4.0", newState.Version);
-        Assert.Single(newState.Workloads);
-        
-        var workload = newState.Workloads[0];
-        Assert.True(workload.IsDefault);
-        Assert.Equal("默认任务", workload.Name);
-        Assert.Equal(2, workload.SessionIds.Count);
-        Assert.Contains("session-1", workload.SessionIds);
-        Assert.Contains("session-2", workload.SessionIds);
-    }
-    
-    [Fact]
-    public void Migration_From_v03_EmptySessions_CreatesEmptyWorkload()
-    {
-        // Arrange
-        var migration = new WorkspaceMigrationService(NullLogger<WorkspaceMigrationService>.Instance);
-        var oldState = new WorkspaceState
-        {
-            Version = "0.3.2",
-#pragma warning disable CS0618
-            Sessions = new List<SessionState>()
-#pragma warning restore CS0618
+            Version = "0.3.2"
         };
         
         // Act
@@ -176,13 +140,7 @@ public class WorkspaceMigrationTests
         var oldState = new WorkspaceState
         {
             Version = "0.3.2",
-            Workloads = new List<Workload> { existingWorkload },
-#pragma warning disable CS0618
-            Sessions = new List<SessionState>
-            {
-                new SessionState { Id = "session-1", Name = "Test" }
-            }
-#pragma warning restore CS0618
+            Workloads = new List<Workload> { existingWorkload }
         };
         
         // Act
@@ -191,6 +149,6 @@ public class WorkspaceMigrationTests
         // Assert
         Assert.Single(newState.Workloads);
         Assert.Equal(existingWorkload.Id, newState.Workloads[0].Id);
-        Assert.Contains("session-1", newState.Workloads[0].SessionIds);
+        Assert.Empty(newState.Workloads[0].SessionIds);
     }
 }

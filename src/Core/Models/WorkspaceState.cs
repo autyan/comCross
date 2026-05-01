@@ -32,15 +32,6 @@ public sealed class WorkspaceState
     public string? ActiveWorkloadId { get; set; }
     
     /// <summary>
-    /// Sessions in this workspace (legacy, pre-v0.4).
-    /// Kept for backward compatibility during migration.
-    /// NOTE: In v0.4+, sessions are stored separately in SQLite with WorkloadId references.
-    /// If Workload data is lost due to corruption, sessions can be restored from SQLite using WorkloadId.
-    /// </summary>
-    [Obsolete("Use Workloads instead. This property is only for v0.3 migration.")]
-    public List<SessionState>? Sessions { get; set; }
-
-    /// <summary>
     /// Persisted session definitions (v0.4+).
     /// Sessions are restored as Disconnected on startup; no auto-reconnect.
     /// ParametersJson represents the last successful connection parameters.
@@ -99,29 +90,6 @@ public sealed class SessionDescriptor
 
     public string? ParentSessionId { get; set; }
     public List<string> ManagedResourceKinds { get; set; } = new();
-}
-
-public sealed class SessionState
-{
-    public string Id { get; set; } = string.Empty;
-    public string Port { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public SerialSettings Settings { get; set; } = new();
-    public bool Connected { get; set; }
-    public MetricsState Metrics { get; set; } = new();
-    
-    /// <summary>
-    /// ID of the Workload this session belongs to (v0.4+).
-    /// Used for data recovery: if Workload data is corrupted/lost,
-    /// sessions can be restored from SQLite using this WorkloadId.
-    /// </summary>
-    public string? WorkloadId { get; set; }
-}
-
-public sealed class MetricsState
-{
-    public long Rx { get; set; }
-    public long Tx { get; set; }
 }
 
 public sealed class UiState
