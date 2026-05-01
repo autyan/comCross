@@ -14,8 +14,6 @@ namespace ComCross.Shell.ViewModels;
 
 public sealed class PluginManagerViewModel : BaseViewModel
 {
-    private const string SegmentUpgradeBytesEnvVar = "COMCROSS_DEV_SEGMENT_UPGRADE_BYTES";
-
     private readonly PluginManagementService _plugins;
     private readonly IItemVmFactory<PluginItemViewModel, PluginItemContext> _itemFactory;
     private string _pluginsDirectory;
@@ -178,33 +176,16 @@ public sealed class PluginManagerViewModel : BaseViewModel
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(result.SessionId)
-                    && TryGetSegmentUpgradeBytes(out var requestedBytes)
-                    && requestedBytes > 0)
-                {
-                    var upgrade = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
-                        runtime,
-                        result.SessionId,
-                        requestedBytes,
-                        TimeSpan.FromSeconds(3));
-
-                    if (!upgrade.Ok)
-                    {
-                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? L["error.unknown"] : upgrade.Error;
-                        await MessageBoxService.ShowWarningAsync(
-                            L["settings.plugins.connectTest.title"],
-                            Localization.GetString("settings.plugins.segmentUpgrade.denied", upgradeError));
-                    }
-                }
-            }
-            finally
-            {
                 // Best-effort cleanup: connect test should not leave an open session.
                 await _plugins.DisconnectAsync(
                     runtime,
                     sessionId: result.SessionId,
                     reason: "connect-test",
                     timeout: TimeSpan.FromSeconds(3));
+            }
+            catch
+            {
+                // best-effort
             }
 
             var message = string.Format(L["settings.plugins.connectTest.success"], plugin.Name, capability.Id);
@@ -258,33 +239,16 @@ public sealed class PluginManagerViewModel : BaseViewModel
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(result.SessionId)
-                    && TryGetSegmentUpgradeBytes(out var requestedBytes)
-                    && requestedBytes > 0)
-                {
-                    var upgrade = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
-                        runtime,
-                        result.SessionId,
-                        requestedBytes,
-                        TimeSpan.FromSeconds(3));
-
-                    if (!upgrade.Ok)
-                    {
-                        var upgradeError = string.IsNullOrWhiteSpace(upgrade.Error) ? L["error.unknown"] : upgrade.Error;
-                        await MessageBoxService.ShowWarningAsync(
-                            L["settings.plugins.connectTest.title"],
-                            Localization.GetString("settings.plugins.segmentUpgrade.denied", upgradeError));
-                    }
-                }
-            }
-            finally
-            {
                 // Best-effort cleanup: connect test should not leave an open session.
                 await _plugins.DisconnectAsync(
                     runtime,
                     sessionId: result.SessionId,
                     reason: "connect-test",
                     timeout: TimeSpan.FromSeconds(3));
+            }
+            catch
+            {
+                // best-effort
             }
 
             var message = string.Format(L["settings.plugins.connectTest.success"], plugin.Name, capabilityId);
@@ -294,19 +258,6 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         var error = string.IsNullOrWhiteSpace(result.Error) ? L["error.unknown"] : result.Error;
         await MessageBoxService.ShowErrorAsync(L["settings.plugins.connectTest.title"], string.Format(L["settings.plugins.connectTest.failed"], error));
-    }
-
-    private static bool TryGetSegmentUpgradeBytes(out int bytes)
-    {
-        bytes = 0;
-
-        var value = Environment.GetEnvironmentVariable(SegmentUpgradeBytesEnvVar);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        return int.TryParse(value, out bytes);
     }
 
     public IReadOnlyList<CapabilityOption> GetCapabilityOptions(string pluginId)
@@ -334,6 +285,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
                 LocalizeOrFallbackNullable($"{r.Info.Manifest.Id}.capability.{c.Id}.description", c.Description),
                 c.Icon,
                 c.DefaultParametersJson,
+                c.ConnectionResource,
                 c.JsonSchema,
                 c.UiSchema)))
             .ToList();
@@ -545,27 +497,6 @@ public sealed class PluginManagerViewModel : BaseViewModel
         var result = await _plugins.ConnectAsync(runtime, capabilityId, parameters, TimeSpan.FromSeconds(3));
         if (result.Ok)
         {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(result.SessionId))
-                {
-                    // ADR-010 closure: shared memory is initialized as part of ConnectAsync when capability declares SharedMemoryRequest.
-                    // Keep a dev-only override path to force a larger segment for stress testing.
-                    if (TryGetSegmentUpgradeBytes(out var overrideBytes) && overrideBytes > 0)
-                    {
-                        _ = await _plugins.AllocateAndApplySharedMemorySegmentAsync(
-                            runtime,
-                            result.SessionId,
-                            overrideBytes,
-                            TimeSpan.FromSeconds(3));
-                    }
-                }
-            }
-            catch
-            {
-                // best-effort; do not fail user connect on upgrade negotiation.
-            }
-
             await MessageBoxService.ShowInfoAsync(
                 L["dialog.connect.plugin.title"],
                 string.Format(L["dialog.connect.plugin.success"], runtime.Info.Manifest.Name, capabilityId));

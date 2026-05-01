@@ -110,6 +110,9 @@ public sealed class SerialBusAdapterPlugin :
                 UiSchema = ReadEmbeddedResource(SerialConnectUiSchemaResource),
                 DefaultParametersJson = "{}",
                 SupportsMultiSession = false,
+                ConnectionResource = new PluginConnectionResourceDescriptor(
+                    ParameterKey: "port",
+                    LabelKey: "serial.adapter.connect.port"),
                 SharedMemoryRequest = new SharedMemoryRequest
                 {
                     MinBytes = 64 * 1024,

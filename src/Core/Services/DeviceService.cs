@@ -239,6 +239,11 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
         data ??= Array.Empty<byte>();
 
+        var transmitTargetAttributes = await TryGetTransmitTargetAttributesAsync(
+            sessionId,
+            transmitTargetId,
+            cancellationToken);
+
         var result = await _pluginHostProtocol.SendDataAsync(
             sessionId,
             data,
@@ -256,9 +261,41 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             : result with { BytesWritten = data.Length };
 
         // Mirror TX into the FrameStore so RX/TX share one timeline.
-        _frameStore.Append(sessionId, DateTime.UtcNow, FrameDirection.Tx, data, format, source: "send-tx");
+        _frameStore.Append(
+            sessionId,
+            DateTime.UtcNow,
+            FrameDirection.Tx,
+            data,
+            format,
+            source: "send-tx",
+            attributes: transmitTargetAttributes);
         _eventBus.Publish(new DataSentEvent(sessionId, data, result.BytesWritten));
         return result;
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>?> TryGetTransmitTargetAttributesAsync(
+        string sessionId,
+        string? transmitTargetId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(transmitTargetId))
+        {
+            return null;
+        }
+
+        try
+        {
+            var targets = await _pluginHostProtocol.GetTransmitTargetsAsync(
+                sessionId,
+                TimeSpan.FromSeconds(1),
+                cancellationToken);
+            var target = targets.Targets.FirstOrDefault(item => string.Equals(item.Id, transmitTargetId, StringComparison.Ordinal));
+            return target?.Attributes;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(

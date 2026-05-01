@@ -926,7 +926,7 @@ public sealed class NetworkBusAdapterPlugin :
                 var payload = result.Buffer ?? Array.Empty<byte>();
                 if (payload.Length > 0)
                 {
-                    TryWriteFrame(sessionId, payload, BuildSourceEndpointAttributes(result.RemoteEndPoint));
+                    TryWriteFrame(sessionId, payload);
                 }
             }
             catch (OperationCanceledException)
@@ -1511,7 +1511,8 @@ public sealed class NetworkBusAdapterPlugin :
                             target.Id,
                             Subtitle: null,
                             IsDefault: string.Equals(target.Id, _defaultTargetId, StringComparison.Ordinal),
-                            LastSeenUtc: target.LastSeenUtc);
+                            LastSeenUtc: target.LastSeenUtc,
+                            Attributes: BuildSourceEndpointAttributes(target.Endpoint));
                     })
                     .ToArray();
 

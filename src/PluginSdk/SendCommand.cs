@@ -10,7 +10,8 @@ public sealed record PluginTransmitTarget(
     string DisplayName,
     string? Subtitle = null,
     bool IsDefault = false,
-    DateTimeOffset? LastSeenUtc = null);
+    DateTimeOffset? LastSeenUtc = null,
+    IReadOnlyDictionary<string, string>? Attributes = null);
 
 public sealed record PluginTransmitTargetQuery(
     string SessionId);

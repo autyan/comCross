@@ -61,13 +61,6 @@ public sealed class PluginManagementService
         TimeSpan timeout)
         => _protocolService.DisconnectAsync(runtime, sessionId, reason, timeout);
 
-    public Task<SegmentUpgradeResult> AllocateAndApplySharedMemorySegmentAsync(
-        PluginRuntime runtime,
-        string sessionId,
-        int requestedBytes,
-        TimeSpan timeout)
-        => _protocolService.AllocateAndApplySharedMemorySegmentAsync(runtime, sessionId, requestedBytes, timeout);
-
     public Task<(bool Ok, string? Error, PluginUiStateSnapshot? Snapshot)> GetUiStateAsync(
         PluginRuntime runtime,
         string capabilityId,

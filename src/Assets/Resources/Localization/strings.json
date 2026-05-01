@@ -25,6 +25,7 @@
       "dialog.connect.plugin.success": "已发送连接请求: {0}/{1}",
       "dialog.connect.plugin.failed": "连接失败: {0}",
       "dialog.connect.plugin.singleSessionHint": "插件宿主当前只允许一个活动会话。请先断开现有会话后再连接。（多会话支持开发中。）",
+      "dialog.connect.resourceConflict.disconnectExisting": "{0}“{1}”已被会话“{2}”使用。是否断开该会话并连接新的会话？",
       "dialog.connect.validation.requiredField": "请填写必填项：{0}",
       "sidebar.devices": "设备",
       "sidebar.sessions": "会话",

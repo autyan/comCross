@@ -150,7 +150,23 @@ Settings snapshot keys use the format `{settingsPageId}.{fieldKey}`. Plugins sho
 
 Example: the serial adapter declares a `serial-scan.scanPatterns` setting and uses that value inside the serial plugin when producing its `ports` UI state. Shell renders the resulting state and dispatches refresh actions; it does not scan serial devices itself.
 
-## 12) Session Metadata
+## 12) Exclusive Connection Resources
+
+Capabilities can declare `PluginConnectionResourceDescriptor` when one committed parameter identifies an exclusive local resource. This lets the host offer a generic pre-connect conflict prompt without knowing plugin-private semantics.
+
+Example: the serial adapter declares `ConnectionResource.ParameterKey = "port"`. Shell may compare the selected `port` against connected serial sessions' committed parameters and ask whether to disconnect the existing session before connecting the new one.
+
+This is a host UX hint only. Plugins must still validate resource availability during `ConnectAsync` and return a clear failure when the resource cannot be opened.
+
+## 13) Message Frame Attributes
+
+Message frames support a small attribute set for searchable and displayable facts. Attribute limits are intentionally strict: at most 8 entries, key <= 32 bytes, value <= 128 bytes.
+
+Plugins may add transport facts such as `source.endpoint`, but should keep attributes concise.
+
+For multi-target sending, `PluginTransmitTarget.Attributes` carries the target's message attributes. Core copies those attributes onto the mirrored TX frame after a successful send. This lets an RX frame from `source.endpoint=127.0.0.1:9000` and a later TX frame to that same target use the same searchable/renderable attribute mechanism.
+
+## 14) Session Metadata
 
 Plugins should describe the session they created through `PluginConnectResult`.
 
@@ -165,7 +181,7 @@ Common metadata:
 Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
 Passive child sessions created from an accepted resource should set `CanReconnect` to `false` when the host cannot actively recreate that session.
 
-## 13) Startup Session State Initialization
+## 15) Startup Session State Initialization
 
 Plugins can implement `IPluginSessionStateInitializer` when persisted session state needs plugin-owned validation, normalization, or migration at startup.
 
@@ -185,7 +201,7 @@ Core owns the state transition and persistence. Plugins should not access worksp
 
 When the user deletes a session, ComCross treats that session as permanently removed. Core removes the session descriptor and deletes the plugin-owned storage file for that session. Plugins should not depend on session storage surviving session deletion.
 
-## 14) Notes
+## 16) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.

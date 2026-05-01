@@ -1,6 +1,4 @@
-using System.Text.Json;
 using ComCross.PluginSdk;
-using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 using Microsoft.Extensions.Logging;
 
@@ -11,19 +9,17 @@ namespace ComCross.Core.Services;
 /// </summary>
 public sealed class SharedMemoryBackpressureBridgeService : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private readonly SharedMemoryManager _sharedMemoryManager;
-    private readonly SessionHostRuntimeService _sessionHostRuntimeService;
+    private readonly PluginHostProtocolService _pluginHostProtocol;
     private readonly ILogger<SharedMemoryBackpressureBridgeService> _logger;
 
     public SharedMemoryBackpressureBridgeService(
         SharedMemoryManager sharedMemoryManager,
-        SessionHostRuntimeService sessionHostRuntimeService,
+        PluginHostProtocolService pluginHostProtocol,
         ILogger<SharedMemoryBackpressureBridgeService> logger)
     {
         _sharedMemoryManager = sharedMemoryManager ?? throw new ArgumentNullException(nameof(sharedMemoryManager));
-        _sessionHostRuntimeService = sessionHostRuntimeService ?? throw new ArgumentNullException(nameof(sessionHostRuntimeService));
+        _pluginHostProtocol = pluginHostProtocol ?? throw new ArgumentNullException(nameof(pluginHostProtocol));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _sharedMemoryManager.BackpressureDetected += OnBackpressureDetected;
@@ -36,23 +32,22 @@ public sealed class SharedMemoryBackpressureBridgeService : IDisposable
             return;
         }
 
-        var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
-        if (sessionHost is null)
-        {
-            return;
-        }
-
         _ = Task.Run(async () =>
         {
             try
             {
-                var payload = JsonSerializer.SerializeToElement(
-                    new PluginHostSetBackpressurePayload(sessionId, level),
-                    JsonOptions);
-
-                await sessionHost.Client.SendAsync(
-                    new PluginHostRequest(Guid.NewGuid().ToString("N"), PluginHostMessageTypes.SetBackpressure, SessionId: sessionId, Payload: payload),
+                var (ok, error) = await _pluginHostProtocol.SetBackpressureAsync(
+                    sessionId,
+                    level,
                     TimeSpan.FromSeconds(1));
+                if (!ok)
+                {
+                    _logger.LogDebug(
+                        "Failed to send backpressure: SessionId={SessionId}, Level={Level}, Error={Error}",
+                        sessionId,
+                        level,
+                        error ?? "-");
+                }
             }
             catch (Exception ex)
             {

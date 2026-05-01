@@ -81,6 +81,13 @@ public sealed record PluginCapabilityDescriptor
     public SharedMemoryRequest? SharedMemoryRequest { get; init; }
 
     /// <summary>
+    /// Optional declaration for capabilities where one committed parameter identifies an exclusive
+    /// local resource. Hosts may use this to warn before connecting another session to the same
+    /// resource, but the plugin remains the authority for final connection success/failure.
+    /// </summary>
+    public PluginConnectionResourceDescriptor? ConnectionResource { get; init; }
+
+    /// <summary>
     /// Session host process model for this capability.
     /// When <see cref="SessionHostModel.Unspecified"/>, the host falls back to <see cref="SupportsMultiSession"/>.
     /// </summary>
@@ -100,6 +107,11 @@ public sealed record PluginCapabilityDescriptor
     /// </summary>
     public bool SupportsMultiSession { get; init; } = false;
 }
+
+public sealed record PluginConnectionResourceDescriptor(
+    string ParameterKey,
+    string? LabelKey = null,
+    bool PromptDisconnectExisting = true);
 
 /// <summary>
 /// Plugins that expose capabilities to the host.

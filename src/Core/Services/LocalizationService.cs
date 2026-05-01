@@ -640,6 +640,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             // Bus adapter / connect flow
             ["busAdapter.adapter.nameFormat"] = "{0} / {1}",
             ["dialog.connect.plugin.singleSessionHint"] = "The plugin host currently allows only one active session. Disconnect the existing session to connect another. (Multi-session support is pending.)",
+            ["dialog.connect.resourceConflict.disconnectExisting"] = "{0} '{1}' is already used by session '{2}'. Disconnect it and connect the new one?",
             ["settings.notifications.storage"] = "Storage limit alerts",
             ["settings.notifications.connection"] = "Connection alerts",
             ["settings.notifications.export"] = "Export alerts",

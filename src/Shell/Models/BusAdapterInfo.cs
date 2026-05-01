@@ -1,4 +1,5 @@
 using System;
+using ComCross.PluginSdk;
 
 namespace ComCross.Shell.Models;
 
@@ -57,6 +58,11 @@ public sealed class BusAdapterInfo
     /// Optional default parameters JSON for the capability.
     /// </summary>
     public string? DefaultParametersJson { get; init; }
+
+    /// <summary>
+    /// Optional plugin-declared exclusive connection resource descriptor.
+    /// </summary>
+    public PluginConnectionResourceDescriptor? ConnectionResource { get; init; }
 
     /// <summary>
     /// JSON schema for parameters.

@@ -30,9 +30,13 @@ public sealed class BusAdapterConnectionService
         return sessions.FirstOrDefault(session => string.Equals(session.Id, sessionId, StringComparison.Ordinal));
     }
 
-    public async Task<Session?> FindSerialPortConflictAsync(string pluginId, string capabilityId, string desiredPort)
+    public async Task<Session?> FindResourceConflictAsync(
+        string pluginId,
+        string capabilityId,
+        string parameterKey,
+        string desiredValue)
     {
-        if (string.IsNullOrWhiteSpace(desiredPort))
+        if (string.IsNullOrWhiteSpace(parameterKey) || string.IsNullOrWhiteSpace(desiredValue))
         {
             return null;
         }
@@ -42,7 +46,7 @@ public sealed class BusAdapterConnectionService
             session.Status == SessionStatus.Connected
             && string.Equals(session.PluginId, pluginId, StringComparison.Ordinal)
             && string.Equals(session.CapabilityId, capabilityId, StringComparison.Ordinal)
-            && string.Equals(TryGetCommittedParameterString(session.ParametersJson, "port"), desiredPort, StringComparison.Ordinal));
+            && string.Equals(TryGetCommittedParameterString(session.ParametersJson, parameterKey), desiredValue, StringComparison.Ordinal));
     }
 
     public Task ConnectPluginAsync(

@@ -96,6 +96,20 @@ public sealed class PluginHostProtocolService
             return (false, "Invalid sessionId.");
         }
 
+        return await SetBackpressureAsync(sessionId, level, timeout, cancellationToken);
+    }
+
+    public async Task<(bool Ok, string? Error)> SetBackpressureAsync(
+        string sessionId,
+        BackpressureLevel level,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return (false, "Invalid sessionId.");
+        }
+
         var sessionHost = _sessionHostRuntimeService.TryGet(sessionId);
         if (sessionHost is null)
         {

@@ -1,5 +1,6 @@
 using System;
 using ComCross.Core.Services;
+using ComCross.PluginSdk;
 using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
@@ -18,6 +19,7 @@ public sealed record PluginCapabilityLaunchOption(
     string? CapabilityDescription,
     string? Icon,
     string? DefaultParametersJson,
+    PluginConnectionResourceDescriptor? ConnectionResource,
     string? JsonSchema,
     string? UiSchema);
 

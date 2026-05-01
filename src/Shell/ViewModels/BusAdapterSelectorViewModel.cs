@@ -28,8 +28,6 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
     public const string BusAdapterViewKind = "bus-adapter";
 
     private const string PluginAdapterPrefix = "plugin:";
-    private const string SerialPluginId = "serial.adapter";
-    private const string SerialCapabilityId = "serial";
     private readonly string _viewKind;
     private readonly string? _viewInstanceId;
     private BusAdapterInfo? _selectedAdapter;
@@ -273,6 +271,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
                     PluginId = option.PluginId,
                     CapabilityId = option.CapabilityId,
                     DefaultParametersJson = option.DefaultParametersJson,
+                    ConnectionResource = option.ConnectionResource,
                     JsonSchema = option.JsonSchema,
                     UiSchema = option.UiSchema
                 };
@@ -965,24 +964,34 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             return;
         }
 
-        // Resource contention rule (UI-host policy): only force disconnect if the *same resource* is already occupied.
-        // For Serial, the resource key is the port path/name.
+        var connectionResource = SelectedAdapter.ConnectionResource;
         if (targetSessionId is null
-            && string.Equals(pluginId, SerialPluginId, StringComparison.Ordinal)
-            && string.Equals(capabilityId, SerialCapabilityId, StringComparison.Ordinal))
+            && connectionResource?.PromptDisconnectExisting == true
+            && !string.IsNullOrWhiteSpace(connectionResource.ParameterKey))
         {
-            var desiredPort = TryGetStateString(currentState, "port") ?? TryGetStateString(currentState, "Port");
-            if (!string.IsNullOrWhiteSpace(desiredPort))
+            var desiredResource = TryGetStateString(currentState, connectionResource.ParameterKey);
+            if (!string.IsNullOrWhiteSpace(desiredResource))
             {
                 try
                 {
-                    var conflict = await _connections.FindSerialPortConflictAsync(pluginId, capabilityId, desiredPort);
+                    var conflict = await _connections.FindResourceConflictAsync(
+                        pluginId,
+                        capabilityId,
+                        connectionResource.ParameterKey,
+                        desiredResource);
 
                     if (conflict is not null)
                     {
+                        var resourceLabel = string.IsNullOrWhiteSpace(connectionResource.LabelKey)
+                            ? connectionResource.ParameterKey
+                            : Localization.GetString(connectionResource.LabelKey);
                         var ok = await MessageBoxService.ShowConfirmAsync(
                             Localization.GetString("dialog.connect.title"),
-                            $"Port '{desiredPort}' is already in use by session '{conflict.Name}'. Disconnect it and connect the new one?");
+                            Localization.GetString(
+                                "dialog.connect.resourceConflict.disconnectExisting",
+                                resourceLabel,
+                                desiredResource,
+                                conflict.Name));
 
                         if (!ok)
                         {

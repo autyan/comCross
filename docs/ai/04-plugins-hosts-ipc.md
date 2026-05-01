@@ -26,6 +26,7 @@
   - Core/Shell own validation of contract shape, lifecycle safety, persistence of public metadata, and degraded behavior when the producer is unavailable.
 - Plugin settings are public producer inputs. When a plugin setting affects plugin-owned domain behavior, Core may pass a settings snapshot through the relevant IPC query, and the plugin must apply it itself.
 - Do not reimplement plugin-owned discovery in Shell/Core. For example, serial port scanning belongs to the serial bus plugin; Shell only renders the plugin-provided state and dispatches plugin actions.
+- If the host needs a generic pre-connect policy such as exclusive local-resource conflict prompting, the capability must declare the public resource key through `PluginConnectionResourceDescriptor`. Shell/Core may compare that declared key against committed session parameters; they must not hardcode plugin ids or plugin-private parameter names.
 
 ## Capability And Permission Semantics
 
