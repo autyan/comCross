@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace ComCross.Core.Services;
 
 /// <summary>
-/// Domain facade that coordinates workspace, workload, and session lifecycle operations.
+/// Domain service that coordinates workspace, workload, and session lifecycle operations.
 /// Reduces the cognitive load on ViewModels.
 /// </summary>
 public interface IWorkspaceCoordinator

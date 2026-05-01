@@ -56,7 +56,7 @@ public static class ServiceCollectionExtensions
         // Persist committed session definitions (last successful connect parameters)
         services.AddSingleton<SessionDescriptorPersistenceService>();
         
-        // Business Coordinators (Domain Facades)
+        // Business Coordinators (Domain Services)
         services.AddSingleton<IWorkspaceCoordinator, WorkspaceCoordinator>();
         
         // Plugin Runtime System
