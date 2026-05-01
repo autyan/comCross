@@ -144,21 +144,20 @@ public sealed class Session : INotifyPropertyChanged
            && _managedResourceKinds.Any(kind => string.Equals(kind, resourceKind, StringComparison.Ordinal));
 
     /// <summary>
-    /// A best-effort, UI-friendly endpoint label derived from <see cref="ParametersJson"/>.
-    /// This is for display only; sessions do not own bus-specific fields.
+    /// UI-friendly endpoint label produced by the session owner.
     /// </summary>
     public string Endpoint
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_parametersJson))
-            {
-                return _displaySubtitle ?? string.Empty;
-            }
-
             if (!string.IsNullOrWhiteSpace(_displaySubtitle))
             {
                 return _displaySubtitle;
+            }
+
+            if (string.IsNullOrWhiteSpace(_parametersJson))
+            {
+                return string.Empty;
             }
 
             try
@@ -169,37 +168,9 @@ public sealed class Session : INotifyPropertyChanged
                     return string.Empty;
                 }
 
-                // Common patterns
-                if (TryGetString(doc.RootElement, "host", out var host) && TryGetString(doc.RootElement, "port", out var port)
-                    && !string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(port))
-                {
-                    return $"{host}:{port}";
-                }
-
-                if (TryGetString(doc.RootElement, "listenHost", out var listenHost) && TryGetString(doc.RootElement, "listenPort", out var listenPort)
-                    && !string.IsNullOrWhiteSpace(listenHost) && !string.IsNullOrWhiteSpace(listenPort))
-                {
-                    return $"{listenHost}:{listenPort}";
-                }
-
-                if (TryGetString(doc.RootElement, "remoteHost", out var remoteHost) && TryGetString(doc.RootElement, "remotePort", out var remotePort)
-                    && !string.IsNullOrWhiteSpace(remoteHost) && !string.IsNullOrWhiteSpace(remotePort))
-                {
-                    return $"{remoteHost}:{remotePort}";
-                }
-
-                // Convention-based common keys across bus adapters.
                 if (TryGetString(doc.RootElement, "port", out var singlePort))
                 {
                     return singlePort;
-                }
-                if (TryGetString(doc.RootElement, "host", out var singleHost))
-                {
-                    return singleHost;
-                }
-                if (TryGetString(doc.RootElement, "address", out var address))
-                {
-                    return address;
                 }
                 if (TryGetString(doc.RootElement, "endpoint", out var endpoint))
                 {

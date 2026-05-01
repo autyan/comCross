@@ -154,8 +154,7 @@ public sealed class ManagedResourceAutoConnectService
             ownerSession,
             PluginResourceKinds.Pending,
             PluginResourceIds.All,
-            // Keep the existing plugin UI view scope until the i18n/UI cleanup scope migrates view names.
-            viewKind: "listener",
+            viewKind: "managed-resource",
             viewInstanceId: null,
             timeout: TimeSpan.FromSeconds(1));
 

@@ -40,3 +40,16 @@ Avoid naming classes after design patterns, such as `Facade`, unless the reposit
 - Shell ViewModels may bind UI state and commands, but should not learn low-level Core details such as dispatcher payload shape, plugin-host message names, or workspace persistence mechanics.
 - Put Shell-facing use cases into Shell services when they adapt Core services for UI workflows.
 - Put domain orchestration into Core services or coordinators when the behavior is not UI-specific.
+
+## Producer/Consumer Boundary
+
+ComCross has an explicit producer/consumer boundary between the main program and bus plugins.
+
+- Bus plugins are producers of domain facts: session metadata, reconnect policy, session topology, managed resources, UI schema, UI state, state patches, and plugin-owned connection semantics.
+- Core and Shell are consumers of those facts. They provide lifecycle orchestration, persistence, host coordination, generic UI rendering, and user workflow glue.
+- Core and Shell must not infer bus-domain behavior from plugin-private parameters, capability-specific payload shapes, or hardcoded plugin ids.
+- Core and Shell may route by stable platform identifiers such as plugin id or capability id only when performing generic platform dispatch, not when deciding bus-domain meaning.
+- If Shell needs to display or operate on a bus-domain fact, first require the plugin to produce that fact through a contract. Do not parse private parameters in Shell as a shortcut.
+- If Core needs durable session facts, persist the plugin-produced public metadata or patches. Do not reconstruct those facts later from plugin-private storage.
+
+Review smell: `Core` or `Shell` code that branches on a bus plugin id/capability id to decide listener/client semantics, parent-child topology, reconnectability, display icon, business labels, or parameter migration is presumed wrong unless it is clearly generic routing.

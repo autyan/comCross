@@ -5,6 +5,7 @@
 - `PluginSdk` is the public plugin-facing surface. Keep it stable and free of in-repository project references.
 - Built-in plugins should use the same SDK-facing contracts expected of external plugins.
 - Do not make Shell depend on built-in plugin implementation details.
+- Bus plugins produce domain facts for the main program. Core and Shell consume those facts through SDK/IPC contracts and must not infer plugin-private semantics.
 
 ## Host Boundaries
 
@@ -19,6 +20,10 @@
 - Any change to IPC or shared-memory behavior must be explicitly called out as a contract change.
 - Use structured payload types when possible. Avoid duplicating anonymous payload shapes across UI call sites.
 - Keep shared-memory allocation, cleanup, and backpressure behavior observable through logs, tests, or documentation.
+- Model main-program/plugin interaction as command/query in, result/state/event/patch out:
+  - Core/Shell may ask a plugin to connect, disconnect, execute an action, provide UI state, initialize session state, or describe resources.
+  - The plugin's returned data is the authoritative source for bus-domain decisions that Core/Shell need to consume.
+  - Core/Shell own validation of contract shape, lifecycle safety, persistence of public metadata, and degraded behavior when the producer is unavailable.
 
 ## Capability And Permission Semantics
 

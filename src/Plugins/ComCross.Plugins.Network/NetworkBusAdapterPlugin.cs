@@ -1664,9 +1664,15 @@ public sealed class NetworkBusAdapterPlugin :
         CopyIfPresent(parameters, normalized, "connectTimeoutMs");
         CopyIfPresent(parameters, normalized, "sessionName");
 
-        return changed
-            ? new PluginSessionMetadataPatch(ParametersJson: JsonSerializer.Serialize(normalized))
-            : null;
+        var subtitle = BuildClientSubtitle(parameters);
+        if (!changed && string.IsNullOrWhiteSpace(subtitle))
+        {
+            return null;
+        }
+
+        return new PluginSessionMetadataPatch(
+            ParametersJson: changed ? JsonSerializer.Serialize(normalized) : null,
+            DisplaySubtitle: subtitle);
     }
 
     private static PluginSessionMetadataPatch? BuildUdpClientSessionPatch(JsonElement parameters)
@@ -1680,15 +1686,76 @@ public sealed class NetworkBusAdapterPlugin :
         CopyRequestedOrCanonicalInt(parameters, normalized, "localPort", "requestedLocalPort", ref changed);
         CopyIfPresent(parameters, normalized, "sessionName");
 
-        return changed
-            ? new PluginSessionMetadataPatch(ParametersJson: JsonSerializer.Serialize(normalized))
-            : null;
+        var subtitle = BuildClientSubtitle(parameters);
+        if (!changed && string.IsNullOrWhiteSpace(subtitle))
+        {
+            return null;
+        }
+
+        return new PluginSessionMetadataPatch(
+            ParametersJson: changed ? JsonSerializer.Serialize(normalized) : null,
+            DisplaySubtitle: subtitle);
     }
 
     private static PluginSessionMetadataPatch? BuildScopedSessionPatch(JsonElement parameters)
     {
         var hasParent = !string.IsNullOrWhiteSpace(TryReadString(parameters, "listenerSessionId"));
-        return hasParent ? new PluginSessionMetadataPatch(CanReconnect: false) : null;
+        return hasParent
+            ? new PluginSessionMetadataPatch(
+                DisplaySubtitle: BuildStoredEndpointSubtitle(parameters),
+                CanReconnect: false)
+            : new PluginSessionMetadataPatch(DisplaySubtitle: BuildListenerSubtitle(parameters));
+    }
+
+    private static string? BuildClientSubtitle(JsonElement parameters)
+        => BuildStoredEndpointSubtitle(parameters)
+           ?? BuildEndpointPairFromParts(
+               TryReadString(parameters, "actualLocalHost") ?? TryReadString(parameters, "localHost"),
+               TryReadIntValue(parameters, "actualLocalPort") ?? TryReadIntValue(parameters, "localPort"),
+               TryReadString(parameters, "remoteHost") ?? TryReadString(parameters, "host"),
+               TryReadIntValue(parameters, "remotePort") ?? TryReadIntValue(parameters, "port"));
+
+    private static string? BuildListenerSubtitle(JsonElement parameters)
+        => BuildStoredEndpointSubtitle(parameters)
+           ?? BuildEndpointFromParts(
+               TryReadString(parameters, "listenHost"),
+               TryReadIntValue(parameters, "listenPort"));
+
+    private static string? BuildStoredEndpointSubtitle(JsonElement parameters)
+    {
+        var endpoint = TryReadString(parameters, "endpoint");
+        return string.IsNullOrWhiteSpace(endpoint) ? null : endpoint.Trim();
+    }
+
+    private static string? BuildEndpointPairFromParts(
+        string? leftHost,
+        int? leftPort,
+        string? rightHost,
+        int? rightPort)
+    {
+        var left = BuildEndpointFromParts(leftHost, leftPort);
+        var right = BuildEndpointFromParts(rightHost, rightPort);
+        if (string.IsNullOrWhiteSpace(left))
+        {
+            return right;
+        }
+
+        if (string.IsNullOrWhiteSpace(right))
+        {
+            return left;
+        }
+
+        return $"{left} -> {right}";
+    }
+
+    private static string? BuildEndpointFromParts(string? host, int? port)
+    {
+        if (string.IsNullOrWhiteSpace(host) || port is null or <= 0)
+        {
+            return null;
+        }
+
+        return $"{host.Trim()}:{port.Value}";
     }
 
     private static void CopyOrMapString(
@@ -1833,6 +1900,9 @@ public sealed class NetworkBusAdapterPlugin :
 
         return false;
     }
+
+    private static int? TryReadIntValue(JsonElement obj, string propertyName)
+        => TryReadInt(obj, propertyName, out var value) ? value : null;
 
     private static string? TryReadString(JsonElement obj, string propertyName)
     {

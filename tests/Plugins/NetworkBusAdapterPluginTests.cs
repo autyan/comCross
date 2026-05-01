@@ -370,6 +370,7 @@ public sealed class NetworkBusAdapterPluginTests
         Assert.True(result.Ok, result.Error);
         Assert.Equal(1, result.StoragePatch?.SchemaVersion);
         Assert.NotNull(result.SessionPatch?.ParametersJson);
+        Assert.Equal("127.0.0.1:54321 -> 127.0.0.1:9000", result.SessionPatch.DisplaySubtitle);
 
         using var doc = JsonDocument.Parse(result.SessionPatch!.ParametersJson!);
         var normalized = doc.RootElement;
@@ -397,6 +398,7 @@ public sealed class NetworkBusAdapterPluginTests
 
         Assert.True(result.Ok, result.Error);
         Assert.False(result.SessionPatch?.CanReconnect);
+        Assert.Null(result.SessionPatch?.DisplaySubtitle);
         Assert.Equal(1, result.StoragePatch?.SchemaVersion);
     }
 

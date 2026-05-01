@@ -28,6 +28,7 @@ This is the repository-level entry point for AI coding agents. Read this file be
 ## Hard Rules
 
 - Do not silently change repository boundaries or cross-process contracts.
+- Treat the main program and bus plugins as a producer/consumer boundary: bus plugins produce domain facts through contracts; Core/Shell consume those facts without inferring plugin-private semantics.
 - Do not deliver mock, placeholder, or TODO-based implementations for real capabilities.
 - Do not add user-visible raw strings. Use i18n keys and update the required resources when the task touches UI copy.
 - Do not use Service Locator outside the composition root unless the reason and boundary are explicit.

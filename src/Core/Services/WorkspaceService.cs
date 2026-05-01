@@ -68,8 +68,7 @@ public sealed class WorkspaceService
         CancellationToken cancellationToken = default)
     {
         var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
-        var sessionId = FindReusableSessionId(pluginId, capabilityId, parameters, scopeSessionId)
-            ?? $"session-{Guid.NewGuid()}";
+        var sessionId = $"session-{Guid.NewGuid()}";
         var name = string.IsNullOrWhiteSpace(sessionName) ? null : sessionName;
 
         try
@@ -96,33 +95,6 @@ public sealed class WorkspaceService
         {
             throw;
         }
-    }
-
-    private string? FindReusableSessionId(
-        string pluginId,
-        string capabilityId,
-        JsonElement parameters,
-        string? scopeSessionId)
-    {
-        if (string.IsNullOrWhiteSpace(scopeSessionId))
-        {
-            return null;
-        }
-
-        var desiredEndpoint = TryReadEndpointIdentity(parameters);
-        if (desiredEndpoint is null)
-        {
-            return null;
-        }
-
-        return _deviceService.GetAllSessions()
-            .FirstOrDefault(session =>
-                session.Status != SessionStatus.Connected
-                && string.Equals(session.PluginId, pluginId, StringComparison.Ordinal)
-                && string.Equals(session.CapabilityId, capabilityId, StringComparison.Ordinal)
-                && string.Equals(session.ParentSessionId, scopeSessionId, StringComparison.Ordinal)
-                && string.Equals(TryReadEndpointIdentity(session.ParametersJson), desiredEndpoint, StringComparison.OrdinalIgnoreCase))
-            ?.Id;
     }
 
     /// <summary>
@@ -473,69 +445,4 @@ public sealed class WorkspaceService
         return ordered;
     }
 
-    private static string? TryReadEndpointIdentity(string? parametersJson)
-    {
-        if (string.IsNullOrWhiteSpace(parametersJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(parametersJson);
-            return TryReadEndpointIdentity(doc.RootElement);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? TryReadEndpointIdentity(JsonElement parameters)
-    {
-        if (parameters.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        var host = TryReadString(parameters, "remoteHost") ?? TryReadString(parameters, "host");
-        var port = TryReadInt(parameters, "remotePort") ?? TryReadInt(parameters, "port");
-        if (!string.IsNullOrWhiteSpace(host) && port is > 0)
-        {
-            return $"{NormalizeHost(host)}:{port.Value}";
-        }
-
-        var endpoint = TryReadString(parameters, "endpoint");
-        return string.IsNullOrWhiteSpace(endpoint) ? null : endpoint.Trim();
-    }
-
-    private static string NormalizeHost(string host)
-        => string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
-            ? "127.0.0.1"
-            : host.Trim();
-
-    private static string? TryReadString(JsonElement obj, string propertyName)
-    {
-        if (!obj.TryGetProperty(propertyName, out var prop))
-        {
-            return null;
-        }
-
-        return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
-    }
-
-    private static int? TryReadInt(JsonElement obj, string propertyName)
-    {
-        if (!obj.TryGetProperty(propertyName, out var prop))
-        {
-            return null;
-        }
-
-        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value))
-        {
-            return value;
-        }
-
-        return int.TryParse(prop.ToString(), out var parsed) ? parsed : null;
-    }
 }

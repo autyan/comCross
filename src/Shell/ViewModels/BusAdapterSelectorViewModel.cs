@@ -687,7 +687,7 @@ public sealed class BusAdapterSelectorViewModel : BaseViewModel
             _activeSession.PluginId,
             _activeSession.CapabilityId,
             _activeSession.Id,
-            viewKind: "listener",
+            viewKind: "managed-resource",
             viewInstanceId: null,
             resourceKind: PluginResourceKinds.Pending,
             resourceId: PluginResourceIds.All,

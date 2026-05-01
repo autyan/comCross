@@ -77,12 +77,26 @@ plugin assemblies directly. This isolates crashes and allows per-plugin restarts
 Plugins should not depend on UI types. Provide data and behavior via the
 notification system and any supported contracts instead.
 
-## 6) Permissions
+## 6) Producer/Consumer Boundary
+
+Bus plugins produce domain facts. The main program consumes those facts through public contracts.
+
+For bus plugins, this means the plugin should provide:
+- session display metadata, icons, and endpoint text
+- reconnect policy
+- parent/child session topology
+- managed resource lists and action descriptors
+- capability UI schema and UI state
+- startup session state patches and plugin-owned storage patches
+
+Core and Shell should not infer those facts from plugin-private parameters. If a UI or workflow needs a bus-domain fact, expose it through a PluginSdk contract instead of relying on host-side parsing.
+
+## 7) Permissions
 
 Permissions are declared in the manifest and are used to inform users what
 the plugin is allowed to do. These do not enforce security at runtime yet.
 
-## 7) Notifications (Optional)
+## 8) Notifications (Optional)
 
 Plugins can subscribe to app notifications by implementing:
 
@@ -103,7 +117,7 @@ plugins may opt in.
 Note: plugin callbacks are isolated. Exceptions are caught and the plugin will
 be restarted; failures are logged.
 
-## 8) Packaging
+## 9) Packaging
 
 Place the compiled plugin DLL under its folder in `plugins/`:
 
@@ -113,7 +127,7 @@ plugins/
     tool.dll
 ```
 
-## 9) Session-Owned Resources
+## 10) Session-Owned Resources
 
 Plugins that own transient resources under an active session can expose them through the PluginSdk resource management contract.
 
@@ -129,7 +143,7 @@ Supported generic action kinds:
 
 The host UI must consume the generic descriptors and should not hardcode a plugin's private action names or payload shape.
 
-## 10) Session Metadata
+## 11) Session Metadata
 
 Plugins should describe the session they created through `PluginConnectResult`.
 
@@ -144,7 +158,7 @@ Common metadata:
 Core stores this metadata and Shell consumes it. Core should not infer session topology from plugin id, capability id, or plugin-private parameters.
 Passive child sessions created from an accepted resource should set `CanReconnect` to `false` when the host cannot actively recreate that session.
 
-## 11) Startup Session State Initialization
+## 12) Startup Session State Initialization
 
 Plugins can implement `IPluginSessionStateInitializer` when persisted session state needs plugin-owned validation, normalization, or migration at startup.
 
@@ -162,7 +176,7 @@ The initializer returns:
 
 Core owns the state transition and persistence. Plugins should not access workspace files directly for this flow. If the plugin is unavailable or the initializer fails, the session remains visible but unavailable until the user deletes it or a later startup can initialize it.
 
-## 12) Notes
+## 13) Notes
 
 - Keep plugins isolated from core services unless explicitly supported.
 - Do not depend on internal UI types that may change between versions.
