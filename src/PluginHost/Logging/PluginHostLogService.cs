@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using NLog;
 using NLog.Config;
 using NLog.Layouts;
@@ -130,10 +131,23 @@ public sealed class PluginHostLogService
 
     private static string ResolveDefaultDirectory()
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            var xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+            if (!string.IsNullOrWhiteSpace(xdgDataHome))
+            {
+                return Path.Combine(xdgDataHome, "ComCross", "logs", "plugin-host");
+            }
+
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(home, ".local", "share", "ComCross", "logs", "plugin-host");
+        }
+
         return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ComCross",
-            "plugin-logs");
+            "logs",
+            "plugin-host");
     }
 
     private static string SanitizeFileComponent(string? value)

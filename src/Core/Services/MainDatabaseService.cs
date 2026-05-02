@@ -12,12 +12,14 @@ public sealed class MainDatabaseService : IDisposable, IAsyncDisposable
     private SqliteConnection? _connection;
     private bool _disposed;
 
+    public MainDatabaseService(ComCrossPathService paths)
+        : this(paths.DatabaseDirectory)
+    {
+    }
+
     public MainDatabaseService(string? configDirectory = null)
     {
-        var baseDirectory = configDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
+        var baseDirectory = configDirectory ?? new ComCrossPathService().DatabaseDirectory;
 
         Directory.CreateDirectory(baseDirectory);
         _databasePath = Path.Combine(baseDirectory, "comcross.db");

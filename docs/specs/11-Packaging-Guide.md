@@ -33,7 +33,60 @@ We commit to keeping the runtime baseline stable for users. The baseline will
 only change when strictly necessary, and any breaking changes will be announced
 ahead of time.
 
-## 3) Windows (MSI)
+## 3) Runtime Directories
+
+ComCross separates install content, configuration, local data, logs, cache, and
+runtime plugins.
+
+Windows:
+
+```text
+Configuration:
+%AppData%\ComCross\
+
+Local data:
+%LocalAppData%\ComCross\
+
+Databases:
+%LocalAppData%\ComCross\data\
+
+Logs:
+%LocalAppData%\ComCross\logs\
+
+Cache:
+%LocalAppData%\ComCross\cache\
+
+Runtime plugins:
+%LocalAppData%\ComCross\plugins\
+```
+
+Linux:
+
+```text
+Configuration:
+${XDG_CONFIG_HOME:-$HOME/.config}/ComCross/
+
+Local data:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/
+
+Databases:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/data/
+
+Logs:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/logs/
+
+Cache:
+${XDG_CACHE_HOME:-$HOME/.cache}/ComCross/
+
+Runtime plugins:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+This is a pre-stable breaking directory relocation. Old configuration,
+database, log, cache, plugin session storage, export, and plugin runtime
+directories are not kept as compatibility read paths.
+
+## 4) Windows (MSI)
 
 Recommended toolchain: WiX Toolset v4.
 
@@ -41,7 +94,7 @@ Recommended toolchain: WiX Toolset v4.
 2. Point the MSI project to the publish output folder.
 3. Produce `ComCross-<version>.msi`.
 
-## 4) Linux (DEB/RPM)
+## 5) Linux (DEB/RPM)
 
 Recommended toolchain: fpm.
 
@@ -69,7 +122,7 @@ fpm -s dir -t rpm -n comcross -v <version> \
   -d dotnet-runtime-8.0
 ```
 
-## 5) Plugin Layout
+## 6) Plugin Layout
 
 Official plugins are normal plugin packages. Build and release outputs carry
 them as bundled seed content under:
@@ -95,7 +148,7 @@ This is a pre-stable breaking directory relocation. The old
 `AppContext.BaseDirectory/plugins` runtime layout is not kept as a compatibility
 read path.
 
-## 6) Release Artifacts
+## 7) Release Artifacts
 
 Upload to GitHub Releases with consistent naming:
 
@@ -107,7 +160,7 @@ Upload to GitHub Releases with consistent naming:
 - `comcross_<version>_amd64.deb`
 - `comcross-<version>.x86_64.rpm`
 
-## 7) Symbols
+## 8) Symbols
 
 Public release builds do not include PDBs by default. Use
 `scripts/package-release.sh --include-symbols` if you need symbols for internal

@@ -11,8 +11,19 @@ namespace ComCross.Core.Services;
 public sealed class AppLogService
 {
     private readonly Logger _logger = LogManager.GetLogger("ComCross.App");
+    private readonly ComCrossPathService _paths;
     private AppLogSettings _settings = new();
     private bool _initialized;
+
+    public AppLogService()
+        : this(new ComCrossPathService())
+    {
+    }
+
+    public AppLogService(ComCrossPathService paths)
+    {
+        _paths = paths;
+    }
 
     public void Initialize(AppLogSettings settings)
     {
@@ -26,7 +37,7 @@ public sealed class AppLogService
         _settings = settings;
         if (_initialized)
         {
-            ConfigureLogging(settings);
+        ConfigureLogging(settings);
         }
     }
 
@@ -76,7 +87,7 @@ public sealed class AppLogService
         _logger.Error(exception, "{0}: {1}", context, exception.Message);
     }
 
-    private static void ConfigureLogging(AppLogSettings settings)
+    private void ConfigureLogging(AppLogSettings settings)
     {
         var directory = ResolveDirectory(settings);
         Directory.CreateDirectory(directory);
@@ -131,19 +142,14 @@ public sealed class AppLogService
         return NLog.LogLevel.FromString(level.Trim());
     }
 
-    private static string ResolveDirectory(AppLogSettings settings)
+    private string ResolveDirectory(AppLogSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(settings.Directory))
         {
             return settings.Directory;
         }
 
-        var baseDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross",
-            "app-logs"
-        );
-        settings.Directory = baseDirectory;
-        return baseDirectory;
+        settings.Directory = _paths.AppLogDirectory;
+        return _paths.AppLogDirectory;
     }
 }

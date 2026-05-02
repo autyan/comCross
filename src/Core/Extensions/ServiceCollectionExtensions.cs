@@ -31,8 +31,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<EventBus>());
 
         services.AddSingleton<ComCrossPathService>();
-        services.AddSingleton<ConfigService>();
-        services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ConfigService>().ConfigDirectory));
+        services.AddSingleton(sp => new ConfigService(sp.GetRequiredService<ComCrossPathService>()));
+        services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
         services.AddSingleton<AppLogService>();
