@@ -9,6 +9,7 @@ This directory contains the public technical specifications for ComCross v0.4.0.
 - [03-System-Architecture.md](03-System-Architecture.md) - Current module boundaries and runtime architecture
 - [04-Plugin-System.md](04-Plugin-System.md) - Plugin, host, IPC, UI-state, and bus capability model
 - [05-Workspace-State.md](05-Workspace-State.md) - Workspace, workload, session, and persistence semantics
+- [12-Startup-Identity-Signing-Design.md](12-Startup-Identity-Signing-Design.md) - Planned startup, instance identity, signing, and plugin trust design
 
 ## User Experience
 
