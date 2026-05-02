@@ -4,6 +4,7 @@ This directory contains the public technical specifications for ComCross v0.4.0.
 
 ## Product And Architecture
 
+- [01-Compatibility-Policy.md](01-Compatibility-Policy.md) - Current compatibility stage and breaking-change policy
 - [02-MVP-Scope.md](02-MVP-Scope.md) - v0.4 release scope and non-goals
 - [03-System-Architecture.md](03-System-Architecture.md) - Current module boundaries and runtime architecture
 - [04-Plugin-System.md](04-Plugin-System.md) - Plugin, host, IPC, UI-state, and bus capability model

@@ -10,7 +10,7 @@ The following are contract changes and must be called out explicitly:
 - Workspace, config, database, or other persisted file structures and field semantics.
 - Capability IDs, permission names, plugin IDs, and other external identifiers.
 
-ComCross is pre-1.0, so breaking changes are allowed when they close architecture gaps. They must not be silent.
+ComCross is pre-stable and has not entered a public compatibility period. Breaking changes are allowed when they close architecture gaps, correct runtime boundaries, or establish durable directory and packaging contracts. They must not be silent.
 
 ## Required Documentation
 
@@ -23,6 +23,7 @@ ComCross is pre-1.0, so breaking changes are allowed when they close architectur
 Any persisted structure change must state one migration strategy:
 
 - Discard old data and rebuild.
+- Breaking relocation with no compatibility read.
 - One-time conversion.
 - Compatible read followed by gradual retirement.
 
@@ -34,6 +35,8 @@ At least one diagnostic surface must make the migration observable:
 
 ## Compatibility
 
+- During the current pre-stable stage, compatibility reads and migrations are not required by default for directory, configuration, database, plugin layout, or install layout changes.
+- Breaking relocation is acceptable when it is documented as the chosen strategy.
 - Do not change persisted semantics while only changing UI presentation.
 - Do not change defaults or field meanings without naming the compatibility impact.
-- When in doubt, add compatibility read paths before changing write paths.
+- When the project enters a stable compatibility period, update this rule file before requiring compatibility reads, migrations, or long-term retention guarantees.
