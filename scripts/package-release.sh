@@ -6,7 +6,6 @@ output_dir="artifacts"
 rids=(linux-x64 linux-arm64 win-x64 win-arm64)
 include_symbols=false
 package_outputs=true
-target_framework="net10.0"
 
 usage() {
   cat <<'EOF'

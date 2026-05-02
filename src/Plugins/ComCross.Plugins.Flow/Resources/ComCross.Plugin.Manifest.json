@@ -1,8 +1,8 @@
 {
   "id": "serial.flow",
   "name": "Flow Builder",
-  "version": "0.3.1",
-  "targetCoreVersion": "0.3",
+  "version": "0.4.0",
+  "targetCoreVersion": "0.4",
   "entryPoint": "ComCross.Plugins.Flow.FlowTool",
   "pluginType": "FlowProcessor",
   "toolGroup": "automation",

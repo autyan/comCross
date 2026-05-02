@@ -28,8 +28,8 @@ Example:
 {
   "id": "network.adapter",
   "name": "Network Adapter",
-  "version": "0.3.2",
-  "targetCoreVersion": "0.3",
+  "version": "0.4.0",
+  "targetCoreVersion": "0.4",
   "entryPoint": "ComCross.Plugins.Network.NetworkBusAdapterPlugin",
   "pluginType": "BusAdapter",
   "toolGroup": "network",

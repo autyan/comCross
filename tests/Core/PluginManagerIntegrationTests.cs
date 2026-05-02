@@ -254,7 +254,20 @@ public sealed class PluginManagerIntegrationTests
 
         private static void CopyHostOutputs(string repoRoot, string baseDir, string projectName)
         {
-            var sourceDir = Path.Combine(repoRoot, "src", projectName, "bin", "Release", "net8.0");
+            var hostPrefix = $"ComCross.{projectName}";
+            var sourceDir = new[]
+                {
+                    Path.Combine(repoRoot, "src", projectName, "bin", "Debug", "net8.0"),
+                    Path.Combine(repoRoot, "src", projectName, "bin", "Release", "net8.0")
+                }
+                .FirstOrDefault(path => File.Exists(Path.Combine(path, hostPrefix + ".dll"))
+                    && File.Exists(Path.Combine(path, hostPrefix + ".runtimeconfig.json")));
+
+            if (sourceDir is null)
+            {
+                throw new DirectoryNotFoundException($"Host output not found for {hostPrefix}.");
+            }
+
             foreach (var file in Directory.GetFiles(sourceDir, $"ComCross.{projectName}*"))
             {
                 var target = Path.Combine(baseDir, Path.GetFileName(file));
