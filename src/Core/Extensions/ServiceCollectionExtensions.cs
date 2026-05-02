@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<DeviceService>();
         
         // Plugin trust / signature verification (disabled by default; see AppSettings.Plugins.SignatureVerification)
+        services.AddSingleton<IPluginTrustKeyProvider, OfficialPluginTrustKeyProvider>();
         services.AddSingleton<PluginSignatureVerificationService>();
         
         services.AddSingleton<WorkspaceDatabaseService>();
