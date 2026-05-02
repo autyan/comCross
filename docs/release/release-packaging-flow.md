@@ -104,6 +104,9 @@ It is manually triggered with `workflow_dispatch` inputs:
 - `prerelease`: whether the GitHub Release is marked as a pre-release
 - `draft`: whether the GitHub Release is created as a draft
 - `require_signing`: whether missing signing material should fail the workflow
+- `release_notes_path`: repository path to the release notes Markdown file.
+  This is required for final non-draft releases and may be omitted for
+  validation-only draft pre-releases.
 
 The workflow:
 
@@ -113,7 +116,8 @@ The workflow:
 4. Downloads all package artifacts into one release package directory.
 5. Regenerates a unified `SHA256SUMS` file over all final package assets.
 6. Optionally signs `SHA256SUMS`.
-7. Creates the GitHub Release or Pre-release and uploads the package assets.
+7. Creates the GitHub Release or Pre-release and uploads the package assets,
+   using `release_notes_path` when provided.
 
 Pre-release validation may run with `require_signing=false` while signing
 secrets are still being prepared. Formal releases should use
@@ -141,6 +145,17 @@ gh workflow run release.yml \
   -f require_signing=false
 ```
 
+Final release example:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0 \
+  -f prerelease=false \
+  -f draft=false \
+  -f require_signing=true \
+  -f release_notes_path=docs/release/notes/v0.5.0.md
+```
+
 Follow-up commands:
 
 ```bash
@@ -148,3 +163,18 @@ gh run list --workflow release.yml
 gh run view <run-id> --log
 gh release view v0.5.0-rc.1
 ```
+
+## Release Notes Source
+
+Release note source files live under:
+
+```text
+docs/release/notes/
+```
+
+Use `docs/release/notes/v<version>.md` for final public releases. The release
+branch or release commit must include the release notes file before triggering a
+final non-draft workflow run.
+
+Validation-only draft pre-releases may omit `release_notes_path`; those releases
+must be deleted after validation.

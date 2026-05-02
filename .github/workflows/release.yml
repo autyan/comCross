@@ -22,6 +22,11 @@ on:
         required: true
         default: false
         type: boolean
+      release_notes_path:
+        description: "Repository path to release notes Markdown. Required for final non-draft releases."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -258,16 +263,31 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_PRERELEASE: ${{ inputs.prerelease }}
           RELEASE_DRAFT: ${{ inputs.draft }}
+          RELEASE_NOTES_PATH: ${{ inputs.release_notes_path }}
         run: |
           set -euo pipefail
 
           tag="v${RELEASE_VERSION}"
+          notes_args=()
+          if [[ -n "${RELEASE_NOTES_PATH}" ]]; then
+            if [[ ! -f "${RELEASE_NOTES_PATH}" ]]; then
+              echo "Release notes file not found: ${RELEASE_NOTES_PATH}" >&2
+              exit 1
+            fi
+            notes_args+=(--notes-file "${RELEASE_NOTES_PATH}")
+          elif [[ "${RELEASE_DRAFT}" != "true" && "${RELEASE_PRERELEASE}" != "true" ]]; then
+            echo "release_notes_path is required for final non-draft releases." >&2
+            exit 1
+          else
+            notes_args+=(--notes "Automated ComCross release package validation for ${tag}.")
+          fi
+
           release_args=(
             "${tag}"
             artifacts/release/packages/*
             --target "${GITHUB_SHA}"
             --title "ComCross ${tag}"
-            --notes "Automated ComCross release package validation for ${tag}."
+            "${notes_args[@]}"
           )
 
           if [[ "${RELEASE_PRERELEASE}" == "true" ]]; then

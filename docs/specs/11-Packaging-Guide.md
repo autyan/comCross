@@ -22,6 +22,8 @@ Default release assets:
 - Verification:
   - `SHA256SUMS`
   - `SHA256SUMS.asc` when signing material is provided
+- Release notes:
+  - `docs/release/notes/v<version>.md`
 
 Portable `.tar.gz` and `.zip` publish archives are no longer default release
 assets. Users who need bare publish outputs should build them locally from
@@ -290,11 +292,30 @@ gh workflow run release.yml \
 ```
 
 For formal releases, use `require_signing=true` after the signing secrets are
-configured.
+configured and pass `release_notes_path`:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0 \
+  -f prerelease=false \
+  -f draft=false \
+  -f require_signing=true \
+  -f release_notes_path=docs/release/notes/v0.5.0.md
+```
 
 The workflow builds Linux packages on Ubuntu, Windows MSI packages on Windows,
 regenerates a unified `SHA256SUMS` file across all package assets, optionally
 signs the checksum file, and creates the GitHub Release or Pre-release.
+
+Release notes are stored under:
+
+```text
+docs/release/notes/
+```
+
+Final public releases must provide a matching release notes file in the release
+branch before the workflow is triggered. Validation-only draft pre-releases may
+omit release notes and must be deleted after validation.
 
 ## 9) Plugin Layout
 
