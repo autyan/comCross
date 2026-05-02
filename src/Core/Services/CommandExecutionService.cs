@@ -16,6 +16,7 @@ public sealed class CommandExecutionService
     public async Task ExecuteAsync(
         string sessionId,
         CommandDefinition command,
+        string? transmitTargetId = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -34,7 +35,8 @@ public sealed class CommandExecutionService
                 command.Payload,
                 MessageFormat.Hex,
                 command.AppendCr,
-                command.AppendLf));
+                command.AppendLf,
+                transmitTargetId));
             return;
         }
 
@@ -45,7 +47,8 @@ public sealed class CommandExecutionService
                 command.Payload,
                 MessageFormat.Text,
                 command.AppendCr,
-                command.AppendLf));
+                command.AppendLf,
+                transmitTargetId));
             return;
         }
 
@@ -57,7 +60,7 @@ public sealed class CommandExecutionService
             data = data.Concat(encoding.GetBytes(suffix)).ToArray();
         }
 
-        EnsureSendSucceeded(await _workspaceCoordinator.SendDataAsync(sessionId, data));
+        EnsureSendSucceeded(await _workspaceCoordinator.SendDataAsync(sessionId, data, transmitTargetId));
     }
 
     private static void EnsureSendSucceeded(PluginCommandResult result)

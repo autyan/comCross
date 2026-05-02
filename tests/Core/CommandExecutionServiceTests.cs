@@ -21,13 +21,14 @@ public sealed class CommandExecutionServiceTests
             AppendCr = true
         };
 
-        await service.ExecuteAsync("session-1", command);
+        await service.ExecuteAsync("session-1", command, "127.0.0.1:43045");
 
         Assert.Equal("session-1", coordinator.LastMessageSessionId);
         Assert.Equal("AT", coordinator.LastMessage);
         Assert.Equal(MessageFormat.Text, coordinator.LastFormat);
         Assert.True(coordinator.LastAddCr);
         Assert.False(coordinator.LastAddLf);
+        Assert.Equal("127.0.0.1:43045", coordinator.LastMessageTransmitTargetId);
         Assert.Null(coordinator.LastData);
     }
 
@@ -43,13 +44,14 @@ public sealed class CommandExecutionServiceTests
             AppendLf = true
         };
 
-        await service.ExecuteAsync("session-1", command);
+        await service.ExecuteAsync("session-1", command, "127.0.0.1:43045");
 
         Assert.Equal("session-1", coordinator.LastMessageSessionId);
         Assert.Equal("01 02 0A", coordinator.LastMessage);
         Assert.Equal(MessageFormat.Hex, coordinator.LastFormat);
         Assert.False(coordinator.LastAddCr);
         Assert.True(coordinator.LastAddLf);
+        Assert.Equal("127.0.0.1:43045", coordinator.LastMessageTransmitTargetId);
         Assert.Null(coordinator.LastData);
     }
 
@@ -66,10 +68,11 @@ public sealed class CommandExecutionServiceTests
             AppendLf = true
         };
 
-        await service.ExecuteAsync("session-1", command);
+        await service.ExecuteAsync("session-1", command, "127.0.0.1:43045");
 
         Assert.Equal("session-1", coordinator.LastDataSessionId);
         Assert.Equal(new byte[] { 0x41, 0x00, 0x0A, 0x00 }, coordinator.LastData);
+        Assert.Equal("127.0.0.1:43045", coordinator.LastDataTransmitTargetId);
         Assert.Null(coordinator.LastMessage);
     }
 
@@ -80,8 +83,10 @@ public sealed class CommandExecutionServiceTests
         public MessageFormat? LastFormat { get; private set; }
         public bool LastAddCr { get; private set; }
         public bool LastAddLf { get; private set; }
+        public string? LastMessageTransmitTargetId { get; private set; }
         public string? LastDataSessionId { get; private set; }
         public byte[]? LastData { get; private set; }
+        public string? LastDataTransmitTargetId { get; private set; }
 
         public long TotalRxBytes => 0;
 
@@ -134,6 +139,7 @@ public sealed class CommandExecutionServiceTests
             LastFormat = format;
             LastAddCr = addCr;
             LastAddLf = addLf;
+            LastMessageTransmitTargetId = transmitTargetId;
             return Task.FromResult(new PluginCommandResult(true));
         }
 
@@ -141,6 +147,7 @@ public sealed class CommandExecutionServiceTests
         {
             LastDataSessionId = sessionId;
             LastData = data;
+            LastDataTransmitTargetId = transmitTargetId;
             return Task.FromResult(new PluginCommandResult(true));
         }
 

@@ -414,7 +414,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
 
         CommandCenter.SelectedCommand = command;
-        await CommandCenter.SendCommandAsync(command);
+        await CommandCenter.SendCommandAsync(command, SelectedTransmitTarget?.Id);
     }
 
     public void OpenCommandSearch()

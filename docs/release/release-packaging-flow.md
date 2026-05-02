@@ -107,6 +107,40 @@ The required review checklist is maintained in:
 docs/release/prerelease-review.md
 ```
 
+### Hotfix Package Republish
+
+A hotfix package republish is a narrow exception to the full prerelease review
+and release-branch flow. Use it only when an accepted regression must be fixed
+from the current `main` release state and the user explicitly requests a hotfix
+release.
+
+Hotfix rules:
+
+- Branch from `main` using a `hotfix/<scope>` branch.
+- Keep the code change limited to the accepted regression fix.
+- Do not change application version files, release notes, or changelog files
+  unless explicitly requested.
+- Merge the hotfix back to `main` before triggering the release workflow.
+- Trigger `.github/workflows/release.yml` with the hotfix package version in
+  the `version` input, for example `0.5.1`.
+- If the previous package release should be withdrawn, delete the previous
+  GitHub Release and matching tag only after the replacement workflow has been
+  triggered or completed according to the user's instruction.
+
+Hotfix trigger example:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.1 \
+  -f prerelease=false \
+  -f draft=false \
+  -f require_signing=true
+```
+
+If no new release notes file is created for the hotfix, run the workflow as a
+draft or pre-release, or provide an existing release notes path only when the
+user confirms that the notes should be reused unchanged.
+
 The release workflow is:
 
 ```text

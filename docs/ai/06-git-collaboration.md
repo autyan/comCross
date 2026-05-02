@@ -23,6 +23,16 @@
 
 - Do not push, tag, publish, package, or alter release branches unless explicitly requested.
 - Do not change runtime or publish layout as part of unrelated refactors.
+- Hotfix package republishes are allowed to bypass the full prerelease-review
+  and release-branch flow only when the user explicitly asks for a hotfix
+  release. Keep the hotfix branch based on `main`, limit the commit to the
+  accepted regression fix plus any required release-process rule update, merge
+  it back to `main`, and trigger the release workflow with the requested
+  hotfix package version.
+- For hotfix package republishes, do not change application version files,
+  release notes, or changelogs unless the user explicitly asks for those
+  changes. The workflow `version` input may be used to create packages and a
+  GitHub release tag for the hotfix package version.
 - Before creating a release branch, ensure the release code has already been
   merged into both `main` and `develop`.
 - After `main` and `develop` contain the release code, create a prerelease

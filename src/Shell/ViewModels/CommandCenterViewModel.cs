@@ -377,7 +377,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
     public async Task SendSelectedAsync()
         => await SendCommandAsync(SelectedCommand);
 
-    public async Task SendCommandAsync(CommandDefinition? command)
+    public async Task SendCommandAsync(CommandDefinition? command, string? transmitTargetId = null)
     {
         if (command == null || string.IsNullOrEmpty(_sessionId))
         {
@@ -386,7 +386,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
 
         try
         {
-            await _commandExecutionService.ExecuteAsync(_sessionId, command);
+            await _commandExecutionService.ExecuteAsync(_sessionId, command, transmitTargetId);
         }
         catch (Exception ex)
         {

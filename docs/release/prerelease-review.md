@@ -2,6 +2,13 @@
 
 This checklist must be completed before creating a final release branch.
 
+Hotfix package republishes are an explicit exception. When a user-approved
+hotfix starts from `main`, fixes one accepted regression, and only republishes
+packages under a new hotfix package version, the prerelease review branch and
+final release branch are not required. The hotfix must still be reviewed by the
+requesting user and validated with the narrowest relevant tests before it is
+merged back to `main`.
+
 ## Branch Flow
 
 1. Merge all code intended for the release into `develop`.
