@@ -1,0 +1,43 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="ComCross"
+    Manufacturer="autyan"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="2D0F7581-E54A-4E77-8F17-0DD6E82290E1"
+    Scope="perMachine">
+
+    <SummaryInformation Description="ComCross $(var.PlatformRid)" Manufacturer="autyan" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ComCross is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="ComCross" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="ComCross" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="ComCross" />
+    </StandardDirectory>
+
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="*">
+      <Shortcut
+        Id="ComCrossStartMenuShortcut"
+        Name="ComCross"
+        Description="Cross-platform embedded communication toolbox"
+        Target="[INSTALLFOLDER]ComCross.Shell.exe"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\ComCross\ComCross"
+        Name="installed"
+        Type="integer"
+        Value="1"
+        KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>
