@@ -1,7 +1,7 @@
 # Release Packaging Flow
 
-This document captures the staged release pipeline used by the
-`feature/release-packaging-flow` work.
+This document captures the staged release pipeline used for ComCross release
+automation.
 
 ## Goal
 
@@ -24,7 +24,8 @@ format.
 4. Build Windows per-user MSI packages with `scripts/release/build-windows-msi.ps1`.
 5. Generate checksums with `scripts/release/generate-checksums.sh`.
 6. Optionally sign checksums with `scripts/release/sign-artifacts.sh`.
-7. After local and Windows validation, add the GitHub Actions release workflow.
+7. Run the GitHub Actions release workflow and publish a pre-release for
+   validation before using the same workflow for the final release.
 
 ## Local Linux Verification
 
@@ -87,3 +88,63 @@ scripts/release/local-verify.sh \
 
 GitHub Actions must use secrets and temporary files. Signing keys must never be
 committed to the repository.
+
+## GitHub Actions Release Flow
+
+The release workflow is:
+
+```text
+.github/workflows/release.yml
+```
+
+It is manually triggered with `workflow_dispatch` inputs:
+
+- `version`: release version without the leading `v`, such as `0.5.0-rc.1` or
+  `0.5.0`
+- `prerelease`: whether the GitHub Release is marked as a pre-release
+- `draft`: whether the GitHub Release is created as a draft
+- `require_signing`: whether missing signing material should fail the workflow
+
+The workflow:
+
+1. Builds and guardrail-validates the repository on Ubuntu.
+2. Builds Linux DEB/RPM/AppImage packages on Ubuntu.
+3. Builds Windows x64 and ARM64 MSI packages on a Windows runner.
+4. Downloads all package artifacts into one release package directory.
+5. Regenerates a unified `SHA256SUMS` file over all final package assets.
+6. Optionally signs `SHA256SUMS`.
+7. Creates the GitHub Release or Pre-release and uploads the package assets.
+
+Pre-release validation may run with `require_signing=false` while signing
+secrets are still being prepared. Formal releases should use
+`require_signing=true`.
+
+Required secrets for signed formal releases:
+
+```text
+COMCROSS_GPG_PRIVATE_KEY
+COMCROSS_GPG_PASSPHRASE
+COMCROSS_GPG_KEY_ID
+COMCROSS_PLUGIN_SIGNING_KEY_PEM
+COMCROSS_PLUGIN_SIGNING_KEY_ID
+COMCROSS_WINDOWS_CERT_PFX_BASE64
+COMCROSS_WINDOWS_CERT_PASSWORD
+```
+
+Trigger example:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0-rc.1 \
+  -f prerelease=true \
+  -f draft=true \
+  -f require_signing=false
+```
+
+Follow-up commands:
+
+```bash
+gh run list --workflow release.yml
+gh run view <run-id> --log
+gh release view v0.5.0-rc.1
+```

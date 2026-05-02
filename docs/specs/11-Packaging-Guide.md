@@ -41,6 +41,25 @@ not covered by DEB/RPM.
 
 Windows MSI packages are self-contained and installed per user.
 
+## 2.1) Supported Operating Systems
+
+The current official package support baseline is:
+
+| OS | Minimum version | Architecture | Package |
+|---|---|---|---|
+| Windows | Windows 10 22H2 / Windows 11 22H2 | x64, ARM64 | MSI |
+| Ubuntu | 22.04 LTS | x64, ARM64 | DEB, AppImage |
+| Debian | 12 | x64, ARM64 | DEB, AppImage |
+| Fedora | 40 | x64 | RPM, AppImage |
+
+This is the project compatibility target, not a claim that every desktop
+environment, graphics stack, and hardware configuration is fully tested today.
+
+Other Linux distributions may work but are outside the formal support
+commitment. AppImage packages are the recommended fallback for these users.
+
+ComCross does not currently provide official macOS packages.
+
 ## 3) Runtime Directories
 
 ComCross separates install content, configuration, local data, logs, cache, and
@@ -243,11 +262,39 @@ Expected secret names for future CI release work:
 - `COMCROSS_GPG_PRIVATE_KEY`
 - `COMCROSS_GPG_PASSPHRASE`
 - `COMCROSS_GPG_KEY_ID`
+- `COMCROSS_PLUGIN_SIGNING_KEY_PEM`
+- `COMCROSS_PLUGIN_SIGNING_KEY_ID`
 - `COMCROSS_WINDOWS_CERT_PFX_BASE64`
 - `COMCROSS_WINDOWS_CERT_PASSWORD`
 
 Formal release jobs must fail when required signing material is missing. Local
 dry runs may skip signing unless `--require-signing` is passed.
+
+## 8.1) GitHub Actions Release Workflow
+
+The automated release workflow is:
+
+```text
+.github/workflows/release.yml
+```
+
+It is manually triggered so pre-release validation and final release publishing
+remain explicit release-manager actions:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0-rc.1 \
+  -f prerelease=true \
+  -f draft=true \
+  -f require_signing=false
+```
+
+For formal releases, use `require_signing=true` after the signing secrets are
+configured.
+
+The workflow builds Linux packages on Ubuntu, Windows MSI packages on Windows,
+regenerates a unified `SHA256SUMS` file across all package assets, optionally
+signs the checksum file, and creates the GitHub Release or Pre-release.
 
 ## 9) Plugin Layout
 
