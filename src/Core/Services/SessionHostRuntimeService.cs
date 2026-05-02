@@ -20,14 +20,18 @@ public sealed class SessionHostRuntimeService
     private static readonly TimeSpan HostConnectTimeout = TimeSpan.FromSeconds(3);
 
     private readonly ILogger<SessionHostRuntimeService> _logger;
+    private readonly ComCrossPathService _paths;
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<string, HostGroup> _groupsByKey = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _sessionToGroupKey = new(StringComparer.Ordinal);
 
     public event Action<SessionHostRuntime, PluginHostEvent>? HostEventReceived;
 
-    public SessionHostRuntimeService(ILogger<SessionHostRuntimeService> logger)
+    public SessionHostRuntimeService(
+        ComCrossPathService paths,
+        ILogger<SessionHostRuntimeService> logger)
     {
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -132,7 +136,7 @@ public sealed class SessionHostRuntimeService
 
         var fixedSessionId = supportsMultiSession ? null : sessionId;
 
-        var startInfo = CreateStartInfo(hostPath, pipeName, eventPipeName, plugin, hostToken, fixedSessionId);
+        var startInfo = CreateStartInfo(hostPath, pipeName, eventPipeName, plugin, hostToken, fixedSessionId, _paths);
         if (startInfo is null)
         {
             throw new InvalidOperationException("Unable to create session host process.");
@@ -357,7 +361,14 @@ public sealed class SessionHostRuntimeService
         return $"ccsh-{safePlugin}-{hashHex}-{nonce}";
     }
 
-    private static ProcessStartInfo? CreateStartInfo(string hostPath, string pipeName, string eventPipeName, PluginInfo plugin, string hostToken, string? fixedSessionId)
+    private static ProcessStartInfo? CreateStartInfo(
+        string hostPath,
+        string pipeName,
+        string eventPipeName,
+        PluginInfo plugin,
+        string hostToken,
+        string? fixedSessionId,
+        ComCrossPathService paths)
     {
         if (string.IsNullOrWhiteSpace(hostPath))
         {
@@ -383,6 +394,8 @@ public sealed class SessionHostRuntimeService
             $" --entry \"{plugin.Manifest.EntryPoint}\"" +
             $" --host-token \"{hostToken}\"" +
             $" --role session" +
+            $" --instance-id \"{paths.Instance.InstanceId}\"" +
+            $" --log-dir \"{paths.PluginHostLogDirectory}\"" +
             $" --parent-pid {parentPid}";
 
         if (!string.IsNullOrWhiteSpace(fixedSessionId))

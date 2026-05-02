@@ -12,15 +12,18 @@ public sealed class ExportService
     private readonly IMessageStreamService _messageStream;
     private readonly NotificationService _notificationService;
     private readonly SettingsService _settingsService;
+    private readonly ComCrossPathService _paths;
 
     public ExportService(
         IMessageStreamService messageStream,
         NotificationService notificationService,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        ComCrossPathService paths)
     {
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
     }
 
     /// <summary>
@@ -102,11 +105,7 @@ public sealed class ExportService
             return directorySetting;
         }
 
-        // Fallback to default directory
-        var fallback = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross",
-            "exports");
+        var fallback = _paths.ExportDirectory;
         _settingsService.Current.Export.DefaultDirectory = fallback;
         _ = _settingsService.SaveAsync();
         return fallback;

@@ -11,11 +11,16 @@ public sealed class DatabaseManager : IDisposable, IAsyncDisposable
     private bool _initialized;
     private bool _disposed;
 
-    private readonly string? _configDirectory;
+    private readonly string? _databaseDirectory;
+
+    public DatabaseManager(ComCrossPathService paths)
+        : this(paths.DatabaseDirectory)
+    {
+    }
 
     public DatabaseManager(string? configDirectory = null)
     {
-        _configDirectory = configDirectory;
+        _databaseDirectory = configDirectory;
     }
 
     /// <summary>
@@ -68,11 +73,11 @@ public sealed class DatabaseManager : IDisposable, IAsyncDisposable
         try
         {
             // Initialize main database (program data)
-            _mainDb = new MainDatabaseService(_configDirectory);
+            _mainDb = new MainDatabaseService(_databaseDirectory);
             await _mainDb.InitializeAsync(cancellationToken);
 
             // Initialize workspace database (work data)
-            _workspaceDb = new WorkspaceDatabaseService(_configDirectory);
+            _workspaceDb = new WorkspaceDatabaseService(_databaseDirectory);
             await _workspaceDb.InitializeAsync(cancellationToken);
 
             _initialized = true;
@@ -140,10 +145,7 @@ public sealed class DatabaseManager : IDisposable, IAsyncDisposable
     /// </summary>
     private string GetMainDatabasePath()
     {
-        var baseDirectory = _configDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
+        var baseDirectory = _databaseDirectory ?? new ComCrossPathService().DatabaseDirectory;
         return Path.Combine(baseDirectory, "comcross.db");
     }
 

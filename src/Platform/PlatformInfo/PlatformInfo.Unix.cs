@@ -8,4 +8,5 @@ public static class PlatformInfo
     public static string PluginHostExecutableName => "ComCross.PluginHost";
     public static string SessionHostExecutableName => "ComCross.SessionHost";
     public static string ExtensionHostExecutableName => "ComCross.ExtensionHost";
+    public static string ShellExecutableName => "ComCross.Shell";
 }

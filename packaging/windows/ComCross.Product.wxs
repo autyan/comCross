@@ -1,0 +1,45 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="$(var.ProductName)"
+    Manufacturer="autyan"
+    Version="$(var.PackageVersion)"
+    UpgradeCode="$(var.UpgradeCode)"
+    Scope="perUser">
+
+    <SummaryInformation Description="ComCross $(var.PlatformRid)" Manufacturer="autyan" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ComCross is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="$(var.ProductName)" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="$(var.InstallFolderName)" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="$(var.ProductName)" />
+    </StandardDirectory>
+
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="*">
+      <Shortcut
+        Id="ComCrossStartMenuShortcut"
+        Name="$(var.ShortcutName)"
+        Description="Cross-platform embedded communication toolbox"
+        Target="[INSTALLFOLDER]ComCross.Startup.exe"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\ComCross\ComCross"
+        Name="installed"
+        Type="integer"
+        Value="1"
+        KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>

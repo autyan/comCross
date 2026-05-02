@@ -596,7 +596,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["settings.logs.databaseWarning"] = "Enabling database persistence will use more storage and may impact performance. Messages will be stored in SQLite for advanced search capabilities.",
             ["settings.logs.databaseDirectory"] = "Database directory",
             ["settings.logs.directory.defaultWatermark"] = "Default: Logs",
-            ["settings.logs.databaseDirectory.defaultWatermark"] = "Default: AppData",
+            ["settings.logs.databaseDirectory.defaultWatermark"] = "Default: Local data",
             ["session.database.enable"] = "DB Store",
             ["session.database.tooltip"] = "Store messages to database for advanced search. Note: Historical data is not converted. Switching will result in data loss unless manually imported.",
             ["sidebar.busAdapter.comingSoon"] = "(Coming soon)",

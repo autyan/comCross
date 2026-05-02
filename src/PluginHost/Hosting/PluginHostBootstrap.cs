@@ -54,6 +54,7 @@ internal static class PluginHostBootstrap
 
         argsMap.TryGetValue("--event-pipe", out var eventPipeName);
         argsMap.TryGetValue("--host-token", out var hostToken);
+        argsMap.TryGetValue("--instance-id", out var instanceId);
 
         argsMap.TryGetValue("--log-dir", out var logDir);
         argsMap.TryGetValue("--log-format", out var logFormat);
@@ -65,6 +66,7 @@ internal static class PluginHostBootstrap
             EntryPoint: entryPoint,
             Role: role,
             PluginId: pluginId,
+            InstanceId: string.IsNullOrWhiteSpace(instanceId) ? null : instanceId,
             FixedSessionId: string.IsNullOrWhiteSpace(fixedSessionId) ? null : fixedSessionId,
             EventPipeName: string.IsNullOrWhiteSpace(eventPipeName) ? null : eventPipeName,
             HostToken: string.IsNullOrWhiteSpace(hostToken) ? null : hostToken,

@@ -21,7 +21,10 @@ internal static class Program
             return 2;
         }
 
-        var fileKey = PluginHostLogKey.Build(Process.GetCurrentProcess().Id, options.PluginId, options.Role);
+        var logPluginId = string.IsNullOrWhiteSpace(options.InstanceId)
+            ? options.PluginId
+            : $"{options.InstanceId}.{options.PluginId}";
+        var fileKey = PluginHostLogKey.Build(Process.GetCurrentProcess().Id, logPluginId, options.Role);
         var logService = new PluginHostLogService();
         logService.Initialize(new PluginHostLogOptions(
             Directory: string.IsNullOrWhiteSpace(options.LogDir) ? string.Empty : options.LogDir,
@@ -37,7 +40,7 @@ internal static class Program
             logService.Warn($"no_new_privs could not be enabled: {nnpError}");
         }
 
-        logService.Info($"PluginHost starting: role={options.Role}, pluginId={options.PluginId}, pluginPath={options.PluginPath}, entry={options.EntryPoint}");
+        logService.Info($"PluginHost starting: instanceId={options.InstanceId ?? "-"}, role={options.Role}, pluginId={options.PluginId}, pluginPath={options.PluginPath}, entry={options.EntryPoint}");
 
         _ = PluginHostBootstrap.StartParentMonitorIfRequested(args);
 

@@ -2,16 +2,61 @@
 
 A cross-platform embedded communication toolbox for serial, TCP, and UDP workflows.
 
+> Documentation notice: repository documentation may be drafted or translated
+> with AI assistance. Treat translated documents as convenience references.
+> For security, release verification, and implementation decisions, verify
+> against the English source documents and project history.
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)
-![Version](https://img.shields.io/badge/version-v0.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.5.0-blue.svg)
+
+## Languages
+
+- English: [README.md](README.md)
+- Simplified Chinese: [docs/i18n/README.zh-CN.md](docs/i18n/README.zh-CN.md)
+- Traditional Chinese: [docs/i18n/README.zh-TW.md](docs/i18n/README.zh-TW.md)
+- Japanese: [docs/i18n/README.ja.md](docs/i18n/README.ja.md)
+- Korean: [docs/i18n/README.ko.md](docs/i18n/README.ko.md)
+- Spanish: [docs/i18n/README.es.md](docs/i18n/README.es.md)
+- French: [docs/i18n/README.fr.md](docs/i18n/README.fr.md)
+- German: [docs/i18n/README.de.md](docs/i18n/README.de.md)
+- Portuguese (Brazil): [docs/i18n/README.pt-BR.md](docs/i18n/README.pt-BR.md)
+- Russian: [docs/i18n/README.ru.md](docs/i18n/README.ru.md)
 
 ## Status
 
-ComCross is preparing the v0.4.0 release. This release is the first stable, promotion-ready build focused on a reliable plugin-driven communication workspace.
+ComCross is preparing the v0.5.0 release. This release focuses on packaging,
+release automation, and a clearer supported-platform baseline for broader
+pre-release validation.
 
-The v0.4.0 workspace format is not compatible with old v0.3 session state. Existing sessions from older development builds should be recreated.
+The v0.4.0+ workspace format is not compatible with old v0.3 session state.
+Existing sessions from older development builds should be recreated.
+
+## Supported Operating Systems
+
+ComCross currently provides official release packages for the following desktop
+systems:
+
+| OS | Minimum version | Architecture | Package |
+|---|---|---|---|
+| Windows | Windows 10 22H2 / Windows 11 22H2 | x64, ARM64 | MSI |
+| Ubuntu | 22.04 LTS | x64, ARM64 | DEB, AppImage |
+| Debian | 12 | x64, ARM64 | DEB, AppImage |
+| Fedora | 40 | x64 | RPM, AppImage |
+
+This support list is the baseline compatibility target. At the current project
+stage, ComCross does not yet have enough testing resources to fully validate
+every supported OS version, desktop environment, graphics stack, and hardware
+configuration.
+
+Other Linux distributions may work, but they are not part of the formal support
+commitment. Users on non-mainstream distributions are expected to understand
+their own runtime, desktop, graphics, and package-management environment.
+AppImage packages are provided as the recommended fallback for these systems.
+
+ComCross does not currently provide official macOS packages.
 
 ## Features
 
@@ -115,9 +160,9 @@ v0.4.0 focuses on architecture convergence and stable day-to-day use:
 - Message frames support bounded attributes: max 8 entries, key <= 32 bytes, value <= 128 bytes.
 - Multi-target send is plugin-declared and currently powers UDP listener replies.
 
-## v0.5 Direction
+## v0.6 Direction
 
-Planned post-v0.4 work:
+Planned post-v0.5 work:
 
 - File-stream-backed message storage/display for lower memory pressure.
 - Complete removal of remaining controlled Shell static bridges.

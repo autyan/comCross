@@ -27,6 +27,9 @@ dev-discussions/
 # Publish outputs
 artifacts/
 
+# Local release signing material. CI uses GitHub Actions secrets instead.
+.release-secrets/
+
 # AI-generated contents
 .ai-rules.md
 

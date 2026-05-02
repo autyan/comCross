@@ -1,98 +1,394 @@
 # Packaging Guide
 
-This guide describes how to produce release artifacts for GitHub.
+This guide describes the release packaging model for ComCross.
 
-## 1) Publish
+## 1) Release Policy
 
-Use the packaging script to generate platform-specific outputs in one pass:
+Official GitHub Releases should publish installable operating-system packages,
+not portable publish archives.
 
-```
-scripts/package-release.sh -c Release -r linux-x64,linux-arm64,win-x64,win-arm64
-```
+Default release assets:
 
-Outputs are placed under:
+- Windows:
+  - `ComCross-<version>-win-x64.msi`
+  - `ComCross-<version>-win-arm64.msi`
+- Linux:
+  - `comcross_<version>_amd64.deb`
+  - `comcross_<version>_arm64.deb`
+  - `comcross-<version>-1.x86_64.rpm`
+  - `comcross-<version>-1.aarch64.rpm`
+  - `ComCross-<version>-linux-x64.AppImage`
+  - `ComCross-<version>-linux-arm64.AppImage`
+- Verification:
+  - `SHA256SUMS`
+  - `SHA256SUMS.asc` when signing material is provided
+- Release notes:
+  - `docs/release/notes/v<version>.md`
+- Changelog:
+  - `docs/release/changelog/v<version>.md`
 
-- Framework-dependent: `artifacts/framework-dependent/ComCross-<rid>-Release/`
-- Self-contained: `artifacts/self-contained/ComCross-<rid>-Release/`
-- Archives: `artifacts/packages/<track>/ComCross-<rid>-Release.(zip|tar.gz)`
-
-`ComCross.PluginHost`, `ComCross.SessionHost`, and `ComCross.ExtensionHost` are published into the same folder so process-isolated plugin flows can start without relying on development paths.
+Portable `.tar.gz` and `.zip` publish archives are no longer default release
+assets. Users who need bare publish outputs should build them locally from
+source.
 
 ## 2) Runtime Baseline
 
 Projects target `net8.0`. Development may use any installed SDK that can build
 `net8.0`, and release artifacts target the .NET 8 LTS runtime baseline.
-Packaging for DEB/RPM should assume distro baselines that ship or support .NET 8
-(for example Ubuntu 22.04, Debian 12, Fedora 39).
 
-If you do not bundle the runtime (framework-dependent publish), ensure the
-package declares runtime dependencies so installation fails when the runtime is
-too old.
+Linux DEB/RPM packages are framework-dependent and declare a dependency on
+`.NET 8 Runtime`.
 
-We commit to keeping the runtime baseline stable for users. The baseline will
-only change when strictly necessary, and any breaking changes will be announced
-ahead of time.
+Linux AppImage packages are self-contained and do not require a system .NET
+runtime. AppImage is the fallback package for users on distributions that are
+not covered by DEB/RPM.
 
-## 3) Windows (MSI)
+Windows MSI packages are self-contained and installed per user.
 
-Recommended toolchain: WiX Toolset v4.
+## 2.1) Supported Operating Systems
 
-1. Install WiX.
-2. Point the MSI project to the publish output folder.
-3. Produce `ComCross-<version>.msi`.
+The current official package support baseline is:
 
-## 4) Linux (DEB/RPM)
+| OS | Minimum version | Architecture | Package |
+|---|---|---|---|
+| Windows | Windows 10 22H2 / Windows 11 22H2 | x64, ARM64 | MSI |
+| Ubuntu | 22.04 LTS | x64, ARM64 | DEB, AppImage |
+| Debian | 12 | x64, ARM64 | DEB, AppImage |
+| Fedora | 40 | x64 | RPM, AppImage |
 
-Recommended toolchain: fpm.
+This is the project compatibility target, not a claim that every desktop
+environment, graphics stack, and hardware configuration is fully tested today.
 
-Helper script:
+Other Linux distributions may work but are outside the formal support
+commitment. AppImage packages are the recommended fallback for these users.
 
+ComCross does not currently provide official macOS packages.
+
+## 3) Runtime Directories
+
+ComCross separates install content, configuration, local data, logs, cache, and
+runtime plugins.
+
+Windows:
+
+```text
+Main program:
+%LocalAppData%\Programs\ComCross\
+
+Configuration:
+%AppData%\ComCross\
+
+Local data:
+%LocalAppData%\ComCross\
+
+Databases:
+%LocalAppData%\ComCross\data\
+
+Logs:
+%LocalAppData%\ComCross\logs\
+
+Cache:
+%LocalAppData%\ComCross\cache\
+
+Runtime plugins:
+%LocalAppData%\ComCross\plugins\
 ```
-scripts/package-linux.sh -v <version>
+
+Linux:
+
+```text
+Main program:
+/opt/comcross/
+
+Configuration:
+${XDG_CONFIG_HOME:-$HOME/.config}/ComCross/
+
+Local data:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/
+
+Databases:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/data/
+
+Logs:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/logs/
+
+Cache:
+${XDG_CACHE_HOME:-$HOME/.cache}/ComCross/
+
+Runtime plugins:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
 ```
 
-Example (DEB):
+This is a pre-stable breaking directory relocation. Old configuration,
+database, log, cache, plugin session storage, export, and plugin runtime
+directories are not kept as compatibility read paths.
 
-```
-fpm -s dir -t deb -n comcross -v <version> \
-  -C artifacts/framework-dependent/ComCross-linux-x64-Release \
-  --prefix /opt/comcross \
-  -d dotnet-runtime-8.0
-```
+## 4) Local Release Verification
 
-Example (RPM):
+The local release entry point is:
 
-```
-fpm -s dir -t rpm -n comcross -v <version> \
-  -C artifacts/framework-dependent/ComCross-linux-x64-Release \
-  --prefix /opt/comcross \
-  -d dotnet-runtime-8.0
+```bash
+scripts/release/local-verify.sh --version <version>
 ```
 
-## 5) Plugin Layout
+By default this builds Linux x64 and ARM64 publish outputs, then produces:
 
-Release packages place built-in plugins under:
+- DEB/RPM through a local Docker image that carries `fpm`
+- AppImage packages from self-contained publish outputs
+- `SHA256SUMS`
+- optional GPG signature for `SHA256SUMS`
 
+Example:
+
+```bash
+scripts/release/local-verify.sh --version 0.5.0
 ```
-plugins/<plugin-id>-<stable-hash>/
+
+With local GPG signing:
+
+```bash
+scripts/release/local-verify.sh \
+  --version 0.5.0 \
+  --gpg-private-key ~/.keys/comcross-release.asc \
+  --gpg-key-id <key-id>
 ```
 
-The package script computes the folder from the manifest plugin id and publishes each plugin with its dependencies into that folder.
+Local signing material must stay outside the repository. `.release-secrets/` is
+ignored for temporary local use, but it must not be used by CI.
 
-## 6) Release Artifacts
+## 5) Linux DEB/RPM
 
-Upload to GitHub Releases with consistent naming:
+Linux packages are built from framework-dependent publish outputs.
 
-- `ComCross-linux-x64-<version>.tar.gz`
-- `ComCross-linux-arm64-<version>.tar.gz`
-- `ComCross-win-x64-<version>.zip`
-- `ComCross-win-arm64-<version>.zip`
-- `ComCross-<version>.msi`
-- `comcross_<version>_amd64.deb`
-- `comcross-<version>.x86_64.rpm`
+The packager uses Docker so local machines and GitHub runners do not need Ruby
+or `fpm` installed directly:
 
-## 7) Symbols
+```bash
+scripts/release/build-publish-output.sh --version 0.5.0
+scripts/release/build-linux-packages.sh --version 0.5.0
+```
 
-Public release builds do not include PDBs by default. Use
-`scripts/package-release.sh --include-symbols` if you need symbols for internal
-debug builds.
+Architecture mapping:
+
+- `linux-x64` -> DEB `amd64`, RPM `x86_64`
+- `linux-arm64` -> DEB `arm64`, RPM `aarch64`
+
+Installed system layout:
+
+```text
+/opt/comcross/
+/usr/bin/comcross
+/usr/share/applications/comcross.desktop
+/usr/share/icons/hicolor/256x256/apps/comcross.png
+```
+
+Linux package payloads place official plugin packages under:
+
+```text
+/opt/comcross/bundled-plugins/
+```
+
+At runtime, Core synchronizes official plugin packages into the user-local XDG
+data directory and loads plugins from there:
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+## 6) Linux AppImage
+
+AppImage packages are built from self-contained publish outputs:
+
+```bash
+scripts/release/build-appimages.sh --version 0.5.0
+```
+
+AppImage packages are intended as a fallback for non-mainstream Linux
+distributions. They are not a replacement for distro-native DEB/RPM packages.
+
+## 7) Windows MSI
+
+Windows MSI packages are built on Windows with WiX Toolset v7. The repository
+pins the WiX version through a .NET tool manifest so local and CI builds use the
+same toolchain.
+
+```powershell
+dotnet tool restore
+scripts/release/build-windows-msi.ps1 -Version 0.5.0
+```
+
+WiX v7 requires explicit OSMF EULA acceptance. Local and CI builds must pass
+the WiX v7 EULA acceptance flag when invoking `wix build`.
+
+The script produces:
+
+```text
+artifacts/release/packages/windows/ComCross-<version>-win-x64.msi
+artifacts/release/packages/windows/ComCross-<version>-win-arm64.msi
+```
+
+MSI signing can be enabled with:
+
+```powershell
+scripts/release/build-windows-msi.ps1 `
+  -Version 0.5.0 `
+  -CertificatePfxPath C:\keys\comcross.pfx `
+  -CertificatePassword $env:COMCROSS_WINDOWS_CERT_PASSWORD
+```
+
+Windows MSI validation is performed on a Windows machine before the GitHub
+Actions release workflow is enabled.
+
+Windows MSI packages install per user and must not require administrator
+elevation for normal install, update, or uninstall.
+
+Official plugin packages are bundled with the installer as seed content:
+
+```text
+%LocalAppData%\Programs\ComCross\bundled-plugins\
+```
+
+At runtime, Core synchronizes official plugin packages into the user-local
+plugin directory and loads plugins from there:
+
+```text
+%LocalAppData%\ComCross\plugins\
+```
+
+## 8) Signing Inputs
+
+Local verification reads signing material from paths supplied by the developer.
+GitHub Actions must read signing material from repository or environment
+secrets.
+
+Expected secret names for future CI release work:
+
+- `COMCROSS_GPG_PRIVATE_KEY`
+- `COMCROSS_GPG_PASSPHRASE`
+- `COMCROSS_GPG_KEY_ID`
+- `COMCROSS_PLUGIN_SIGNING_KEY_PEM`
+- `COMCROSS_PLUGIN_SIGNING_KEY_ID`
+- `COMCROSS_WINDOWS_CERT_PFX_BASE64`
+- `COMCROSS_WINDOWS_CERT_PASSWORD`
+
+Formal release jobs must fail when required signing material is missing. Local
+dry runs may skip signing unless `--require-signing` is passed.
+
+## 8.1) GitHub Actions Release Workflow
+
+The automated release workflow is:
+
+```text
+.github/workflows/release.yml
+```
+
+It is manually triggered so pre-release validation and final release publishing
+remain explicit release-manager actions:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0-rc.1 \
+  -f prerelease=true \
+  -f draft=true \
+  -f require_signing=false
+```
+
+For formal releases, use `require_signing=true` after the signing secrets are
+configured and pass `release_notes_path`:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0 \
+  -f prerelease=false \
+  -f draft=false \
+  -f require_signing=true \
+  -f release_notes_path=docs/release/notes/v0.5.0.md
+```
+
+The workflow builds Linux packages on Ubuntu, Windows MSI packages on Windows,
+regenerates a unified `SHA256SUMS` file across all package assets, optionally
+signs the checksum file, and creates the GitHub Release or Pre-release.
+
+Release notes are stored under:
+
+```text
+docs/release/notes/
+```
+
+Version changelogs are stored under:
+
+```text
+docs/release/changelog/
+```
+
+Final public releases must provide matching release notes and changelog files in
+the release branch before the workflow is triggered. Release notes should stay
+short and link to the full changelog. Validation-only draft pre-releases may
+omit release notes and must be deleted after validation.
+
+## 9) Plugin Layout
+
+Official plugins are normal plugin packages. They have no special runtime
+treatment. They are released with the main application package for now, but the
+runtime loads them from the same plugin directory that future third-party
+plugins will use.
+
+Runtime plugin packages use isolated plugin directories:
+
+```text
+<runtime-plugin-directory>/<plugin-id>-<stable-hash>/
+```
+
+The package scripts compute the folder from the manifest plugin id and publish
+each plugin with its dependencies into that folder.
+
+Runtime plugin roots:
+
+```text
+Windows:
+%LocalAppData%\ComCross\plugins\
+
+Linux:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+Install packages carry official plugins as bundled seed content:
+
+```text
+Windows:
+%LocalAppData%\Programs\ComCross\bundled-plugins\
+
+Linux:
+/opt/comcross/bundled-plugins/
+```
+
+Core owns synchronizing bundled official plugins into the runtime plugin root
+before plugin discovery.
+
+The detailed decision record is maintained in:
+
+```text
+docs/release/windows-linux-packaging-decisions.md
+```
+
+## 10) Bare Publish Output
+
+Bare publish output is for local development and advanced users. It is not a
+default GitHub Release asset.
+
+Framework-dependent example:
+
+```bash
+scripts/package-release.sh \
+  -c Release \
+  -r linux-x64 \
+  --no-package
+```
+
+Self-contained output is produced by the release pipeline as an intermediate
+input for AppImage and MSI packaging.
+
+## 11) Symbols
+
+Public release builds do not include PDBs by default. Use existing publish
+scripts with `--include-symbols` for internal debug builds.

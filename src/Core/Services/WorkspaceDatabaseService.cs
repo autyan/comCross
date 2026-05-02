@@ -14,12 +14,14 @@ public sealed class WorkspaceDatabaseService : IDisposable, IAsyncDisposable
     private SqliteConnection? _connection;
     private bool _disposed;
 
+    public WorkspaceDatabaseService(ComCrossPathService paths)
+        : this(paths.DatabaseDirectory)
+    {
+    }
+
     public WorkspaceDatabaseService(string? configDirectory = null)
     {
-        var baseDirectory = configDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
+        var baseDirectory = configDirectory ?? new ComCrossPathService().DatabaseDirectory;
 
         Directory.CreateDirectory(baseDirectory);
         _databasePath = Path.Combine(baseDirectory, "workspace.db");

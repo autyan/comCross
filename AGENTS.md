@@ -7,6 +7,7 @@ This is the repository-level entry point for AI coding agents. Read this file be
 ## Project Shape
 
 - Product: ComCross, a cross-platform embedded communication toolbox.
+- Startup: `src/Startup/`, minimal GUI entrypoint and Shell launcher.
 - Shell: `src/Shell/`, Avalonia desktop UI using MVVM.
 - Core: `src/Core/`, business orchestration, persistence, plugin runtime coordination, workspace/session services.
 - Shared: `src/Shared/`, shared contracts, events, models, and small pure helpers.
@@ -31,8 +32,10 @@ This is the repository-level entry point for AI coding agents. Read this file be
 - Treat the main program and bus plugins as a producer/consumer boundary: bus plugins produce domain facts through contracts; Core/Shell consume those facts without inferring plugin-private semantics.
 - Do not deliver mock, placeholder, or TODO-based implementations for real capabilities.
 - Do not add user-visible raw strings. Use i18n keys and update the required resources when the task touches UI copy.
+- Localized GitHub-facing documentation must include an AI-assisted documentation notice and must preserve the English source meaning for security, signing, release verification, compatibility, and implementation claims.
 - Shell composite input controls must use one visual frame; when an outer control owns the frame, keep inner inputs visually transparent and borderless.
 - Do not use Service Locator outside the composition root unless the reason and boundary are explicit.
+- Do not declare `async` only to satisfy naming style. Use `async/await` only when the method has a real asynchronous boundary such as file/database/network/IPC/process/stream I/O, cancellable waits, timers, or UI dispatcher work. Interface-compatible synchronous implementations should return `Task.CompletedTask` or `Task.FromResult(...)` without `async`.
 - Do not change runtime entry points, publish layout, plugin directory layout, or data directory rules unless the task explicitly targets those contracts.
 - Do not put new responsibilities into `Shared`, `Core`, or `Shell` when the responsibility clearly needs a narrower project or domain.
 
@@ -54,6 +57,8 @@ Choose the detailed rule files by task scope:
   `docs/ai/05-guardrails-verification.md`
 - Git collaboration, commits, dirty worktrees, and release-sensitive work:
   `docs/ai/06-git-collaboration.md`
+- GitHub-facing documentation localization and AI-assisted documentation notices:
+  `docs/ai/07-documentation-localization.md`
 
 If a task touches multiple scopes, apply all relevant files. If the scope is unclear, state the assumed scope before editing.
 

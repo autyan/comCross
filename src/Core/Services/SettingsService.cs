@@ -8,12 +8,19 @@ public sealed class SettingsService
 {
     private readonly ConfigService _configService;
     private readonly AppDatabase _database;
+    private readonly ComCrossPathService _paths;
     private AppSettings _current = new();
 
     public SettingsService(ConfigService configService, AppDatabase database)
+        : this(configService, database, new ComCrossPathService(AppContext.BaseDirectory, configService.ConfigDirectory))
+    {
+    }
+
+    public SettingsService(ConfigService configService, AppDatabase database, ComCrossPathService paths)
     {
         _configService = configService;
         _database = database;
+        _paths = paths;
     }
 
     public AppSettings Current => _current;
@@ -40,24 +47,19 @@ public sealed class SettingsService
 
     private void EnsureDefaults()
     {
-        var baseDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
-
         if (string.IsNullOrWhiteSpace(_current.Logs.Directory))
         {
-            _current.Logs.Directory = Path.Combine(baseDirectory, "logs");
+            _current.Logs.Directory = _paths.LogDirectory;
         }
 
         if (string.IsNullOrWhiteSpace(_current.AppLogs.Directory))
         {
-            _current.AppLogs.Directory = Path.Combine(baseDirectory, "app-logs");
+            _current.AppLogs.Directory = _paths.AppLogDirectory;
         }
 
         if (string.IsNullOrWhiteSpace(_current.Export.DefaultDirectory))
         {
-            _current.Export.DefaultDirectory = Path.Combine(baseDirectory, "exports");
+            _current.Export.DefaultDirectory = _paths.ExportDirectory;
         }
 
         Directory.CreateDirectory(_current.Logs.Directory);

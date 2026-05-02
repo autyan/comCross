@@ -36,7 +36,7 @@ public sealed class LogSettings
     public bool DatabasePersistenceEnabled { get; set; } = true;
     
     /// <summary>
-    /// Database directory (optional, defaults to AppData if not specified)
+    /// Database directory (optional, defaults to the ComCross local data directory if not specified)
     /// </summary>
     public string? DatabaseDirectory { get; set; }
 }
@@ -131,15 +131,8 @@ public sealed class PluginSignatureVerificationSettings
     public bool Enabled { get; set; } = false;
 
     /// <summary>
-    /// Temporary allow-list for official/built-in plugins while signature verification is being rolled out.
-    /// NOTE: This is not a cryptographic guarantee.
+    /// Development-only unsigned plugin allow-list.
+    /// NOTE: This is not a cryptographic guarantee and must not be used for Stable/EAP enforcement.
     /// </summary>
-    public List<string> AllowUnsignedPluginIds { get; set; } = new()
-    {
-        "serial.adapter",
-        "serial.flow",
-        "serial.protocol",
-        "serial.stats",
-        "network.adapter"
-    };
+    public List<string> AllowUnsignedPluginIds { get; set; } = new();
 }
