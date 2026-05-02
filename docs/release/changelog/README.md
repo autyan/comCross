@@ -17,6 +17,9 @@ docs/release/changelog/v<version>.md
 Examples:
 
 ```text
+docs/release/changelog/v0.3.1.md
+docs/release/changelog/v0.3.2.md
+docs/release/changelog/v0.4.0.md
 docs/release/changelog/v0.5.0.md
 docs/release/changelog/v0.6.0.md
 docs/release/changelog/v1.0.0.md
@@ -38,3 +41,7 @@ changelog.
 
 Do not add support, compatibility, signing, or security claims that are not
 backed by release workflow evidence or authoritative project documentation.
+
+Historical changelogs may be reconstructed from the original GitHub Release
+content and repository state, but they must preserve the release's actual
+package and verification capabilities.

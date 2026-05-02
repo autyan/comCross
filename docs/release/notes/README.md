@@ -18,6 +18,9 @@ docs/release/notes/v<version>.md
 Examples:
 
 ```text
+docs/release/notes/v0.3.1.md
+docs/release/notes/v0.3.2.md
+docs/release/notes/v0.4.0.md
 docs/release/notes/v0.5.0.md
 docs/release/notes/v0.6.0.md
 docs/release/notes/v1.0.0.md
@@ -47,6 +50,11 @@ verification evidence.
 
 Avoid detailed implementation history, architecture discussion, and full
 changelogs in this directory.
+
+Historical releases should be backfilled into this directory when practical so
+old GitHub Releases can be normalized to the same concise style. Do not add
+modern signing, package, or support claims to historical notes unless those
+claims were true for that release.
 
 ## Workflow Integration
 
