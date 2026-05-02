@@ -1,11 +1,12 @@
-using System.Runtime.InteropServices;
+using ComCross.Core.Application;
+using ComCross.Platform.UserDirectories;
 
 namespace ComCross.Core.Services;
 
 public sealed class ComCrossPathService
 {
     public ComCrossPathService()
-        : this(AppContext.BaseDirectory, GetConfigDirectory(), GetLocalDataDirectory(), GetCacheDirectory())
+        : this(new PlatformUserDirectoryProvider(), ComCrossInstanceIdentity.Stable(), AppContext.BaseDirectory)
     {
     }
 
@@ -15,10 +16,33 @@ public sealed class ComCrossPathService
     }
 
     public ComCrossPathService(
+        IPlatformUserDirectoryProvider userDirectories,
+        ComCrossInstanceIdentity instance,
+        string? installDirectory = null)
+        : this(
+            installDirectory ?? AppContext.BaseDirectory,
+            Path.Combine(userDirectories.ConfigHome, instance.DirectoryName),
+            Path.Combine(userDirectories.LocalDataHome, instance.DirectoryName),
+            Path.Combine(userDirectories.CacheHome, instance.DirectoryName),
+            instance)
+    {
+    }
+
+    public ComCrossPathService(
         string installDirectory,
         string configDirectory,
         string localDataDirectory,
         string cacheDirectory)
+        : this(installDirectory, configDirectory, localDataDirectory, cacheDirectory, ComCrossInstanceIdentity.Stable())
+    {
+    }
+
+    private ComCrossPathService(
+        string installDirectory,
+        string configDirectory,
+        string localDataDirectory,
+        string cacheDirectory,
+        ComCrossInstanceIdentity instance)
     {
         if (string.IsNullOrWhiteSpace(installDirectory))
         {
@@ -44,7 +68,10 @@ public sealed class ComCrossPathService
         ConfigDirectory = configDirectory;
         LocalDataDirectory = localDataDirectory;
         CacheDirectory = cacheDirectory;
+        Instance = instance ?? throw new ArgumentNullException(nameof(instance));
     }
+
+    public ComCrossInstanceIdentity Instance { get; }
 
     public string InstallDirectory { get; }
 
@@ -64,78 +91,11 @@ public sealed class ComCrossPathService
 
     public string AppLogDirectory => Path.Combine(LogDirectory, "app");
 
+    public string StartupLogDirectory => Path.Combine(LogDirectory, "startup");
+
     public string PluginHostLogDirectory => Path.Combine(LogDirectory, "plugin-host");
 
     public string ExportDirectory => Path.Combine(LocalDataDirectory, "exports");
 
     public string PluginSessionStorageDirectory => Path.Combine(LocalDataDirectory, "plugin-session-storage");
-
-    private static string GetConfigDirectory()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "ComCross");
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            var xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            if (!string.IsNullOrWhiteSpace(xdgConfigHome))
-            {
-                return Path.Combine(xdgConfigHome, "ComCross");
-            }
-
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(home, ".config", "ComCross");
-        }
-
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross");
-    }
-
-    private static string GetLocalDataDirectory()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ComCross");
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            var xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-            if (!string.IsNullOrWhiteSpace(xdgDataHome))
-            {
-                return Path.Combine(xdgDataHome, "ComCross");
-            }
-
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(home, ".local", "share", "ComCross");
-        }
-
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ComCross");
-    }
-
-    private static string GetCacheDirectory()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            var xdgCacheHome = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
-            if (!string.IsNullOrWhiteSpace(xdgCacheHome))
-            {
-                return Path.Combine(xdgCacheHome, "ComCross");
-            }
-
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(home, ".cache", "ComCross");
-        }
-
-        return Path.Combine(GetLocalDataDirectory(), "cache");
-    }
 }

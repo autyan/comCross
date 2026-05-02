@@ -17,6 +17,7 @@ public sealed class ExtensionRuntimeService
 
     private readonly ILogger<ExtensionRuntimeService> _logger;
     private readonly PluginSignatureVerificationService _signatureVerification;
+    private readonly ComCrossPathService _paths;
     private readonly ConcurrentDictionary<string, PluginRuntime> _activeRuntimes = new(StringComparer.Ordinal);
     private readonly object _hostSync = new();
 
@@ -30,9 +31,11 @@ public sealed class ExtensionRuntimeService
     private string? _pluginsFilePath;
     public ExtensionRuntimeService(
         PluginSignatureVerificationService signatureVerification,
+        ComCrossPathService paths,
         ILogger<ExtensionRuntimeService> logger)
     {
         _signatureVerification = signatureVerification ?? throw new ArgumentNullException(nameof(signatureVerification));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -424,7 +427,7 @@ public sealed class ExtensionRuntimeService
             return false;
         }
 
-        var processStart = CreateStartInfo(hostPath, pipeName, eventPipeName, pluginsFilePath, hostToken);
+        var processStart = CreateStartInfo(hostPath, pipeName, eventPipeName, pluginsFilePath, hostToken, _paths);
         if (processStart is null)
         {
             TryDeletePluginsFile(pluginsFilePath);
@@ -757,7 +760,8 @@ public sealed class ExtensionRuntimeService
         string pipeName,
         string eventPipeName,
         string pluginsFilePath,
-        string hostToken)
+        string hostToken,
+        ComCrossPathService paths)
     {
         if (string.IsNullOrWhiteSpace(hostPath))
         {
@@ -777,7 +781,8 @@ public sealed class ExtensionRuntimeService
         }
 
         var args =
-            $"--pipe \"{pipeName}\" --event-pipe \"{eventPipeName}\" --plugins-file \"{pluginsFilePath}\" --host-token \"{hostToken}\" --parent-pid {parentPid}";
+            $"--pipe \"{pipeName}\" --event-pipe \"{eventPipeName}\" --plugins-file \"{pluginsFilePath}\" --host-token \"{hostToken}\"" +
+            $" --instance-id \"{paths.Instance.InstanceId}\" --log-dir \"{paths.PluginHostLogDirectory}\" --parent-pid {parentPid}";
 
         if (!string.IsNullOrWhiteSpace(parentStartUtc))
         {

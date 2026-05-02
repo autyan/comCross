@@ -33,7 +33,7 @@ public partial class App : Application
         
         // 1. Configure DI container
         var services = new ServiceCollection();
-        services.AddComCrossShell(); 
+        services.AddComCrossShell(ShellStartupContext.Instance);
         _serviceProvider = services.BuildServiceProvider();
 
         // 2. Get the AppHost from DI

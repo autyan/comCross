@@ -6,6 +6,7 @@
 - `src/PluginSdk`: public plugin SDK and protocol-facing types only. It must not reference other in-repository projects.
 - `src/Shared`: shared contracts, events, models, and small pure helpers. It must not own business workflows.
 - `src/Core`: business orchestration, persistence, plugin runtime coordination, workspace/session coordination.
+- `src/Startup`: minimal GUI launcher and user-facing entry point. Keep dependencies small; do not move Core workflows into Startup.
 - `src/Shell`: UI and interaction. It must not own business rules.
 - `src/PluginHost`, `src/SessionHost`, `src/ExtensionHost`: host process boundaries and host-side runtime behavior.
 - `src/Plugins/*`: built-in plugins that use the public SDK and host contracts.

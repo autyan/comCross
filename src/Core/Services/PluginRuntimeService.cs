@@ -24,13 +24,17 @@ public sealed class PluginRuntimeService
 
     private readonly PluginSignatureVerificationService _signatureVerification;
 
+    private readonly ComCrossPathService _paths;
+
     public PluginRuntimeService(
         SharedMemorySessionService sharedMemorySessionService,
         PluginSignatureVerificationService signatureVerification,
+        ComCrossPathService paths,
         ILogger<PluginRuntimeService> logger)
     {
         _sharedMemorySessionService = sharedMemorySessionService ?? throw new ArgumentNullException(nameof(sharedMemorySessionService));
         _signatureVerification = signatureVerification ?? throw new ArgumentNullException(nameof(signatureVerification));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -268,7 +272,7 @@ public sealed class PluginRuntimeService
             return false;
         }
 
-        var processStart = CreateStartInfo(hostPath, pipeName, eventPipeName, runtime.Info, hostToken);
+        var processStart = CreateStartInfo(hostPath, pipeName, eventPipeName, runtime.Info, hostToken, _paths);
         if (processStart is null)
         {
             runtime.SetFailed("Unable to create plugin host process.");
@@ -484,7 +488,13 @@ public sealed class PluginRuntimeService
         }
     }
 
-    private static ProcessStartInfo? CreateStartInfo(string hostPath, string pipeName, string eventPipeName, PluginInfo plugin, string hostToken)
+    private static ProcessStartInfo? CreateStartInfo(
+        string hostPath,
+        string pipeName,
+        string eventPipeName,
+        PluginInfo plugin,
+        string hostToken,
+        ComCrossPathService paths)
     {
         if (string.IsNullOrWhiteSpace(hostPath))
         {
@@ -503,7 +513,16 @@ public sealed class PluginRuntimeService
             parentStartUtc = null;
         }
 
-        var args = $"--pipe \"{pipeName}\" --event-pipe \"{eventPipeName}\" --plugin \"{plugin.AssemblyPath}\" --entry \"{plugin.Manifest.EntryPoint}\" --host-token \"{hostToken}\" --role ui --parent-pid {parentPid}";
+        var args =
+            $"--pipe \"{pipeName}\"" +
+            $" --event-pipe \"{eventPipeName}\"" +
+            $" --plugin \"{plugin.AssemblyPath}\"" +
+            $" --entry \"{plugin.Manifest.EntryPoint}\"" +
+            $" --host-token \"{hostToken}\"" +
+            $" --role ui" +
+            $" --instance-id \"{paths.Instance.InstanceId}\"" +
+            $" --log-dir \"{paths.PluginHostLogDirectory}\"" +
+            $" --parent-pid {parentPid}";
         if (!string.IsNullOrWhiteSpace(parentStartUtc))
         {
             args += $" --parent-start-utc \"{parentStartUtc}\"";

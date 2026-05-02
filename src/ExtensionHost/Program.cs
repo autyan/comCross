@@ -313,12 +313,16 @@ internal static class Program
 
         argsMap.TryGetValue("--event-pipe", out var eventPipeName);
         argsMap.TryGetValue("--host-token", out var hostToken);
+        argsMap.TryGetValue("--instance-id", out var instanceId);
+        argsMap.TryGetValue("--log-dir", out var logDir);
 
         options = new ExtensionHostOptions(
             pipeName,
             pluginsFilePath,
             string.IsNullOrWhiteSpace(eventPipeName) ? null : eventPipeName,
-            string.IsNullOrWhiteSpace(hostToken) ? null : hostToken);
+            string.IsNullOrWhiteSpace(hostToken) ? null : hostToken,
+            string.IsNullOrWhiteSpace(instanceId) ? null : instanceId,
+            string.IsNullOrWhiteSpace(logDir) ? null : logDir);
         error = string.Empty;
         return true;
     }
@@ -394,7 +398,9 @@ internal static class Program
         string PipeName,
         string PluginsFilePath,
         string? EventPipeName,
-        string? HostToken);
+        string? HostToken,
+        string? InstanceId,
+        string? LogDir);
 
     private sealed class ExtensionCatalog : IDisposable
     {

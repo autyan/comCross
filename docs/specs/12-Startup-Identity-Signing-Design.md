@@ -84,11 +84,13 @@ must not contain OS checks.
 
 The first implementation is a minimal GUI launcher:
 
-- show a small splash window;
+- do not show a normal main window or splash during successful startup;
 - read the instance manifest;
 - enforce single-instance behavior for that instance;
 - locate and start Shell from the same install directory by default;
 - show an error dialog when Shell cannot be started;
+- include the startup log directory in the error dialog and provide an action
+  to open that folder;
 - write startup logs;
 - exit after handing off to Shell, unless later product requirements require a
   resident launcher.
@@ -288,6 +290,11 @@ Recommended implementation:
 Startup must enforce this contract. Shell must also enforce it so users cannot
 bypass the contract by launching Shell directly.
 
+In the first implementation Startup performs a short preflight check and then
+releases the lock before launching Shell. Shell owns the long-lived application
+lock. This keeps the implementation simple while leaving room for a future
+activation handoff or resident launcher.
+
 The first implementation may show a simple "ComCross is already running" error.
 Later implementations may focus an existing window or forward activation.
 
@@ -316,9 +323,10 @@ Startup first version is a minimal GUI.
 
 Required UI:
 
-- splash or small launch window;
-- launch status text;
-- error dialog if Shell cannot be started.
+- no normal main window or splash during successful launch;
+- error dialog if Shell cannot be started;
+- log directory displayed in the error dialog;
+- button/action to open the log directory.
 
 Required log:
 
@@ -649,7 +657,7 @@ Recommended order from `develop`:
 
 3. `feature/startup-launcher-entrypoint`
    - Add `ComCross.Startup`.
-   - Implement minimal GUI splash and error dialog.
+   - Implement minimal hidden-success GUI launch and error dialog.
    - Implement startup logging.
    - Launch same-directory Shell by default.
    - Keep `--shell-path` and `COMCROSS_SHELL_PATH` hooks.

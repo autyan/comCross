@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using ComCross.Core.Application;
 using ComCross.Core.Extensions;
 using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
@@ -11,10 +12,12 @@ namespace ComCross.Shell.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddComCrossShell(this IServiceCollection services)
+    public static IServiceCollection AddComCrossShell(
+        this IServiceCollection services,
+        ComCrossInstanceIdentity? instance = null)
     {
         // 1. Register Core Services (Business Logic)
-        services.AddComCrossCore();
+        services.AddComCrossCore(instance);
 
         // 2. Register Shell-specific UI Implementations of Core Interfaces
         services.AddSingleton<ComCross.PluginSdk.UI.IPluginUiControlFactory, ComCross.Shell.Plugins.UI.AvaloniaPluginUiControlFactory>();

@@ -7,6 +7,7 @@ This is the repository-level entry point for AI coding agents. Read this file be
 ## Project Shape
 
 - Product: ComCross, a cross-platform embedded communication toolbox.
+- Startup: `src/Startup/`, minimal GUI entrypoint and Shell launcher.
 - Shell: `src/Shell/`, Avalonia desktop UI using MVVM.
 - Core: `src/Core/`, business orchestration, persistence, plugin runtime coordination, workspace/session services.
 - Shared: `src/Shared/`, shared contracts, events, models, and small pure helpers.

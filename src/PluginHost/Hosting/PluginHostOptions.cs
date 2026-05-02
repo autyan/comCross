@@ -6,6 +6,7 @@ internal sealed record PluginHostOptions(
     string EntryPoint,
     string Role,
     string PluginId,
+    string? InstanceId,
     string? FixedSessionId,
     string? EventPipeName,
     string? HostToken,

@@ -5,6 +5,7 @@ using ComCross.Shared.Interfaces;
 using ComCross.Core.Services;
 using ComCross.Core.Application;
 using ComCross.Platform.SharedMemory;
+using ComCross.Platform.UserDirectories;
 
 namespace ComCross.Core.Extensions;
 
@@ -13,10 +14,16 @@ namespace ComCross.Core.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddComCrossCore(this IServiceCollection services)
+    public static IServiceCollection AddComCrossCore(
+        this IServiceCollection services,
+        ComCrossInstanceIdentity? instance = null)
     {
+        instance ??= ComCrossInstanceIdentity.Stable();
+
         // Application Host
         services.AddSingleton<IAppHost, AppHost>();
+        services.AddSingleton(instance);
+        services.AddSingleton<IPlatformUserDirectoryProvider, PlatformUserDirectoryProvider>();
 
         // Logging Infrastructure
         services.AddSingleton<ILoggerFactory, AppLogLoggerFactory>();
@@ -30,7 +37,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<EventBus>();
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<EventBus>());
 
-        services.AddSingleton<ComCrossPathService>();
+        services.AddSingleton(sp => new ComCrossPathService(
+            sp.GetRequiredService<IPlatformUserDirectoryProvider>(),
+            sp.GetRequiredService<ComCrossInstanceIdentity>()));
         services.AddSingleton(sp => new ConfigService(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton<SettingsService>();
