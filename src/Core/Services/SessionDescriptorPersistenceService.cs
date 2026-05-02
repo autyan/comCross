@@ -164,9 +164,9 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await Task.CompletedTask;
         Dispose();
+        return ValueTask.CompletedTask;
     }
 }
