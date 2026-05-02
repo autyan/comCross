@@ -9,13 +9,28 @@
 
 ## Plugin Layout
 
-Release packages place plugins under:
+Runtime plugin packages live under the user-local plugin root:
 
 ```text
-plugins/
+<runtime-plugin-root>/
   <plugin-id>-<stable-hash>/
     <plugin assembly and dependencies>
 ```
+
+Runtime plugin roots:
+
+```text
+Windows:
+%LocalAppData%\ComCross\plugins\
+
+Linux:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+Official plugins are normal plugin packages. They are bundled with the main
+application release as seed content and synchronized into the runtime plugin
+root before discovery. The runtime loads plugins from the runtime plugin root,
+not from the main program install directory.
 
 Each plugin embeds:
 

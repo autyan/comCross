@@ -21,7 +21,7 @@ format.
 1. Build publish output with `scripts/release/build-publish-output.sh`.
 2. Build Linux DEB/RPM packages with `scripts/release/build-linux-packages.sh`.
 3. Build Linux AppImage packages with `scripts/release/build-appimages.sh`.
-4. Build Windows MSI packages with `scripts/release/build-windows-msi.ps1`.
+4. Build Windows per-user MSI packages with `scripts/release/build-windows-msi.ps1`.
 5. Generate checksums with `scripts/release/generate-checksums.sh`.
 6. Optionally sign checksums with `scripts/release/sign-artifacts.sh`.
 7. After local and Windows validation, add the GitHub Actions release workflow.
@@ -45,12 +45,35 @@ The Linux DEB/RPM step uses Docker to host `fpm`.
 Run on Windows:
 
 ```powershell
-dotnet tool install --global wix
+dotnet tool restore
 scripts/release/build-windows-msi.ps1 -Version 0.5.0
 ```
 
+Windows MSI packages use WiX Toolset v7. WiX v7 EULA acceptance must be
+explicit in local and CI builds.
+
 Signing is optional for local smoke tests, but formal release jobs must require
 signing material.
+
+Windows validation must verify the full installed application, not only MSI
+generation:
+
+- per-user install without administrator elevation
+- main program under `%LocalAppData%\Programs\ComCross`
+- runtime official plugins under `%LocalAppData%\ComCross\plugins`
+- Start Menu launch
+- Shell window startup
+- plugin discovery and host startup
+- clean process shutdown
+- uninstall cleanup according to the documented retention policy
+
+## Directory And Plugin Decisions
+
+Packaging, data-directory, and official-plugin layout decisions are recorded in:
+
+```text
+docs/release/windows-linux-packaging-decisions.md
+```
 
 ## Signing Material
 
