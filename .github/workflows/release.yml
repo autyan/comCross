@@ -27,7 +27,7 @@ permissions:
   contents: write
 
 env:
-  DOTNET_VERSION: "8.0.x"
+  DOTNET_VERSION: "8.0.420"
   RELEASE_OUTPUT: artifacts/release
 
 jobs:
@@ -42,6 +42,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Pin .NET SDK
+        run: dotnet new globaljson --sdk-version ${{ env.DOTNET_VERSION }} --force
 
       - name: Restore
         run: dotnet restore ComCross.sln
@@ -70,6 +73,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Pin .NET SDK
+        run: dotnet new globaljson --sdk-version ${{ env.DOTNET_VERSION }} --force
 
       - name: Build Linux release packages
         env:
@@ -140,6 +146,10 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Pin .NET SDK
+        shell: pwsh
+        run: dotnet new globaljson --sdk-version $env:DOTNET_VERSION --force
 
       - name: Build Windows MSI packages
         shell: pwsh

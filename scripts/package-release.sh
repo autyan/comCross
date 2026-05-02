@@ -133,7 +133,7 @@ fi
 
 symbol_args=()
 if [[ "${include_symbols}" == "false" ]]; then
-  symbol_args+=("-p:DebugType=none" "-p:DebugSymbols=false")
+  symbol_args+=("--property:DebugType=none" "--property:DebugSymbols=false")
 fi
 
 publish_project() {
@@ -262,6 +262,7 @@ PY
       -o "${plugin_out}" \
       "${symbol_args[@]}"
 
+    cp "${manifest_path}" "${plugin_out}/ComCross.Plugin.Manifest.json"
     sign_plugin_package "${plugin_out}"
   done
   

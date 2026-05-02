@@ -51,7 +51,7 @@ static int SignPlugin(string[] args)
         return 1;
     }
 
-    var manifest = LoadManifest(assemblyPath);
+    var manifest = LoadManifest(pluginDir, assemblyPath);
     if (manifest is null)
     {
         Console.Error.WriteLine($"Plugin manifest resource not found in {assemblyPath}.");
@@ -98,8 +98,16 @@ static int SignPlugin(string[] args)
     return 0;
 }
 
-static PluginManifest? LoadManifest(string assemblyPath)
+static PluginManifest? LoadManifest(string pluginDir, string assemblyPath)
 {
+    var manifestPath = Path.Combine(pluginDir, PluginDiscoveryService.ManifestResourceName);
+    if (File.Exists(manifestPath))
+    {
+        return JsonSerializer.Deserialize<PluginManifest>(
+            File.ReadAllText(manifestPath),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
     var assembly = Assembly.LoadFrom(assemblyPath);
     var resourceName = assembly
         .GetManifestResourceNames()
