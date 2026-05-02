@@ -1,6 +1,11 @@
 # Release Notes Directory
 
-This directory stores the release note source files used by GitHub Releases.
+This directory stores the concise release note source files used by GitHub
+Releases.
+
+Release notes are the public download page content. Keep them short. Put
+complete version history in `docs/release/changelog/` and link to it from each
+final release note.
 
 ## Naming
 
@@ -28,19 +33,20 @@ Validation-only draft pre-releases do not need a release notes file.
 
 ## Required Sections
 
-Final release notes should include:
+Final release notes should include only:
 
-- Release summary
-- Supported operating systems and package formats
-- Installation and upgrade notes
-- Compatibility or breaking changes
-- Security, signing, and checksum verification notes
-- Known limitations
-- Contributors or acknowledgements when applicable
+- One short release summary
+- Download/package selection guidance
+- Checksum/signature verification commands
+- Important compatibility or support notes
+- Links to the full changelog and supporting docs
 
 Do not make support, compatibility, signing, or security claims in a release
 note unless the claim is also true in the code, package scripts, and release
 verification evidence.
+
+Avoid detailed implementation history, architecture discussion, and full
+changelogs in this directory.
 
 ## Workflow Integration
 

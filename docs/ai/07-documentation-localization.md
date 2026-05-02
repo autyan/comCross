@@ -69,6 +69,18 @@ When a formal English specification changes, localized GitHub entry docs do not
 need a full translation of the spec, but links and short summaries should remain
 accurate.
 
+## Release Documentation
+
+- GitHub Release notes are concise public release landing pages stored under
+  `docs/release/notes/v<version>.md`.
+- Version changelogs are detailed version history files stored under
+  `docs/release/changelog/v<version>.md`.
+- Final release notes must link to the matching changelog and supporting docs
+  instead of duplicating full change history.
+- Localized documents must not add release, signing, support, compatibility, or
+  security claims beyond the authoritative English release notes, changelog, and
+  specifications.
+
 ## Verification
 
 For documentation-only localization changes:

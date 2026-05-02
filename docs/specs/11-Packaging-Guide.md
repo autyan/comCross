@@ -24,6 +24,8 @@ Default release assets:
   - `SHA256SUMS.asc` when signing material is provided
 - Release notes:
   - `docs/release/notes/v<version>.md`
+- Changelog:
+  - `docs/release/changelog/v<version>.md`
 
 Portable `.tar.gz` and `.zip` publish archives are no longer default release
 assets. Users who need bare publish outputs should build them locally from
@@ -313,8 +315,15 @@ Release notes are stored under:
 docs/release/notes/
 ```
 
-Final public releases must provide a matching release notes file in the release
-branch before the workflow is triggered. Validation-only draft pre-releases may
+Version changelogs are stored under:
+
+```text
+docs/release/changelog/
+```
+
+Final public releases must provide matching release notes and changelog files in
+the release branch before the workflow is triggered. Release notes should stay
+short and link to the full changelog. Validation-only draft pre-releases may
 omit release notes and must be deleted after validation.
 
 ## 9) Plugin Layout

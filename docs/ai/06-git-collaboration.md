@@ -23,6 +23,13 @@
 
 - Do not push, tag, publish, package, or alter release branches unless explicitly requested.
 - Do not change runtime or publish layout as part of unrelated refactors.
+- Final release branches must carry both concise GitHub Release notes under
+  `docs/release/notes/v<version>.md` and complete version changelogs under
+  `docs/release/changelog/v<version>.md`.
+- GitHub Release notes must stay short and link to the matching changelog
+  instead of duplicating full version history.
+- Validation-only draft pre-releases may omit release notes, but they must be
+  deleted after validation.
 
 ## Verification Before Commit
 

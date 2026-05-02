@@ -104,8 +104,8 @@ It is manually triggered with `workflow_dispatch` inputs:
 - `prerelease`: whether the GitHub Release is marked as a pre-release
 - `draft`: whether the GitHub Release is created as a draft
 - `require_signing`: whether missing signing material should fail the workflow
-- `release_notes_path`: repository path to the release notes Markdown file.
-  This is required for final non-draft releases and may be omitted for
+- `release_notes_path`: repository path to the concise release notes Markdown
+  file. This is required for final non-draft releases and may be omitted for
   validation-only draft pre-releases.
 
 The workflow:
@@ -164,16 +164,28 @@ gh run view <run-id> --log
 gh release view v0.5.0-rc.1
 ```
 
-## Release Notes Source
+## Release Notes And Changelog Source
 
-Release note source files live under:
+GitHub Release note source files live under:
 
 ```text
 docs/release/notes/
 ```
 
-Use `docs/release/notes/v<version>.md` for final public releases. The release
-branch or release commit must include the release notes file before triggering a
+Use `docs/release/notes/v<version>.md` for final public releases. These files
+must be short release landing pages for downloads, verification, important
+notes, and links.
+
+Version changelog source files live under:
+
+```text
+docs/release/changelog/
+```
+
+Use `docs/release/changelog/v<version>.md` for complete version-level change
+tracking. Final release notes must link to the matching changelog.
+
+The release branch or release commit must include both files before triggering a
 final non-draft workflow run.
 
 Validation-only draft pre-releases may omit `release_notes_path`; those releases
