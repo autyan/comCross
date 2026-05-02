@@ -16,6 +16,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:MSBUILDDISABLENODEREUSE = "1"
+$DotNetPublishBuildArgs = @("-maxcpucount:1", "-nodeReuse:false")
 
 function Normalize-Version {
     param([Parameter(Mandatory=$true)][string]$InputVersion)
@@ -203,11 +205,11 @@ function Publish-ComCrossWindows {
     }
     New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
 
-    Invoke-Native dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/Startup/ComCross.Startup.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/Startup/ComCross.Startup.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
 
     Write-InstanceManifest -PublishDir $PublishDir
 
@@ -227,7 +229,7 @@ function Publish-ComCrossWindows {
         $stableHash = Get-StableHash -PluginId $pluginId
         $pluginOut = Join-Path $pluginsDir "$pluginId-$stableHash"
 
-        Invoke-Native dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut -p:DebugType=none -p:DebugSymbols=false
+        Invoke-Native dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut -p:DebugType=none -p:DebugSymbols=false @DotNetPublishBuildArgs
         Sign-PluginPackage -PluginDir $pluginOut
     }
 }
