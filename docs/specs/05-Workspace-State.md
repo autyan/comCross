@@ -20,6 +20,52 @@ Current top-level fields:
 
 v0.4 intentionally removed the legacy v0.3 `Sessions` model. Old session state is not migrated.
 
+## Storage Locations
+
+ComCross uses separate roots for configuration and local data.
+
+Windows:
+
+```text
+Configuration:
+%AppData%\ComCross\
+
+Local data:
+%LocalAppData%\ComCross\
+
+Databases:
+%LocalAppData%\ComCross\data\
+
+Logs:
+%LocalAppData%\ComCross\logs\
+
+Cache:
+%LocalAppData%\ComCross\cache\
+```
+
+Linux:
+
+```text
+Configuration:
+${XDG_CONFIG_HOME:-$HOME/.config}/ComCross/
+
+Local data:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/
+
+Databases:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/data/
+
+Logs:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/logs/
+
+Cache:
+${XDG_CACHE_HOME:-$HOME/.cache}/ComCross/
+```
+
+This is a pre-stable breaking directory relocation. Old configuration,
+database, log, cache, plugin session storage, and export directories are not
+kept as compatibility read paths.
+
 ## Workloads
 
 A workload groups sessions for user workflow organization. `EnsureDefaultWorkload()` creates a default workload when none exists.

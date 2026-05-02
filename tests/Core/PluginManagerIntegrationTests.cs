@@ -152,15 +152,13 @@ public sealed class PluginManagerIntegrationTests
     private sealed class PluginManagerHarness : IAsyncDisposable
     {
         private readonly string _configDirectory;
-        private readonly string _pluginsDirectory;
-        private readonly string? _pluginsBackupDirectory;
 
-        private PluginManagerHarness(IServiceProvider services, string configDirectory, string pluginsDirectory, string? pluginsBackupDirectory)
+        private PluginManagerHarness(
+            IServiceProvider services,
+            string configDirectory)
         {
             Services = services;
             _configDirectory = configDirectory;
-            _pluginsDirectory = pluginsDirectory;
-            _pluginsBackupDirectory = pluginsBackupDirectory;
         }
 
         public IServiceProvider Services { get; }
@@ -169,32 +167,27 @@ public sealed class PluginManagerIntegrationTests
         {
             var baseDir = AppContext.BaseDirectory;
             var repoRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
-            var pluginsDirectory = Path.Combine(baseDir, "plugins");
-            var pluginsBackupDirectory = Directory.Exists(pluginsDirectory)
-                ? pluginsDirectory + ".bak-" + Guid.NewGuid().ToString("N")
-                : null;
-
-            if (pluginsBackupDirectory is not null)
-            {
-                Directory.Move(pluginsDirectory, pluginsBackupDirectory);
-            }
-
-            Directory.CreateDirectory(pluginsDirectory);
+            var testRoot = Path.Combine(Path.GetTempPath(), "comcross-tests", Guid.NewGuid().ToString("N"));
+            var installDirectory = Path.Combine(testRoot, "install");
+            var localDataDirectory = Path.Combine(testRoot, "local-data");
+            var bundledPluginsDirectory = Path.Combine(installDirectory, "bundled-plugins");
+            Directory.CreateDirectory(bundledPluginsDirectory);
 
             CopyHostOutputs(repoRoot, baseDir, "PluginHost");
             CopyHostOutputs(repoRoot, baseDir, "ExtensionHost");
             CopyHostOutputs(repoRoot, baseDir, "SessionHost");
 
-            CopyPluginAssembly(typeof(FlowTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.flow"));
-            CopyPluginAssembly(typeof(NetworkBusAdapterPlugin).Assembly.Location, Path.Combine(pluginsDirectory, "z-network.adapter"));
-            CopyPluginAssembly(typeof(SerialBusAdapterPlugin).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.adapter"));
-            CopyPluginAssembly(typeof(StatsTool).Assembly.Location, Path.Combine(pluginsDirectory, "z-serial.stats"));
+            CopyPluginAssembly(typeof(FlowTool).Assembly.Location, Path.Combine(bundledPluginsDirectory, "z-serial.flow"));
+            CopyPluginAssembly(typeof(NetworkBusAdapterPlugin).Assembly.Location, Path.Combine(bundledPluginsDirectory, "z-network.adapter"));
+            CopyPluginAssembly(typeof(SerialBusAdapterPlugin).Assembly.Location, Path.Combine(bundledPluginsDirectory, "z-serial.adapter"));
+            CopyPluginAssembly(typeof(StatsTool).Assembly.Location, Path.Combine(bundledPluginsDirectory, "z-serial.stats"));
 
-            var configDirectory = Path.Combine(Path.GetTempPath(), "comcross-tests", Guid.NewGuid().ToString("N"));
+            var configDirectory = Path.Combine(testRoot, "config");
             Directory.CreateDirectory(configDirectory);
 
             var services = new ServiceCollection();
             services.AddComCrossCore();
+            services.AddSingleton(new ComCrossPathService(installDirectory, localDataDirectory));
             services.AddSingleton(new ConfigService(configDirectory));
 
             var provider = services.BuildServiceProvider();
@@ -202,7 +195,7 @@ public sealed class PluginManagerIntegrationTests
             await database.InitializeAsync();
             await provider.GetRequiredService<SettingsService>().InitializeAsync();
 
-            return new PluginManagerHarness(provider, configDirectory, pluginsDirectory, pluginsBackupDirectory);
+            return new PluginManagerHarness(provider, configDirectory);
         }
 
         public async ValueTask DisposeAsync()
@@ -229,23 +222,11 @@ public sealed class PluginManagerIntegrationTests
 
             try
             {
-                if (Directory.Exists(_pluginsDirectory))
+                var root = Directory.GetParent(_configDirectory)?.FullName;
+                if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
                 {
-                    Directory.Delete(_pluginsDirectory, recursive: true);
+                    Directory.Delete(root, recursive: true);
                 }
-
-                if (!string.IsNullOrWhiteSpace(_pluginsBackupDirectory) && Directory.Exists(_pluginsBackupDirectory))
-                {
-                    Directory.Move(_pluginsBackupDirectory, _pluginsDirectory);
-                }
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                Directory.Delete(_configDirectory, recursive: true);
             }
             catch
             {

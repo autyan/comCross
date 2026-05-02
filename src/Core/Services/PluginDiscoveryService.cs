@@ -21,10 +21,10 @@ public sealed class PluginDiscoveryService
 
         var plugins = new List<PluginInfo>();
 
-        // Preferred layout: each plugin is a directory under plugins/.
+        // Preferred layout: each plugin is a directory under the runtime plugin root.
         // Example:
-        //   plugins/ComCross.Plugins.Serial/ComCross.Plugins.Serial.dll
-        //   plugins/ComCross.Plugins.Serial/System.IO.Ports.dll
+        //   <runtime-plugin-root>/ComCross.Plugins.Serial/ComCross.Plugins.Serial.dll
+        //   <runtime-plugin-root>/ComCross.Plugins.Serial/System.IO.Ports.dll
         // This enables plugin-local dependencies and native assets.
         var pluginDirs = Directory.EnumerateDirectories(pluginsDirectory, "*", SearchOption.TopDirectoryOnly);
         var discoveredFromDirs = false;
@@ -63,7 +63,7 @@ public sealed class PluginDiscoveryService
             return Deduplicate(plugins);
         }
 
-        // Legacy layout: plugin DLLs copied directly into plugins/.
+        // Flat layout: plugin DLLs copied directly into the runtime plugin root.
         IEnumerable<string> flatCandidates;
         try
         {

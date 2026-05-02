@@ -11,12 +11,14 @@ public sealed class ConfigService
     private readonly string _configDirectory;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    public ConfigService(ComCrossPathService paths)
+        : this(paths.ConfigDirectory)
+    {
+    }
+
     public ConfigService(string? configDirectory = null)
     {
-        _configDirectory = configDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
+        _configDirectory = configDirectory ?? new ComCrossPathService().ConfigDirectory;
 
         Directory.CreateDirectory(_configDirectory);
 

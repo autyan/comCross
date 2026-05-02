@@ -29,9 +29,10 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<EventBus>();
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<EventBus>());
-        
-        services.AddSingleton<ConfigService>();
-        services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ConfigService>().ConfigDirectory));
+
+        services.AddSingleton<ComCrossPathService>();
+        services.AddSingleton(sp => new ConfigService(sp.GetRequiredService<ComCrossPathService>()));
+        services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
         services.AddSingleton<AppLogService>();
@@ -63,6 +64,7 @@ public static class ServiceCollectionExtensions
         
         // Plugin Runtime System
         services.AddSingleton<PluginDiscoveryService>();
+        services.AddSingleton<BundledPluginSynchronizationService>();
         services.AddSingleton<PluginRuntimeService>();
         services.AddSingleton<ExtensionRuntimeService>();
         services.AddSingleton<SessionHostRuntimeService>();

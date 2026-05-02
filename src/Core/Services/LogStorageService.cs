@@ -13,6 +13,7 @@ public sealed class LogStorageService
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
     private readonly AppDatabase _database;
+    private readonly ComCrossPathService _paths;
     private readonly ConcurrentDictionary<string, SessionLogWriter> _writers = new();
     private bool _overLimitNotified;
 
@@ -20,12 +21,14 @@ public sealed class LogStorageService
         IMessageStreamService messageStream,
         SettingsService settingsService,
         NotificationService notificationService,
-        AppDatabase database)
+        AppDatabase database,
+        ComCrossPathService paths)
     {
         _messageStream = messageStream;
         _settingsService = settingsService;
         _notificationService = notificationService;
         _database = database;
+        _paths = paths;
     }
 
     public void StartSession(Session session)
@@ -35,7 +38,7 @@ public sealed class LogStorageService
             return;
         }
 
-        var writer = new SessionLogWriter(session, _settingsService, _database);
+        var writer = new SessionLogWriter(session, _settingsService, _database, _paths.LogDirectory);
         var subscription = _messageStream.Subscribe(session.Id, message =>
         {
             writer.Append(message);
@@ -166,6 +169,7 @@ public sealed class LogStorageService
         private readonly Session _session;
         private readonly SettingsService _settingsService;
         private readonly AppDatabase _database;
+        private readonly string _defaultDirectory;
         private readonly object _lock = new();
         private IDisposable? _subscription;
         private StreamWriter? _writer;
@@ -174,11 +178,16 @@ public sealed class LogStorageService
         private long _nextStorageCheckBytes = 1024 * 1024;
         private DateTime _lastTimestamp = DateTime.UtcNow;
 
-        public SessionLogWriter(Session session, SettingsService settingsService, AppDatabase database)
+        public SessionLogWriter(
+            Session session,
+            SettingsService settingsService,
+            AppDatabase database,
+            string defaultDirectory)
         {
             _session = session;
             _settingsService = settingsService;
             _database = database;
+            _defaultDirectory = defaultDirectory;
         }
 
         public void AttachSubscription(IDisposable subscription)
@@ -269,7 +278,7 @@ public sealed class LogStorageService
                 return;
             }
 
-            var directory = ResolveDirectory(settings);
+            var directory = ResolveDirectory(settings, _defaultDirectory);
             Directory.CreateDirectory(directory);
             var filePath = CreateFilePath(directory, _session.Name, _session.Id);
 
@@ -316,20 +325,15 @@ public sealed class LogStorageService
             return Path.Combine(directory, fileName);
         }
 
-        private static string ResolveDirectory(LogSettings settings)
+        private static string ResolveDirectory(LogSettings settings, string defaultDirectory)
         {
             if (!string.IsNullOrWhiteSpace(settings.Directory))
             {
                 return settings.Directory;
             }
 
-            var baseDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "ComCross",
-                "logs"
-            );
-            settings.Directory = baseDirectory;
-            return baseDirectory;
+            settings.Directory = defaultDirectory;
+            return defaultDirectory;
         }
 
         private static string SanitizeFileName(string name)

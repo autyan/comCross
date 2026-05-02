@@ -94,10 +94,12 @@
   <Target Name="PublishBuiltInPlugins" AfterTargets="Build">
     <PropertyGroup>
       <!-- IMPORTANT: PublishDir must be absolute, otherwise it will be interpreted relative to each plugin project. -->
-      <_BuiltInPluginsOut>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\\$(OutputPath)plugins\\'))</_BuiltInPluginsOut>
+      <_BuiltInPluginsOut>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\\$(OutputPath)bundled-plugins\\'))</_BuiltInPluginsOut>
+      <_LegacyPluginsOut>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\\$(OutputPath)plugins\\'))</_LegacyPluginsOut>
     </PropertyGroup>
 
-    <!-- Clean legacy flat layout to avoid loading stale plugin DLLs without dependencies. -->
+    <!-- Clean old development output so runtime discovery only follows the bundled seed -> runtime root contract. -->
+    <RemoveDir Directories="$(_LegacyPluginsOut)" />
     <RemoveDir Directories="$(_BuiltInPluginsOut)" />
     <MakeDir Directories="$(_BuiltInPluginsOut)" />
 

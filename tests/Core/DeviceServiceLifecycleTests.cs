@@ -109,6 +109,7 @@ public sealed class DeviceServiceLifecycleTests
 
             var services = new ServiceCollection();
             services.AddComCrossCore();
+            services.AddSingleton(new ComCrossPathService(AppContext.BaseDirectory, configDirectory));
             services.AddSingleton(new ConfigService(configDirectory));
 
             return Task.FromResult(new TestHarness(services.BuildServiceProvider(), configDirectory));

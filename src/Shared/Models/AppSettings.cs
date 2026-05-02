@@ -36,7 +36,7 @@ public sealed class LogSettings
     public bool DatabasePersistenceEnabled { get; set; } = true;
     
     /// <summary>
-    /// Database directory (optional, defaults to AppData if not specified)
+    /// Database directory (optional, defaults to the ComCross local data directory if not specified)
     /// </summary>
     public string? DatabaseDirectory { get; set; }
 }

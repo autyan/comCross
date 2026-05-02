@@ -41,7 +41,66 @@ not covered by DEB/RPM.
 
 Windows MSI packages are self-contained and installed per user.
 
-## 3) Local Release Verification
+## 3) Runtime Directories
+
+ComCross separates install content, configuration, local data, logs, cache, and
+runtime plugins.
+
+Windows:
+
+```text
+Main program:
+%LocalAppData%\Programs\ComCross\
+
+Configuration:
+%AppData%\ComCross\
+
+Local data:
+%LocalAppData%\ComCross\
+
+Databases:
+%LocalAppData%\ComCross\data\
+
+Logs:
+%LocalAppData%\ComCross\logs\
+
+Cache:
+%LocalAppData%\ComCross\cache\
+
+Runtime plugins:
+%LocalAppData%\ComCross\plugins\
+```
+
+Linux:
+
+```text
+Main program:
+/opt/comcross/
+
+Configuration:
+${XDG_CONFIG_HOME:-$HOME/.config}/ComCross/
+
+Local data:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/
+
+Databases:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/data/
+
+Logs:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/logs/
+
+Cache:
+${XDG_CACHE_HOME:-$HOME/.cache}/ComCross/
+
+Runtime plugins:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+This is a pre-stable breaking directory relocation. Old configuration,
+database, log, cache, plugin session storage, export, and plugin runtime
+directories are not kept as compatibility read paths.
+
+## 4) Local Release Verification
 
 The local release entry point is:
 
@@ -74,7 +133,7 @@ scripts/release/local-verify.sh \
 Local signing material must stay outside the repository. `.release-secrets/` is
 ignored for temporary local use, but it must not be used by CI.
 
-## 4) Linux DEB/RPM
+## 5) Linux DEB/RPM
 
 Linux packages are built from framework-dependent publish outputs.
 
@@ -113,15 +172,7 @@ data directory and loads plugins from there:
 ${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
 ```
 
-User configuration and runtime data use separate XDG roots:
-
-```text
-${XDG_CONFIG_HOME:-$HOME/.config}/ComCross/
-${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/
-${XDG_CACHE_HOME:-$HOME/.cache}/ComCross/
-```
-
-## 5) Linux AppImage
+## 6) Linux AppImage
 
 AppImage packages are built from self-contained publish outputs:
 
@@ -132,7 +183,7 @@ scripts/release/build-appimages.sh --version 0.5.0
 AppImage packages are intended as a fallback for non-mainstream Linux
 distributions. They are not a replacement for distro-native DEB/RPM packages.
 
-## 6) Windows MSI
+## 7) Windows MSI
 
 Windows MSI packages are built on Windows with WiX Toolset v7. The repository
 pins the WiX version through a .NET tool manifest so local and CI builds use the
@@ -168,12 +219,6 @@ Actions release workflow is enabled.
 Windows MSI packages install per user and must not require administrator
 elevation for normal install, update, or uninstall.
 
-Installed main program layout:
-
-```text
-%LocalAppData%\Programs\ComCross\
-```
-
 Official plugin packages are bundled with the installer as seed content:
 
 ```text
@@ -187,14 +232,7 @@ plugin directory and loads plugins from there:
 %LocalAppData%\ComCross\plugins\
 ```
 
-User configuration and runtime data use separate roots:
-
-```text
-%AppData%\ComCross\
-%LocalAppData%\ComCross\
-```
-
-## 7) Signing Inputs
+## 8) Signing Inputs
 
 Local verification reads signing material from paths supplied by the developer.
 GitHub Actions must read signing material from repository or environment
@@ -211,7 +249,7 @@ Expected secret names for future CI release work:
 Formal release jobs must fail when required signing material is missing. Local
 dry runs may skip signing unless `--require-signing` is passed.
 
-## 8) Plugin Layout
+## 9) Plugin Layout
 
 Official plugins are normal plugin packages. They have no special runtime
 treatment. They are released with the main application package for now, but the
@@ -256,7 +294,7 @@ The detailed decision record is maintained in:
 docs/release/windows-linux-packaging-decisions.md
 ```
 
-## 9) Bare Publish Output
+## 10) Bare Publish Output
 
 Bare publish output is for local development and advanced users. It is not a
 default GitHub Release asset.
@@ -273,7 +311,7 @@ scripts/package-release.sh \
 Self-contained output is produced by the release pipeline as an intermediate
 input for AppImage and MSI packaging.
 
-## 10) Symbols
+## 11) Symbols
 
 Public release builds do not include PDBs by default. Use existing publish
 scripts with `--include-symbols` for internal debug builds.

@@ -14,10 +14,10 @@ public sealed class PluginSessionStorageService
     private readonly string _rootDirectory;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public PluginSessionStorageService(ConfigService configService)
+    public PluginSessionStorageService(ComCrossPathService paths)
     {
-        ArgumentNullException.ThrowIfNull(configService);
-        _rootDirectory = Path.Combine(configService.ConfigDirectory, "plugin-session-storage");
+        ArgumentNullException.ThrowIfNull(paths);
+        _rootDirectory = paths.PluginSessionStorageDirectory;
         Directory.CreateDirectory(_rootDirectory);
     }
 

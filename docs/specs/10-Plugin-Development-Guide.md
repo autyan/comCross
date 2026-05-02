@@ -4,7 +4,7 @@ This document explains how to build a ComCross plugin for the v0.4 plugin archit
 
 ## 1) Plugin Structure
 
-During development and release packaging, each plugin is placed under an isolated plugin folder:
+Runtime plugin packages are placed under an isolated plugin folder:
 
 ```text
 <runtime-plugin-root>/
@@ -24,9 +24,13 @@ Linux:
 ${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
 ```
 
-Official plugins are normal plugin packages. They are bundled with the main
-application package as seed content and synchronized into the runtime plugin
-root before plugin discovery.
+Build and release outputs place official plugin packages under
+`bundled-plugins/` as seed content. Core synchronizes those packages into the
+runtime plugin root before discovery.
+
+This is a pre-stable breaking directory relocation. The old
+`AppContext.BaseDirectory/plugins` runtime layout is not kept as a compatibility
+read path.
 
 ## 2) Manifest
 

@@ -10,12 +10,14 @@ public sealed class AppDatabase
 {
     private readonly string _databasePath;
 
+    public AppDatabase(ComCrossPathService paths)
+        : this(paths.DatabaseDirectory)
+    {
+    }
+
     public AppDatabase(string? configDirectory = null)
     {
-        var baseDirectory = configDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ComCross"
-        );
+        var baseDirectory = configDirectory ?? new ComCrossPathService().DatabaseDirectory;
 
         Directory.CreateDirectory(baseDirectory);
         _databasePath = Path.Combine(baseDirectory, "ComCross.db");

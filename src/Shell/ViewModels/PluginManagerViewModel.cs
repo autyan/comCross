@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
 using ComCross.Core.Services;
@@ -28,7 +27,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
     {
         _plugins = plugins;
         _itemFactory = itemFactory;
-        _pluginsDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
+        _pluginsDirectory = _plugins.RuntimePluginsDirectory;
 
         Plugins = new ItemVmCollection<PluginItemViewModel, PluginItemContext>(_itemFactory);
 

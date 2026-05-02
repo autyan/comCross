@@ -31,6 +31,8 @@ public sealed class PluginManagementService
 
     public PluginRuntime? GetRuntime(string pluginId) => _pluginManagerService.GetRuntime(pluginId);
 
+    public string RuntimePluginsDirectory => _pluginManagerService.RuntimePluginsDirectory;
+
     public Task<PluginToggleResult> SetPluginEnabledAsync(string pluginId, bool enabled)
         => _pluginManagerService.SetPluginEnabledAsync(pluginId, enabled);
 
