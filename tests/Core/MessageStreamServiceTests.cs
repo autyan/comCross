@@ -61,6 +61,33 @@ public class MessageStreamServiceTests
     }
 
     [Fact]
+    public void MessageStream_Search_FindsAttributeMatches()
+    {
+        // Arrange
+        var service = new MessageStreamService();
+        var sessionId = "test-session";
+
+        service.Append(sessionId, new LogMessage
+        {
+            Id = "1",
+            Timestamp = DateTime.UtcNow,
+            Content = "payload",
+            Level = LogLevel.Info,
+            Attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["source.endpoint"] = "127.0.0.1:9000"
+            }
+        });
+
+        // Act
+        var results = service.Search(sessionId, "source.endpoint");
+
+        // Assert
+        Assert.Single(results);
+        Assert.Equal("payload", results[0].Content);
+    }
+
+    [Fact]
     public void MessageStream_Clear_RemovesAllMessages()
     {
         // Arrange

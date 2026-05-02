@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:ComCross.Shell.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="200"
+        x:Class="ComCross.Shell.Views.ProgressDialogWindow"
+        x:DataType="vm:ProgressDialogViewModel"
+        Width="400"
+        Height="200"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding L[shutdown.title]}">
+
+  <Border Padding="20">
+    <StackPanel Spacing="16">
+      <TextBlock Text="{Binding L[shutdown.message]}"
+                 FontSize="14"
+                 TextWrapping="Wrap" />
+      <TextBlock Text="{Binding CurrentStatus}"
+                 FontSize="12"
+                 Foreground="#87909B" />
+      <ProgressBar IsIndeterminate="True" Height="4" />
+    </StackPanel>
+  </Border>
+</Window>

@@ -15,6 +15,7 @@ public sealed class CommandDefinition
     public int SortOrder { get; set; }
     public string? Hotkey { get; set; }
     public bool IsPreset { get; set; }
+    public bool IsPinned { get; set; }
 }
 
 public enum CommandPayloadType

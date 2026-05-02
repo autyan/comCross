@@ -12,6 +12,8 @@ public sealed class LogMessage
     public string? Source { get; init; }
     public byte[]? RawData { get; init; }
     public MessageFormat Format { get; init; } = MessageFormat.Text;
+    public IReadOnlyDictionary<string, string> Attributes { get; init; } = MessageFrameAttributes.Empty;
+    public int AttributeSchemaVersion { get; init; } = MessageFrameAttributes.SchemaVersion;
 }
 
 public enum LogLevel

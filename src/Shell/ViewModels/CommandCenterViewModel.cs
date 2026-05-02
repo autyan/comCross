@@ -1,22 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
+using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class CommandCenterViewModel : INotifyPropertyChanged
+public sealed class CommandCenterViewModel : BaseViewModel
 {
     private readonly CommandService _commandService;
+    private readonly CommandExecutionService _commandExecutionService;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
-    private readonly LocalizedStringsViewModel _localizedStrings;
     private string? _sessionId;
     private string _sessionName = string.Empty;
     private CommandDefinition? _selectedCommand;
@@ -30,23 +29,33 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
     private CommandScope _editorScope = CommandScope.Global;
     private string _editorHotkey = string.Empty;
     private int _editorSortOrder;
+    private bool _editorIsPinned;
+    private bool _isActive;
 
     public CommandCenterViewModel(
+        ILocalizationService localization,
         CommandService commandService,
+        CommandExecutionService commandExecutionService,
         SettingsService settingsService,
-        NotificationService notificationService,
-        LocalizedStringsViewModel localizedStrings)
+        NotificationService notificationService)
+        : base(localization)
     {
         _commandService = commandService;
+        _commandExecutionService = commandExecutionService;
         _settingsService = settingsService;
         _notificationService = notificationService;
-        _localizedStrings = localizedStrings;
-        RefreshLocalizedOptions();
+
+        // 构造时自动根据当前 Session 加载数据
+        _ = LoadAsync();
     }
 
-    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
-
     public ObservableCollection<CommandDefinition> Commands { get; } = new();
+
+    public bool IsActive
+    {
+        get => _isActive;
+        set => SetProperty(ref _isActive, value);
+    }
 
     public CommandDefinition? SelectedCommand
     {
@@ -214,8 +223,34 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         }
     }
 
-    public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions { get; private set; } = Array.Empty<CommandOption<CommandPayloadType>>();
-    public IReadOnlyList<CommandOption<CommandScope>> ScopeOptions { get; private set; } = Array.Empty<CommandOption<CommandScope>>();
+    public bool EditorIsPinned
+    {
+        get => _editorIsPinned;
+        set
+        {
+            if (_editorIsPinned == value)
+            {
+                return;
+            }
+
+            _editorIsPinned = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public IReadOnlyList<CommandOption<CommandPayloadType>> PayloadTypeOptions =>
+        new[]
+        {
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, L["tool.commands.type.text"]),
+            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, L["tool.commands.type.hex"])
+        };
+
+    public IReadOnlyList<CommandOption<CommandScope>> ScopeOptions =>
+        new[]
+        {
+            new CommandOption<CommandScope>(CommandScope.Global, L["tool.commands.scope.global"]),
+            new CommandOption<CommandScope>(CommandScope.Session, L["tool.commands.scope.session"])
+        };
 
     public CommandOption<CommandPayloadType>? SelectedPayloadType
     {
@@ -246,8 +281,6 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
-
-    public event Func<CommandDefinition, Task>? SendRequested;
 
     public async Task LoadAsync()
     {
@@ -283,8 +316,35 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         command.SortOrder = EditorSortOrder > 0 ? EditorSortOrder : command.SortOrder == 0 ? Commands.Count + 1 : command.SortOrder;
         command.Hotkey = NormalizeHotkey(EditorHotkey);
 
+        if (EditorIsPinned && !command.IsPinned && Commands.Count(c => c.IsPinned) >= RightToolDockViewModel.MaxPinnedCommands)
+        {
+            await _notificationService.AddAsync(
+                NotificationCategory.System,
+                NotificationLevel.Warning,
+                "command.pinned.limit",
+                new object[] { RightToolDockViewModel.MaxPinnedCommands });
+            return;
+        }
+
+        command.IsPinned = EditorIsPinned;
+
         await _commandService.AddOrUpdateAsync(command);
         await LoadAsync();
+    }
+
+    public async Task SaveCommandAsync(CommandDefinition command)
+    {
+        await _commandService.AddOrUpdateAsync(command);
+        await LoadAsync();
+    }
+
+    public async Task NotifyPinnedLimitAsync(int maxPinnedCommands)
+    {
+        await _notificationService.AddAsync(
+            NotificationCategory.System,
+            NotificationLevel.Warning,
+            "command.pinned.limit",
+            new object[] { maxPinnedCommands });
     }
 
     public void NewCommand()
@@ -300,6 +360,7 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         EditorScope = CommandScope.Global;
         EditorHotkey = string.Empty;
         EditorSortOrder = Commands.Count + 1;
+        EditorIsPinned = false;
     }
 
     public async Task DeleteSelectedAsync()
@@ -314,15 +375,26 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
     }
 
     public async Task SendSelectedAsync()
+        => await SendCommandAsync(SelectedCommand);
+
+    public async Task SendCommandAsync(CommandDefinition? command)
     {
-        if (SelectedCommand == null)
+        if (command == null || string.IsNullOrEmpty(_sessionId))
         {
             return;
         }
 
-        if (SendRequested != null)
+        try
         {
-            await SendRequested.Invoke(SelectedCommand);
+            await _commandExecutionService.ExecuteAsync(_sessionId, command);
+        }
+        catch (Exception ex)
+        {
+            await _notificationService.AddAsync(
+                NotificationCategory.System,
+                NotificationLevel.Error,
+                "command.send.failed",
+                new object[] { ex.Message });
         }
     }
 
@@ -348,26 +420,6 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         await LoadAsync();
     }
 
-    public void RefreshLocalizedOptions()
-    {
-        PayloadTypeOptions = new[]
-        {
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Text, _localizedStrings.ToolCommandsTypeText),
-            new CommandOption<CommandPayloadType>(CommandPayloadType.Hex, _localizedStrings.ToolCommandsTypeHex)
-        };
-
-        ScopeOptions = new[]
-        {
-            new CommandOption<CommandScope>(CommandScope.Global, _localizedStrings.ToolCommandsScopeGlobal),
-            new CommandOption<CommandScope>(CommandScope.Session, _localizedStrings.ToolCommandsScopeSession)
-        };
-
-        OnPropertyChanged(nameof(PayloadTypeOptions));
-        OnPropertyChanged(nameof(ScopeOptions));
-        OnPropertyChanged(nameof(SelectedPayloadType));
-        OnPropertyChanged(nameof(SelectedScope));
-    }
-
     private void LoadEditor(CommandDefinition? command)
     {
         if (command == null)
@@ -385,6 +437,7 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         EditorScope = command.Scope;
         EditorHotkey = command.Hotkey ?? string.Empty;
         EditorSortOrder = command.SortOrder == 0 ? 1 : command.SortOrder;
+        EditorIsPinned = command.IsPinned;
         OnPropertyChanged(nameof(SelectedPayloadType));
         OnPropertyChanged(nameof(SelectedScope));
     }
@@ -400,12 +453,12 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         var match = Commands.FirstOrDefault(command =>
             string.Equals(NormalizeHotkey(command.Hotkey), normalized, StringComparison.OrdinalIgnoreCase));
 
-        if (match == null || SendRequested == null)
+        if (match == null)
         {
             return false;
         }
 
-        await SendRequested.Invoke(match);
+        await SendCommandAsync(match);
         return true;
     }
 
@@ -419,12 +472,6 @@ public sealed class CommandCenterViewModel : INotifyPropertyChanged
         return value.Replace(" ", string.Empty).Trim();
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }
 
 public sealed record CommandOption<T>(T Value, string Label);

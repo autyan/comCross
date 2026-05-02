@@ -1,0 +1,51 @@
+// Modbus RTU Protocol Definition
+// Standard: MODBUS Application Protocol V1.1b3
+// CRC: Modbus CRC16 (Polynomial 0xA001, Initial 0xFFFF)
+
+protocol ModbusRTU {
+    version "1.0.0";
+    description "Modbus RTU protocol for industrial automation";
+
+    // Modbus RTU Request (功能码0x03: Read Holding Registers)
+    message ReadHoldingRegistersRequest {
+        uint8 device_address range(1, 247);
+        uint8 function_code;
+        uint16 start_address endian(big);
+        uint16 register_count endian(big) range(1, 125);
+        uint16 crc endian(little);
+    }
+
+    // Modbus RTU Response (功能码0x03)
+    message ReadHoldingRegistersResponse {
+        uint8 device_address range(1, 247);
+        uint8 function_code;
+        uint8 byte_count;
+        uint16 crc endian(little);
+    }
+
+    // Modbus RTU Request (功能码0x06: Write Single Register)
+    message WriteSingleRegisterRequest {
+        uint8 device_address range(1, 247);
+        uint8 function_code;
+        uint16 register_address endian(big);
+        uint16 register_value endian(big);
+        uint16 crc endian(little);
+    }
+
+    // Modbus RTU Response (功能码0x06)
+    message WriteSingleRegisterResponse {
+        uint8 device_address range(1, 247);
+        uint8 function_code;
+        uint16 register_address endian(big);
+        uint16 register_value endian(big);
+        uint16 crc endian(little);
+    }
+
+    // Modbus RTU Exception Response
+    message ExceptionResponse {
+        uint8 device_address range(1, 247);
+        uint8 function_code range(128, 255);  // 异常响应功能码 = 原功能码 + 0x80
+        uint8 exception_code range(1, 11);
+        uint16 crc endian(little);
+    }
+}

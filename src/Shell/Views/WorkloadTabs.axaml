@@ -1,0 +1,232 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:controls="using:ComCross.Shell.Controls"
+             x:Class="ComCross.Shell.Views.WorkloadTabs"
+             x:DataType="vm:WorkloadTabsViewModel">
+  <UserControl.Styles>
+    <Style Selector="Button.topbar-icon-button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="controls|PrototypeTopTabChrome.workload-tab-shell">
+      <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1,1,1,0" />
+      <Setter Property="CornerRadius" Value="8,8,0,0" />
+      <Setter Property="ActiveTopBrush" Value="{StaticResource AccentBlueBrightBrush}" />
+      <Setter Property="ActiveTopThickness" Value="3" />
+      <Setter Property="RenderTransform" Value="translateY(0px)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="controls|PrototypeTopTabChrome.workload-tab-shell.active">
+      <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+    </Style>
+    <Style Selector="controls|PrototypeTopTabChrome.workload-tab-shell:pointerover:not(.active)">
+      <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+      <Setter Property="RenderTransform" Value="translateY(-1px)" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{StaticResource Bg1Brush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="12,6,12,4">
+    <Grid ColumnDefinitions="*,Auto">
+      <!-- Left: Workload Tabs (scrollable) -->
+      <ScrollViewer Grid.Column="0" 
+                    HorizontalScrollBarVisibility="Auto" 
+                    VerticalScrollBarVisibility="Disabled">
+        <StackPanel Orientation="Horizontal" Spacing="0">
+          <!-- Workload Tabs -->
+          <ItemsControl ItemsSource="{Binding Tabs}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WorkloadTabItemViewModel">
+                <Border Name="TabBorder"
+                        Cursor="Hand"
+                        PointerPressed="OnTabBorderPointerPressed"
+                        MinWidth="120"
+                        Margin="0,0,8,0"
+                        ToolTip.Tip="{Binding FullName}">
+                  <Grid>
+                    <controls:PrototypeTopTabChrome Height="32"
+                                                    MinWidth="92"
+                                                    Padding="16,0"
+                                                    Classes="workload-tab-shell"
+                                                    Classes.active="{Binding IsActive}"
+                                                    IsActive="{Binding IsActive}" />
+
+                    <Grid ColumnDefinitions="*,Auto"
+                          Margin="16,0,14,0"
+                          Height="32"
+                          IsHitTestVisible="False">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <Border Width="8" Height="8" CornerRadius="999" Background="{StaticResource AccentCyanBrush}" VerticalAlignment="Center" IsVisible="{Binding IsActive}" />
+                      <Border Width="8" Height="8" CornerRadius="999" Background="{StaticResource TextMutedBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsActive}" />
+                      <TextBlock Name="TabName"
+                                 Text="{Binding DisplayName}" 
+                                 FontSize="13" 
+                                 FontWeight="SemiBold"
+                                 VerticalAlignment="Center"
+                                 Classes.active="{Binding IsActive}">
+                        <TextBlock.Styles>
+                          <Style Selector="TextBlock.active">
+                            <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+                          </Style>
+                          <Style Selector="TextBlock:not(.active)">
+                            <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
+                          </Style>
+                        </TextBlock.Styles>
+                      </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                      <Border Background="{StaticResource Bg2Brush}"
+                              BorderBrush="{StaticResource AccentBlueBrush}"
+                              BorderThickness="1"
+                              CornerRadius="4"
+                              Height="18"
+                              MinWidth="30"
+                              Padding="6,0"
+                              Margin="10,0,0,0"
+                              VerticalAlignment="Center"
+                              IsVisible="{Binding IsDefault}">
+                        <TextBlock Text="{Binding DefaultBadge}"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   LineHeight="10"
+                                   Foreground="{StaticResource AccentBlueBrush}"
+                                   VerticalAlignment="Center" />
+                      </Border>
+                    </StackPanel>
+                    </Grid>
+                  </Grid>
+                  
+                  <!-- Context Menu -->
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <!-- Rename (all workloads) -->
+                      <MenuItem Header="{Binding RenameHeader}" 
+                                IsEnabled="{Binding CanRename}"
+                                Command="{Binding RenameCommand}"
+                                CommandParameter="{Binding Id}">
+                        <MenuItem.Icon>
+                          <TextBlock Text="✏️" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      
+                      <!-- Copy (all workloads) -->
+                      <MenuItem Header="{Binding CopyHeader}" 
+                                IsEnabled="{Binding CanCopy}"
+                                Command="{Binding CopyCommand}"
+                                CommandParameter="{Binding Id}">
+                        <MenuItem.Icon>
+                          <TextBlock Text="📋" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      
+                      <Separator IsVisible="{Binding CanDelete}" />
+                      
+                      <!-- Delete (except default) -->
+                      <MenuItem Header="{Binding DeleteHeader}" 
+                                IsEnabled="{Binding CanDelete}"
+                                Command="{Binding DeleteCommand}"
+                                CommandParameter="{Binding Id}">
+                      </MenuItem>
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          
+          <!-- New Workload Button -->
+          <Button Classes="prototype-plain"
+                  VerticalAlignment="Center"
+                  Command="{Binding CreateWorkloadCommand}"
+                  ToolTip.Tip="{Binding L[workload.new]}">
+            <controls:PrototypeTopTabChrome Height="32"
+                                            MinWidth="40"
+                                            Padding="10,0"
+                                            Classes="workload-tab-shell">
+              <Path Data="{StaticResource PlusIcon}"
+                    Width="18"
+                    Height="18"
+                    Stretch="Uniform"
+                    Stroke="{StaticResource Text1Brush}"
+                    StrokeThickness="1.7"
+                    StrokeLineCap="Round"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </controls:PrototypeTopTabChrome>
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
+      
+      <!-- Right: Action Buttons (fixed width, float right) -->
+      <StackPanel Grid.Column="1" 
+                  Orientation="Horizontal" 
+                  Spacing="8"
+                  Margin="8,0">
+        <!-- Notification Button -->
+        <Button Classes="topbar-icon-button"
+                Click="OnNotificationsClick"
+                ToolTip.Tip="{Binding L[action.notifications.tooltip]}">
+          <Grid ClipToBounds="False">
+            <Border Width="32" Height="32" CornerRadius="6" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" Background="Transparent" />
+            <Path Classes="prototype-icon"
+                  Data="{StaticResource BellIcon}"
+                  Width="16"
+                  Height="16"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,1,1,0"
+                    MinWidth="16"
+                    Height="16"
+                    Padding="4,0"
+                    CornerRadius="999"
+                    Background="{StaticResource ErrorBrush}"
+                    IsVisible="{Binding HasUnreadNotifications}">
+              <TextBlock Text="{Binding NotificationCenter.UnreadCount}"
+                         FontSize="9"
+                         FontWeight="Bold"
+                         Foreground="{StaticResource WhiteBrush}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+            </Border>
+          </Grid>
+        </Button>
+        
+        <!-- Settings Button -->
+        <Button Classes="topbar-icon-button"
+                Click="OnSettingsClick"
+                ToolTip.Tip="{Binding L[action.settings.tooltip]}">
+          <Border Width="32" Height="32" CornerRadius="6" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" Background="Transparent">
+            <Path Classes="prototype-icon"
+                  Data="{StaticResource SettingsIcon}"
+                  Width="16"
+                  Height="16"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
+          </Border>
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

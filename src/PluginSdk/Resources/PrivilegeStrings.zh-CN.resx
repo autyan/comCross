@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="LinuxSerial.Manual" xml:space="preserve">
+    <value>要访问串口设备 {0}，你可以选择以下方式：
+
+方案 1 - 临时授权（通常在设备重新插拔后失效）：
+  sudo chmod 666 {0}
+
+方案 2 - 永久授权（推荐）：
+  sudo usermod -aG dialout {1}
+  然后注销并重新登录
+
+方案 3 - 通过 udev 规则自动授权：
+  创建 /etc/udev/rules.d/50-serial.rules：
+  KERNEL=="ttyUSB[0-9]*", MODE="0666"
+  KERNEL=="ttyACM[0-9]*", MODE="0666"
+  然后执行：sudo udevadm control --reload-rules</value>
+  </data>
+
+  <data name="LinuxNetBind.Manual" xml:space="preserve">
+    <value>在 Linux 上绑定特权端口（&lt;1024）通常需要 CAP_NET_BIND_SERVICE 或 root 权限。
+
+方案 1 - 为可执行文件授予 capability（桌面应用推荐）：
+  sudo setcap 'cap_net_bind_service=+ep' {0}
+
+方案 2 - 以 root 运行宿主进程（不推荐）：
+  sudo {0}
+
+方案 3 - 使用非特权端口（&gt;=1024），例如 {1}</value>
+  </data>
+</root>

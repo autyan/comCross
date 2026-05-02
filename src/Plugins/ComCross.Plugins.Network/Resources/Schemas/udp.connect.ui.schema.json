@@ -1,0 +1,55 @@
+{
+  "uiSchemaVersion": 1,
+  "titleKey": "network.adapter.connect.udp.title",
+  "fields": [
+    {
+      "key": "remoteHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.remoteHost",
+      "defaultStatePath": "defaultParameters.udp.remoteHost",
+      "required": true
+    },
+    {
+      "key": "remotePort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.remotePort",
+      "defaultStatePath": "defaultParameters.udp.remotePort",
+      "defaultValue": 5020,
+      "min": 1,
+      "max": 65535,
+      "required": true
+    },
+    {
+      "key": "localHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.localHost",
+      "defaultStatePath": "defaultParameters.udp.localHost"
+    },
+    {
+      "key": "localPort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.localPort",
+      "defaultStatePath": "defaultParameters.udp.localPort",
+      "defaultValue": 0,
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "key": "sessionName",
+      "control": "text",
+      "labelKey": "network.adapter.connect.sessionName"
+    }
+  ],
+  "layout": {
+    "kind": "stack",
+    "orientation": "vertical",
+    "spacing": 12,
+    "children": [
+      { "kind": "field", "key": "remoteHost" },
+      { "kind": "field", "key": "remotePort" },
+      { "kind": "field", "key": "localHost" },
+      { "kind": "field", "key": "localPort" },
+      { "kind": "field", "key": "sessionName" }
+    ]
+  }
+}

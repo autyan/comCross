@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "port": { "type": "string" },
+    "baudRate": { "type": "integer" },
+    "dataBits": { "type": "integer" },
+    "parity": { "type": "string", "enum": ["None", "Odd", "Even", "Mark", "Space"] },
+    "stopBits": { "type": "string", "enum": ["None", "One", "Two", "OnePointFive"] },
+    "flowControl": { "type": "string", "enum": ["None", "XOnXOff", "RequestToSend", "RequestToSendXOnXOff"] },
+    "sessionName": { "type": "string" }
+  },
+  "required": ["port"]
+}

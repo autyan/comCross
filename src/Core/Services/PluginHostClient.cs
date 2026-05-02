@@ -12,6 +12,7 @@ public sealed class PluginHostClient : IDisposable
     private StreamReader? _reader;
     private StreamWriter? _writer;
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private readonly SemaphoreSlim _ioGate = new(1, 1);
 
     public PluginHostClient(string pipeName)
     {
@@ -20,40 +21,61 @@ public sealed class PluginHostClient : IDisposable
 
     public async Task<PluginHostResponse?> SendAsync(PluginHostRequest request, TimeSpan timeout)
     {
+        await _ioGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await EnsureConnectedAsync(timeout);
-        }
-        catch
-        {
-            return null;
-        }
+            try
+            {
+                await EnsureConnectedAsync(timeout).ConfigureAwait(false);
+            }
+            catch
+            {
+                return null;
+            }
 
-        if (_writer is null || _reader is null)
-        {
-            return null;
-        }
+            if (_writer is null || _reader is null)
+            {
+                return null;
+            }
 
-        var payload = JsonSerializer.Serialize(request, _jsonOptions);
-        await _writer.WriteLineAsync(payload);
+            var payload = JsonSerializer.Serialize(request, _jsonOptions);
+            await _writer.WriteLineAsync(payload).ConfigureAwait(false);
 
-        var line = await ReadLineAsync(_reader, timeout);
-        if (line is null)
-        {
-            return null;
-        }
+            var line = await ReadLineAsync(_reader, timeout).ConfigureAwait(false);
+            if (line is null)
+            {
+                return null;
+            }
 
-        try
-        {
-            return JsonSerializer.Deserialize<PluginHostResponse>(line, _jsonOptions);
+            try
+            {
+                return JsonSerializer.Deserialize<PluginHostResponse>(line, _jsonOptions);
+            }
+            catch
+            {
+                return null;
+            }
         }
-        catch
+        finally
         {
-            return null;
+            _ioGate.Release();
         }
     }
 
     public void Dispose()
+    {
+        _ioGate.Wait();
+        try
+        {
+            DisposeCore();
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
+    }
+
+    private void DisposeCore()
     {
         _writer?.Dispose();
         _reader?.Dispose();
@@ -70,10 +92,10 @@ public sealed class PluginHostClient : IDisposable
             return;
         }
 
-        Dispose();
+        DisposeCore();
         _pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         using var cts = new CancellationTokenSource(timeout);
-        await _pipe.ConnectAsync(cts.Token);
+        await _pipe.ConnectAsync(cts.Token).ConfigureAwait(false);
         _reader = new StreamReader(_pipe, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         _writer = new StreamWriter(_pipe, Encoding.UTF8, bufferSize: 1024, leaveOpen: true)
         {
@@ -84,7 +106,7 @@ public sealed class PluginHostClient : IDisposable
     private static async Task<string?> ReadLineAsync(StreamReader reader, TimeSpan timeout)
     {
         var readTask = reader.ReadLineAsync();
-        var completed = await Task.WhenAny(readTask, Task.Delay(timeout));
-        return completed == readTask ? await readTask : null;
+        var completed = await Task.WhenAny(readTask, Task.Delay(timeout)).ConfigureAwait(false);
+        return completed == readTask ? await readTask.ConfigureAwait(false) : null;
     }
 }

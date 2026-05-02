@@ -1,9 +1,10 @@
 {
   "id": "serial.protocol",
   "name": "Protocol Helper",
-  "version": "0.3.1",
-  "targetCoreVersion": "0.3",
+  "version": "0.4.0",
+  "targetCoreVersion": "0.4",
   "entryPoint": "ComCross.Plugins.Protocol.ProtocolTool",
+  "pluginType": "Extension",
   "toolGroup": "serial",
   "permissions": ["workspace.read", "serial.read"]
 }

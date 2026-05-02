@@ -29,6 +29,16 @@ public sealed class LogSettings
     public int MaxFileSizeMb { get; set; } = 10;
     public int MaxTotalSizeMb { get; set; } = 256;
     public bool AutoDeleteEnabled { get; set; }
+    
+    /// <summary>
+    /// Enable database persistence for message storage (default: enabled)
+    /// </summary>
+    public bool DatabasePersistenceEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Database directory (optional, defaults to AppData if not specified)
+    /// </summary>
+    public string? DatabaseDirectory { get; set; }
 }
 
 public sealed class NotificationSettings
@@ -46,7 +56,6 @@ public sealed class ConnectionSettings
     public bool DefaultAddCr { get; set; } = true;
     public bool DefaultAddLf { get; set; } = true;
     public ConnectionBehavior ExistingSessionBehavior { get; set; } = ConnectionBehavior.PromptUser;
-    public LinuxSerialScanSettings LinuxSerialScan { get; set; } = new();
 }
 
 public enum ConnectionBehavior
@@ -97,6 +106,7 @@ public enum ExportRangeMode
 
 public sealed class CommandSettings
 {
+    public bool DefaultsInitialized { get; set; }
     public List<CommandDefinition> GlobalCommands { get; set; } = new();
     public Dictionary<string, List<CommandDefinition>> SessionCommands { get; set; } = new();
 }
@@ -104,30 +114,32 @@ public sealed class CommandSettings
 public sealed class PluginSettings
 {
     public Dictionary<string, bool> Enabled { get; set; } = new();
+
+    /// <summary>
+    /// Optional plugin package trust enforcement.
+    /// Default is disabled for development/backward compatibility.
+    /// </summary>
+    public PluginSignatureVerificationSettings SignatureVerification { get; set; } = new();
 }
 
-public sealed class LinuxSerialScanSettings
+public sealed class PluginSignatureVerificationSettings
 {
     /// <summary>
-    /// Scan patterns for Linux serial port discovery
+    /// When enabled, Core will evaluate whether a plugin package is trusted before starting its host.
+    /// Default: disabled.
     /// </summary>
-    public List<string> ScanPatterns { get; set; } = new()
-    {
-        "/dev/ttyUSB*",     // USB serial adapters
-        "/dev/ttyACM*",     // USB CDC-ACM devices (Arduino, etc.)
-        "/dev/ttyS*",       // Standard serial ports
-        "/dev/ttyAMA*",     // ARM PL011 UART (Raspberry Pi, etc.)
-        "/dev/pts/*",       // Pseudo-terminal devices (socat, etc.)
-        "/tmp/vserial*",    // Custom virtual serial ports
-        "/tmp/tty*"         // Custom temporary serial ports
-    };
-    
+    public bool Enabled { get; set; } = false;
+
     /// <summary>
-    /// Exclude patterns to filter out unwanted devices
+    /// Temporary allow-list for official/built-in plugins while signature verification is being rolled out.
+    /// NOTE: This is not a cryptographic guarantee.
     /// </summary>
-    public List<string> ExcludePatterns { get; set; } = new()
+    public List<string> AllowUnsignedPluginIds { get; set; } = new()
     {
-        "/dev/pts/0",       // Console
-        "/dev/pts/ptmx"     // PTY master
+        "serial.adapter",
+        "serial.flow",
+        "serial.protocol",
+        "serial.stats",
+        "network.adapter"
     };
 }

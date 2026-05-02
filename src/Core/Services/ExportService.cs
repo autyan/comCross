@@ -164,7 +164,7 @@ public sealed class ExportService
         var sb = new StringBuilder();
         foreach (var msg in messages)
         {
-            sb.AppendLine($"{msg.Timestamp:O}\t{msg.Level}\t{msg.Source}\t{msg.Content}");
+            sb.AppendLine($"{msg.Timestamp:O}\t{msg.Level}\t{msg.Source}\t{FormatAttributes(msg.Attributes)}\t{msg.Content}");
         }
         return sb.ToString();
     }
@@ -172,12 +172,13 @@ public sealed class ExportService
     private static string FormatAsCsv(IReadOnlyList<LogMessage> messages)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Timestamp,Level,Source,Content");
+        sb.AppendLine("Timestamp,Level,Source,Attributes,Content");
         
         foreach (var msg in messages)
         {
             var content = msg.Content.Replace("\"", "\"\"");
-            sb.AppendLine($"\"{msg.Timestamp:O}\",\"{msg.Level}\",\"{msg.Source}\",\"{content}\"");
+            var attributes = FormatAttributes(msg.Attributes).Replace("\"", "\"\"");
+            sb.AppendLine($"\"{msg.Timestamp:O}\",\"{msg.Level}\",\"{msg.Source}\",\"{attributes}\",\"{content}\"");
         }
         
         return sb.ToString();
@@ -199,4 +200,9 @@ public sealed class ExportService
         }
         return name;
     }
+
+    private static string FormatAttributes(IReadOnlyDictionary<string, string> attributes)
+        => attributes.Count == 0
+            ? string.Empty
+            : string.Join(" ", attributes.Select(static x => $"{x.Key}={x.Value}"));
 }

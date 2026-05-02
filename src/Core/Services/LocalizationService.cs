@@ -9,24 +9,127 @@ namespace ComCross.Core.Services;
 /// <summary>
 /// JSON-based localization service implementation
 /// </summary>
-public sealed class LocalizationService : ILocalizationService
+public sealed class LocalizationService : IExtensibleLocalizationService
 {
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _translations = new();
+    private readonly ConcurrentDictionary<string, byte> _missingKeyLogged = new();
+    private readonly ConcurrentDictionary<string, string> _keyOwners = new(StringComparer.Ordinal);
+    private readonly LocalizationStrings _strings;
     private string _currentCulture = "en-US";
+    private readonly bool _debugI18n;
 
     public string CurrentCulture => _currentCulture;
 
     public IReadOnlyList<LocaleCultureInfo> AvailableCultures { get; }
+    
+    public ILocalizationStrings Strings => _strings;
+
+    public event EventHandler<string>? LanguageChanged;
 
     public LocalizationService()
     {
+        _debugI18n = string.Equals(
+            Environment.GetEnvironmentVariable("COMCROSS_I18N_DEBUG"),
+            "1",
+            StringComparison.Ordinal);
+
+        _strings = new LocalizationStrings(this);
+        
         var defaultTranslations = GetEnglishTranslations();
         _translations["en-US"] = defaultTranslations;
 
         AvailableCultures = LoadResourceTranslations(defaultTranslations);
 
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] LocalizationService initialized. DefaultCulture=en-US CurrentCulture={_currentCulture}");
+            Console.WriteLine($"[i18n] AvailableCultures: {string.Join(", ", AvailableCultures.Select(c => c.Code))}");
+            Console.WriteLine($"[i18n] en-US keys loaded: {defaultTranslations.Count}");
+        }
+
         // Load default culture
         LoadCulture(_currentCulture);
+    }
+
+    public void RegisterTranslations(
+        string source,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> bundlesByCulture,
+        out IReadOnlyList<string> duplicateKeys,
+        out IReadOnlyList<string> invalidKeys,
+        Func<string, bool>? validateKey = null)
+    {
+        var duplicates = new List<string>();
+        var invalid = new List<string>();
+
+        if (bundlesByCulture is null || bundlesByCulture.Count == 0)
+        {
+            duplicateKeys = Array.Empty<string>();
+            invalidKeys = Array.Empty<string>();
+            return;
+        }
+
+        foreach (var cultureEntry in bundlesByCulture)
+        {
+            var cultureCode = cultureEntry.Key;
+            if (string.IsNullOrWhiteSpace(cultureCode))
+            {
+                continue;
+            }
+
+            var bundle = cultureEntry.Value;
+            if (bundle is null || bundle.Count == 0)
+            {
+                continue;
+            }
+
+            // Ensure culture dictionary exists.
+            var cultureDict = _translations.GetOrAdd(cultureCode, _ => new Dictionary<string, string>());
+
+            foreach (var kvp in bundle)
+            {
+                var key = kvp.Key;
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                if (validateKey is not null && !validateKey(key))
+                {
+                    invalid.Add($"{cultureCode}:{key}");
+                    continue;
+                }
+
+                var ownerKey = $"{cultureCode}:{key}";
+
+                // Idempotency: if this exact (culture,key) is already owned by the same source,
+                // treat it as a no-op (do not report as duplicate).
+                if (_keyOwners.TryGetValue(ownerKey, out var existingOwner)
+                    && string.Equals(existingOwner, source, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (cultureDict.ContainsKey(key))
+                {
+                    duplicates.Add($"{cultureCode}:{key}");
+                    continue;
+                }
+
+                cultureDict[key] = kvp.Value ?? string.Empty;
+                _keyOwners.TryAdd(ownerKey, source);
+            }
+        }
+
+        duplicateKeys = duplicates;
+        invalidKeys = invalid;
+
+        // Refresh bindings so UI can pick up newly registered keys.
+        _strings.RefreshAll();
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] Registered plugin translations source='{source}', duplicates={duplicates.Count}, invalid={invalid.Count}");
+        }
     }
 
     public void SetCulture(string cultureCode)
@@ -37,7 +140,16 @@ public sealed class LocalizationService : ILocalizationService
         }
 
         _currentCulture = cultureCode;
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] SetCulture -> {cultureCode}");
+        }
+
         LoadCulture(cultureCode);
+        _strings.RefreshAll(); // Notify XAML bindings to refresh
+
+        LanguageChanged?.Invoke(this, cultureCode);
     }
 
     public string GetString(string key, params object[] args)
@@ -64,6 +176,11 @@ public sealed class LocalizationService : ILocalizationService
             }
         }
 
+        if (_debugI18n && _missingKeyLogged.TryAdd($"{_currentCulture}:{key}", 0))
+        {
+            Console.WriteLine($"[i18n] Missing key '{key}' (culture={_currentCulture})");
+        }
+
         return $"[{key}]"; // Return key if not found
     }
 
@@ -74,10 +191,14 @@ public sealed class LocalizationService : ILocalizationService
             return; // Already loaded
         }
 
-        // Use built-in translations (embedded in code for reliability)
-        _translations[cultureCode] = cultureCode == "zh-CN"
-            ? GetChineseTranslations()
-            : GetEnglishTranslations();
+        // English is hardcoded (always available)
+        // Other languages must be loaded from strings.json
+        if (cultureCode == "en-US")
+        {
+            _translations[cultureCode] = GetEnglishTranslations();
+        }
+        // For other cultures, they should have been loaded from JSON in constructor
+        // If not found, they will fallback to en-US automatically
     }
 
     private IReadOnlyList<LocaleCultureInfo> LoadResourceTranslations(
@@ -90,13 +211,41 @@ public sealed class LocalizationService : ILocalizationService
 
         var assembly = typeof(AssetMarker).Assembly;
         var resourceName = "ComCross.Assets.Resources.Localization.strings.json";
-        using var stream = assembly.GetManifestResourceStream(resourceName);
+        var stream = assembly.GetManifestResourceStream(resourceName);
+
+        if (_debugI18n)
+        {
+            Console.WriteLine($"[i18n] Trying to load embedded resource: {resourceName}");
+        }
+
         if (stream == null)
         {
+            var fallbackName = assembly
+                .GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith("Resources.Localization.strings.json", StringComparison.Ordinal));
+
+            if (_debugI18n)
+            {
+                Console.WriteLine($"[i18n] Embedded resource not found by exact name. Fallback match: {fallbackName ?? "<null>"}");
+            }
+
+            if (fallbackName != null)
+            {
+                stream = assembly.GetManifestResourceStream(fallbackName);
+            }
+        }
+
+        if (stream == null)
+        {
+            if (_debugI18n)
+            {
+                Console.WriteLine("[i18n] No embedded strings.json found; only en-US will be available.");
+            }
             return cultures;
         }
 
-        using var doc = JsonDocument.Parse(stream);
+        using var streamToDispose = stream;
+        using var doc = JsonDocument.Parse(streamToDispose);
         if (!doc.RootElement.TryGetProperty("cultures", out var culturesElement))
         {
             return cultures;
@@ -105,28 +254,21 @@ public sealed class LocalizationService : ILocalizationService
         foreach (var cultureProperty in culturesElement.EnumerateObject())
         {
             var cultureCode = cultureProperty.Name;
+            
+            // Skip en-US in JSON - we only use hardcoded English
+            if (cultureCode == "en-US")
+            {
+                continue;
+            }
+            
             var strings = new Dictionary<string, string>();
             foreach (var kvp in cultureProperty.Value.EnumerateObject())
             {
                 strings[kvp.Name] = kvp.Value.GetString() ?? string.Empty;
             }
 
-            if (cultureCode == "en-US")
-            {
-                foreach (var kvp in strings)
-                {
-                    defaultTranslations[kvp.Key] = kvp.Value;
-                }
-            }
-            else
-            {
-                _translations[cultureCode] = strings;
-            }
-
-            if (cultureCode != "en-US")
-            {
-                cultures.Add(CreateLocaleCultureInfo(cultureCode));
-            }
+            _translations[cultureCode] = strings;
+            cultures.Add(CreateLocaleCultureInfo(cultureCode));
         }
 
         return cultures;
@@ -149,12 +291,21 @@ public sealed class LocalizationService : ILocalizationService
     {
         return new Dictionary<string, string>
         {
+            // Common
+            ["error.unknown"] = "Unknown error.",
+
             // Main Window
             ["app.title"] = "ComCross - Serial Toolbox",
             ["menu.connect"] = "Connect",
             ["menu.disconnect"] = "Disconnect",
             ["menu.clear"] = "Clear",
             ["menu.export"] = "Export",
+
+            // MessageBox
+            ["messagebox.ok"] = "OK",
+            ["messagebox.cancel"] = "Cancel",
+            ["messagebox.yes"] = "Yes",
+            ["messagebox.no"] = "No",
             
             // Connect Dialog
             ["dialog.connect.title"] = "Connect to Device",
@@ -164,16 +315,195 @@ public sealed class LocalizationService : ILocalizationService
             ["dialog.connect.sessionname.placeholder"] = "My Session",
             ["dialog.connect.cancel"] = "Cancel",
             ["dialog.connect.connect"] = "Connect",
+                ["dialog.connect.plugin"] = "Plugin...",
+                ["dialog.connect.plugin.title"] = "Plugin Connect",
+                ["dialog.connect.plugin.noPlugins"] = "No loaded plugin capabilities are available. Enable/load plugins in Settings → Plugins.",
+                ["dialog.connect.plugin.capability"] = "Capability",
+                ["dialog.connect.plugin.parameters"] = "Parameters (JSON)",
+                ["dialog.connect.plugin.connect"] = "Connect",
+                ["dialog.connect.plugin.cancel"] = "Cancel",
+                ["dialog.connect.plugin.invalidJson"] = "Invalid JSON parameters: {0}",
+                ["dialog.connect.plugin.success"] = "Connect request sent: {0}/{1}",
+                ["dialog.connect.plugin.failed"] = "Connect failed: {0}",
+
+            // Connect Dialog Validation
+            ["dialog.connect.validation.requiredField"] = "Please fill required field: {0}",
+
+            // Notifications
+            ["notification.plugin.i18n.duplicateKey"] = "Plugin i18n key is duplicated and was not registered: {0}",
+            ["notification.plugin.i18n.invalidKeyPrefix"] = "Plugin i18n key is invalid (missing domain prefix) and was not registered: {0}",
+
+            // Session Edit
+            ["session.edit.title"] = "Edit Session",
+            ["session.edit.name"] = "Session Name",
+            ["session.edit.save"] = "Save",
+            ["session.edit.cancel"] = "Cancel",
+            
+            // Workload
+            ["workload.new"] = "New Workload",
+            ["workload.close"] = "Close",
+            ["workload.rename"] = "Rename",
+            ["workload.copy"] = "Copy",
+            ["workload.delete"] = "Delete",
+            ["workload.activeBadge"] = "Active",
+            ["workload.defaultBadge"] = "Default",
+            ["workload.default.name"] = "{0}'s Workspace",
+            ["workload.panel.title"] = "Workloads",
+            ["workload.panel.loading"] = "Loading...",
+            ["workload.displayName.withCount"] = "{0} ({1})",
+            ["workload.session.displayName"] = "Session {0}",
+            
+            // Workload Dialogs
+            ["dialog.createWorkload.title"] = "Create Workload",
+            ["dialog.createWorkload.name"] = "Workload Name *",
+            ["dialog.createWorkload.description"] = "Description (Optional)",
+            ["dialog.createWorkload.namePlaceholder"] = "Enter workload name (e.g., Test Project A)",
+            ["dialog.createWorkload.descriptionPlaceholder"] = "Enter workload description (optional)",
+            ["dialog.createWorkload.descriptionCounter"] = "/ 200",
+            ["dialog.createWorkload.cancel"] = "Cancel",
+            ["dialog.createWorkload.create"] = "Create",
+            ["dialog.createWorkload.error.empty"] = "Workload name cannot be empty",
+            ["dialog.createWorkload.error.minLength"] = "Workload name must be at least 2 characters",
+            ["dialog.createWorkload.error.maxLength"] = "Workload name cannot exceed 50 characters",
+            ["dialog.renameWorkload.title"] = "Rename Workload",
+            ["dialog.renameWorkload.name"] = "New Name *",
+            ["dialog.renameWorkload.namePlaceholder"] = "Enter new workload name (e.g., Test Project A)",
+            ["dialog.renameWorkload.cancel"] = "Cancel",
+            ["dialog.renameWorkload.rename"] = "Rename",
+            ["dialog.renameWorkload.error.sameName"] = "New name is the same as the current name",
+            ["dialog.deleteWorkload.title"] = "Delete Workspace",
+            ["dialog.deleteWorkload.message"] = "Delete workspace '{0}'? This removes the workspace and its session membership, but does not erase historical data files.",
+            
+            // Main Actions
+            ["action.settings"] = "Settings",
+            ["action.notifications"] = "Notifications",
             
             // Sidebar
+            ["sidebar.workloads"] = "WORKLOADS",
             ["sidebar.devices"] = "DEVICES",
             ["sidebar.sessions"] = "SESSIONS",
+            ["sidebar.tab.quickCreate"] = "QUICK CREATE",
+            ["sidebar.tab.sessions"] = "SESSIONS",
+            ["sidebar.busAdapter"] = "BUS ADAPTER",
+            ["sidebar.deviceConfig"] = "DEVICE CONFIGURATION",
+            ["sidebar.selectPort"] = "Select port",
+            ["sidebar.refreshPorts"] = "Refresh ports",
+            ["sidebar.quickConnect"] = "Quick Connect",
+            ["sidebar.baudRate"] = "Baud Rate",
+            ["sidebar.dataBits"] = "Data Bits",
+            ["sidebar.parity"] = "Parity",
+            ["sidebar.stopBits"] = "Stop Bits",
+            ["sidebar.parity.none"] = "None",
+            ["sidebar.parity.odd"] = "Odd",
+            ["sidebar.parity.even"] = "Even",
+            ["sidebar.newSession"] = "New Session",
+            ["sidebar.quickCreate.title"] = "Quick Create",
+            ["sidebar.quickCreate.hint"] = "Use this area to create a new session quickly. It can evolve into a richer creation surface later.",
+            ["sidebar.currentSession.title"] = "Current Session",
+            ["sidebar.currentSession.empty"] = "No Session Selected",
+            ["sidebar.currentSession.emptyHint"] = "Select a session from the list below, or switch to Quick Create to start a new one.",
+            ["sidebar.reconnect.direct"] = "Reconnect",
+            ["sidebar.reconnect.edit"] = "Reconnect With Params",
+            ["sidebar.reconnect.back"] = "Back To Status",
+
+            // Session
+            ["stream.session.current"] = "Current Session",
+            ["stream.session.none"] = "No Session Selected",
+            ["stream.session.noneHint"] = "Select a session first, or create a new session.",
+            ["stream.session.endpointPlaceholder"] = "No endpoint information for the current session",
+            ["stream.session.generic"] = "Session",
+            ["stream.session.detail.listenerTitle"] = "Listener Details",
+            ["stream.session.detail.sessionTitle"] = "Session Details",
+            ["session.inboundConnection.name"] = "Conn",
+            ["session.inboundConnection.nameWithIndex"] = "Conn #{0}",
+            ["session.connectionParameters"] = "Connection Parameters",
+            ["session.initialization.updating"] = "Session is initializing...",
+            ["session.initialization.failed"] = "Session initialization failed",
+            ["session.initialization.failedWithError"] = "Session initialization failed: {0}",
+            ["session.initialization.pluginUnavailable"] = "Session plugin unavailable",
+            ["session.detail.name"] = "Session Name",
+            ["session.detail.type"] = "Type",
+            ["session.detail.endpoint"] = "Endpoint",
+            ["session.detail.rx"] = "RX",
+            ["session.detail.tx"] = "TX",
+            ["session.detail.open"] = "Session Details",
+            ["session.menu.rename"] = "Rename",
+            ["session.menu.delete"] = "Delete",
+            ["dialog.deleteSession.title"] = "Delete Session",
+            ["dialog.deleteSession.message"] = "Delete session '{0}'?",
+            ["dialog.deleteSession.listener.message"] = "Delete listener '{0}' and all child connections?",
+            ["dialog.network.clearPending.title"] = "Clear Pending Connections",
+            ["dialog.network.clearPending.message"] = "Clear all pending connections for listener '{0}'?",
+            ["dialog.renameSession.title"] = "Rename Session",
+            ["dialog.renameSession.label"] = "Session Name",
+            ["dialog.renameSession.placeholder"] = "Enter session name",
+            ["dialog.renameSession.ok"] = "OK",
+            ["dialog.renameSession.cancel"] = "Cancel",
+
+            // Network session surfaces
+            ["network.session.status"] = "Status",
+            ["network.session.connections"] = "Connections",
+            ["network.session.parent"] = "Listener",
+            ["network.session.listener.tcp"] = "TCP Listener",
+            ["network.session.listener.udp"] = "UDP Listener",
+            ["network.session.listener.generic"] = "Listener",
+            ["network.session.client.tcp"] = "TCP Client",
+            ["network.session.client.udp"] = "UDP Socket",
+            ["network.session.connection.inbound"] = "Inbound Connection",
+            ["network.session.connection.generic"] = "Connection",
+            ["network.session.listener.connections"] = "{0} active",
+            ["network.session.pending.connections"] = "{0} pending",
+            ["network.session.listener.hint"] = "Listener sessions are managed as a group. Delete will remove the listener and all inbound child connections.",
+            ["network.session.manager.activeConnections"] = "Active Connections",
+            ["network.session.manager.pendingConnections"] = "Pending Connections",
+            ["network.session.manager.emptyConnections"] = "No active child connections.",
+            ["network.session.manager.emptyPending"] = "No pending connections.",
+            ["network.session.manager.disconnectAll"] = "Disconnect All",
+            ["network.session.manager.acceptPending"] = "Accept",
+            ["network.session.manager.bindPending"] = "Bind",
+            ["network.session.manager.acceptAllPending"] = "Accept All",
+            ["network.session.manager.bindAllPending"] = "Bind All",
+            ["network.session.manager.rejectPending"] = "Reject",
+            ["network.session.manager.clearAllPending"] = "Clear Pending",
+            ["network.session.badge.client"] = "Client",
+            ["network.session.badge.inbound"] = "Inbound",
+
+            // Connection Errors & Confirmation
+            ["connection.error.noPortSelected"] = "No port selected",
+            ["connection.error.noPortSelectedMessage"] = "Please select a serial port first.",
+            ["connection.error.failed"] = "Connection failed",
+            ["connection.error.failedMessage"] = "Failed to connect to {0}: {1}",
+            ["connection.error.analysis"] = "Error Analysis",
+            ["connection.error.analysisTitle"] = "Connection Error Analysis",
+            ["connection.error.accessDenied"] = "Access Denied to Serial Port",
+            ["connection.error.accessDeniedMessage"] = "Cannot access serial port {0}. This could be caused by:",
+            ["connection.error.cause1"] = "• Port is being used by another application",
+            ["connection.error.cause2"] = "• Previous connection was not properly closed",
+            ["connection.error.cause3"] = "• Insufficient permissions (especially for virtual serial ports)",
+            ["connection.error.cause4"] = "• Serial port device is locked or in an error state",
+            ["connection.error.cause5"] = "• For virtual serial ports: the creating process (e.g., socat) may have terminated",
+            ["connection.confirm.existingSession.title"] = "Existing session",
+            ["connection.confirm.existingSession.message"] = "A session for '{0}' already exists. What do you want to do?",
+            ["connection.confirm.ok"] = "Switch",
+            ["connection.confirm.cancel"] = "Create new",
+
+            // Notifications
+            ["notification.connection.unknownReason"] = "Unknown reason",
+
+            // Shutdown / Cleanup
+            ["shutdown.title"] = "Shutting down",
+            ["shutdown.message"] = "Please wait while ComCross cleans up resources...",
+            ["shutdown.disconnecting"] = "Disconnecting {0}...",
+            ["shutdown.savingState"] = "Saving workspace state...",
+            ["shutdown.cleaningUp"] = "Cleaning up...",
+            ["shutdown.complete"] = "Complete.",
             
             // Message Stream
             ["stream.search.placeholder"] = "Search messages...",
             ["stream.metrics.rx"] = "RX:",
             ["stream.metrics.tx"] = "TX:",
             ["stream.metrics.lines"] = "Lines:",
+            ["stream.metrics.toggle"] = "Stats",
             
             // Tool Dock
             ["tool.send"] = "Send",
@@ -183,16 +513,27 @@ public sealed class LocalizationService : ILocalizationService
             ["tool.send.quickcommands"] = "QUICK COMMANDS",
             ["tool.send.message"] = "MESSAGE",
             ["tool.send.message.placeholder"] = "Type your message...",
+            ["tool.send.message.placeholderWithShortcut"] = "Type your message... (Ctrl+Enter to send)",
             ["tool.send.hexmode"] = "HEX Mode",
             ["tool.send.addcr"] = "Add CR",
             ["tool.send.addlf"] = "Add LF",
             ["tool.send.button"] = "Send",
+            ["tool.send.target"] = "Target",
+            ["tool.send.target.placeholder"] = "Select target",
+            ["tool.send.error.generic"] = "Send failed.",
+            ["tool.send.error.targetRequired"] = "Select a target before sending.",
+            ["tool.send.error.targetNotFound"] = "The selected target is no longer available.",
             ["tool.send.cmd.status"] = "Status",
             ["tool.send.cmd.reset"] = "Reset",
             ["tool.send.cmd.getconfig"] = "Get Config",
             ["tool.commands"] = "Commands",
             ["tool.commands.empty"] = "No commands",
+            ["tool.commands.viewAll"] = "View all commands...",
             ["tool.commands.send"] = "Send",
+            ["tool.commands.edit"] = "Edit",
+            ["tool.commands.pin"] = "Pin",
+            ["tool.commands.unpin"] = "Unpin",
+            ["tool.commands.select"] = "Select command",
             ["tool.commands.add"] = "New",
             ["tool.commands.save"] = "Save",
             ["tool.commands.delete"] = "Delete",
@@ -206,6 +547,9 @@ public sealed class LocalizationService : ILocalizationService
             ["tool.commands.scope"] = "Scope",
             ["tool.commands.appendCr"] = "Append CR",
             ["tool.commands.appendLf"] = "Append LF",
+            ["tool.commands.pinned"] = "Quick",
+            ["tool.commands.search"] = "Search commands...",
+            ["tool.commands.allGroups"] = "All groups",
             ["tool.commands.hotkey"] = "Hotkey",
             ["tool.commands.sortOrder"] = "Order",
             ["tool.commands.scope.global"] = "Global",
@@ -219,6 +563,10 @@ public sealed class LocalizationService : ILocalizationService
             ["status.disconnected"] = "Disconnected",
             ["status.rxbytes"] = "RX: {0} bytes",
             ["status.txbytes"] = "TX: {0} bytes",
+            ["status.rx"] = "RX:",
+            ["status.tx"] = "TX:",
+            ["status.cpu"] = "CPU:",
+            ["status.mem"] = "MEM:",
             
             // Settings
             ["settings.title"] = "Settings",
@@ -230,6 +578,12 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.section.display"] = "Display",
             ["settings.section.export"] = "Export",
             ["settings.section.plugins"] = "Plugins",
+            ["settings.section.pluginSettings"] = "Plugin Settings",
+            ["settings.pluginSettings.page"] = "Page",
+            ["settings.nav.system"] = "System",
+            ["settings.nav.system.page"] = "System Settings",
+            ["settings.nav.plugins"] = "Plugins",
+            ["settings.nav.plugins.page"] = "Plugin Manager",
             ["settings.language"] = "Language",
             ["settings.followSystemLanguage"] = "Follow system language",
             ["settings.logs.autosave"] = "Auto save logs",
@@ -238,8 +592,19 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.logs.maxTotalSize"] = "Max total size (MB)",
             ["settings.logs.autoDelete"] = "Auto delete when exceeded",
             ["settings.logs.autoDeleteRuleTip"] = "When enabled, the oldest log files are deleted until the total size is below the limit.",
+            ["settings.logs.enableDatabase"] = "Enable database persistence (SQLite)",
+            ["settings.logs.databaseWarning"] = "Enabling database persistence will use more storage and may impact performance. Messages will be stored in SQLite for advanced search capabilities.",
+            ["settings.logs.databaseDirectory"] = "Database directory",
+            ["settings.logs.directory.defaultWatermark"] = "Default: Logs",
+            ["settings.logs.databaseDirectory.defaultWatermark"] = "Default: AppData",
+            ["session.database.enable"] = "DB Store",
+            ["session.database.tooltip"] = "Store messages to database for advanced search. Note: Historical data is not converted. Switching will result in data loss unless manually imported.",
+            ["sidebar.busAdapter.comingSoon"] = "(Coming soon)",
+            ["action.notifications.tooltip"] = "Notifications",
+            ["action.settings.tooltip"] = "Settings",
             ["settings.appLogs.enabled"] = "Enable application logs",
             ["settings.appLogs.directory"] = "App log directory",
+            ["settings.appLogs.directory.defaultWatermark"] = "Default: AppLogs",
             ["settings.appLogs.format"] = "Log format",
             ["settings.appLogs.minLevel"] = "Minimum level",
             ["settings.plugins.enabled"] = "Enabled",
@@ -249,6 +614,33 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.plugins.status.loaded"] = "Loaded",
             ["settings.plugins.status.disabled"] = "Disabled",
             ["settings.plugins.status.failed"] = "Failed",
+            ["settings.plugins.capabilities"] = "Capabilities: {0}",
+            ["settings.plugins.capabilities.error"] = "Capabilities: {0} (failed)",
+            ["settings.plugins.action.testConnect"] = "Test Connect",
+            ["settings.plugins.connectTest.title"] = "Plugin Connect Test",
+            ["settings.plugins.connectTest.dialog.title"] = "Plugin Connect Test",
+            ["settings.plugins.connectTest.dialog.capability"] = "Capability",
+            ["settings.plugins.connectTest.dialog.parameters"] = "Parameters (JSON)",
+            ["settings.plugins.connectTest.dialog.connect"] = "Connect",
+            ["settings.plugins.connectTest.dialog.cancel"] = "Cancel",
+            ["settings.plugins.connectTest.dialog.invalidJson"] = "Invalid JSON parameters: {0}",
+            ["settings.plugins.connectTest.error.runtimeNotFound"] = "Runtime not found.",
+            ["settings.plugins.connectTest.error.pluginNotLoaded"] = "Plugin not loaded.",
+            ["settings.plugins.connectTest.error.noCapabilities"] = "No capabilities.",
+            ["settings.plugins.connectTest.error.pluginRuntimeNotLoaded"] = "Plugin runtime not loaded.",
+            ["settings.plugins.connectTest.error.capabilityNotFound"] = "Capability not found.",
+            ["settings.plugins.connectTest.error.invalidSchema"] = "Invalid schema: {0}",
+            ["settings.plugins.segmentUpgrade.denied"] = "Segment upgrade denied: {0}",
+            ["settings.plugins.connectTest.success"] = "Connect request sent: {0}/{1}",
+            ["settings.plugins.connectTest.failed"] = "Connect failed: {0}",
+            ["settings.plugins.toggle.title"] = "Plugin Toggle",
+            ["settings.plugins.toggle.error.activeSessions"] = "Disable is blocked because the plugin still has active sessions.",
+            ["settings.plugins.toggle.error.reloadFailed"] = "Plugin runtime reload failed.",
+
+            // Bus adapter / connect flow
+            ["busAdapter.adapter.nameFormat"] = "{0} / {1}",
+            ["dialog.connect.plugin.singleSessionHint"] = "The plugin host currently allows only one active session. Disconnect the existing session to connect another. (Multi-session support is pending.)",
+            ["dialog.connect.resourceConflict.disconnectExisting"] = "{0} '{1}' is already used by session '{2}'. Disconnect it and connect the new one?",
             ["settings.notifications.storage"] = "Storage limit alerts",
             ["settings.notifications.connection"] = "Connection alerts",
             ["settings.notifications.export"] = "Export alerts",
@@ -257,9 +649,16 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.connection.defaultEncoding"] = "Default encoding",
             ["settings.connection.defaultAddCr"] = "Append CR by default",
             ["settings.connection.defaultAddLf"] = "Append LF by default",
+            ["settings.connection.existingSessionBehavior"] = "When a session already exists",
+            ["settings.connection.behavior.createNew"] = "Create new session",
+            ["settings.connection.behavior.switchToExisting"] = "Switch to existing session",
+            ["settings.connection.behavior.promptUser"] = "Ask every time",
             ["settings.display.maxMessages"] = "Max in-memory messages",
             ["settings.display.autoScroll"] = "Auto scroll",
+            ["tool.send.clearAfterSend"] = "Clear after send",
             ["settings.display.timestampFormat"] = "Timestamp format",
+            ["settings.display.fontFamily"] = "Font family",
+            ["settings.display.fontSize"] = "Font size",
             ["settings.export.defaultFormat"] = "Default format",
             ["settings.export.defaultDirectory"] = "Default export directory",
             ["settings.export.range"] = "Range",
@@ -267,151 +666,20 @@ public sealed class LocalizationService : ILocalizationService
             ["settings.export.range.latest"] = "Latest",
             ["settings.export.range.count"] = "Count",
             ["settings.actions.close"] = "Close",
+            ["dialog.cancel"] = "Cancel",
 
             // Notifications
             ["notifications.title"] = "Notifications",
             ["notifications.empty"] = "No notifications",
             ["notifications.markAllRead"] = "Mark all read",
+            ["notifications.clearAll"] = "Clear all",
             ["notification.storage.limitExceeded"] = "Log storage limit exceeded ({0} MB / {1} MB).",
             ["notification.storage.autoDeleteApplied"] = "Auto delete removed {0} log files.",
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
-            ["notification.connection.unknownReason"] = "unknown",
-            ["notification.export.completed"] = "Export completed: {0}"
-        };
-    }
-
-    private static Dictionary<string, string> GetChineseTranslations()
-    {
-        return new Dictionary<string, string>
-        {
-            // Main Window
-            ["app.title"] = "ComCross - 串口工具箱",
-            ["menu.connect"] = "连接",
-            ["menu.disconnect"] = "断开",
-            ["menu.clear"] = "清空",
-            ["menu.export"] = "导出",
-            
-            // Connect Dialog
-            ["dialog.connect.title"] = "连接到设备",
-            ["dialog.connect.port"] = "端口",
-            ["dialog.connect.baudrate"] = "波特率",
-            ["dialog.connect.sessionname.placeholder"] = "我的会话",
-            ["dialog.connect.sessionname"] = "会话名称",
-            ["dialog.connect.cancel"] = "取消",
-            ["dialog.connect.connect"] = "连接",
-            
-            // Sidebar
-            ["sidebar.devices"] = "设备",
-            ["sidebar.sessions"] = "会话",
-            
-            // Message Stream
-            ["stream.search.placeholder"] = "搜索消息...",
-            ["stream.metrics.rx"] = "接收:",
-            ["stream.metrics.tx"] = "发送:",
-            ["stream.metrics.lines"] = "行数:",
-            
-            // Tool Dock
-            ["tool.send"] = "发送",
-            ["tool.filter"] = "过滤",
-            ["tool.highlight"] = "高亮",
-            ["tool.export"] = "导出",
-            ["tool.send.quickcommands"] = "快捷命令",
-            ["tool.send.message.placeholder"] = "输入消息...",
-            ["tool.send.message"] = "消息",
-            ["tool.send.hexmode"] = "十六进制模式",
-            ["tool.send.addcr"] = "添加 CR",
-            ["tool.send.addlf"] = "添加 LF",
-            ["tool.send.button"] = "发送",
-            ["tool.send.cmd.status"] = "状态",
-            ["tool.send.cmd.reset"] = "重置",
-            ["tool.send.cmd.getconfig"] = "获取配置",
-            ["tool.commands"] = "命令",
-            ["tool.commands.empty"] = "暂无命令",
-            ["tool.commands.send"] = "发送",
-            ["tool.commands.add"] = "新建",
-            ["tool.commands.save"] = "保存",
-            ["tool.commands.delete"] = "删除",
-            ["tool.commands.import"] = "导入",
-            ["tool.commands.export"] = "导出",
-            ["tool.commands.name"] = "名称",
-            ["tool.commands.payload"] = "内容",
-            ["tool.commands.type"] = "类型",
-            ["tool.commands.encoding"] = "编码",
-            ["tool.commands.group"] = "分组",
-            ["tool.commands.scope"] = "范围",
-            ["tool.commands.appendCr"] = "追加 CR",
-            ["tool.commands.appendLf"] = "追加 LF",
-            ["tool.commands.hotkey"] = "快捷键",
-            ["tool.commands.sortOrder"] = "排序",
-            ["tool.commands.scope.global"] = "全局",
-            ["tool.commands.scope.session"] = "会话",
-            ["tool.commands.type.text"] = "文本",
-            ["tool.commands.type.hex"] = "十六进制",
-            
-            // Status Bar
-            ["status.ready"] = "就绪",
-            ["status.connected"] = "已连接",
-            ["status.disconnected"] = "已断开",
-            ["status.rxbytes"] = "接收: {0} 字节",
-            ["status.txbytes"] = "发送: {0} 字节",
-            
-            // Settings
-            ["settings.title"] = "设置",
-            ["settings.section.general"] = "通用",
-            ["settings.section.logs"] = "日志",
-            ["settings.section.appLogs"] = "程序日志",
-            ["settings.section.notifications"] = "通知",
-            ["settings.section.connection"] = "连接",
-            ["settings.section.display"] = "显示",
-            ["settings.section.export"] = "导出",
-            ["settings.section.plugins"] = "插件",
-            ["settings.language"] = "语言",
-            ["settings.followSystemLanguage"] = "跟随系统语言",
-            ["settings.logs.autosave"] = "自动保存日志",
-            ["settings.logs.directory"] = "日志目录",
-            ["settings.logs.maxFileSize"] = "单文件上限 (MB)",
-            ["settings.logs.maxTotalSize"] = "总占用上限 (MB)",
-            ["settings.logs.autoDelete"] = "超限自动删除",
-            ["settings.logs.autoDeleteRuleTip"] = "开启后将按时间删除最旧日志，直到总占用低于上限。",
-            ["settings.appLogs.enabled"] = "启用程序日志",
-            ["settings.appLogs.directory"] = "程序日志目录",
-            ["settings.appLogs.format"] = "日志格式",
-            ["settings.appLogs.minLevel"] = "最低级别",
-            ["settings.plugins.enabled"] = "启用",
-            ["settings.plugins.name"] = "名称",
-            ["settings.plugins.permissions"] = "权限",
-            ["settings.plugins.path"] = "路径",
-            ["settings.plugins.status.loaded"] = "已加载",
-            ["settings.plugins.status.disabled"] = "已禁用",
-            ["settings.plugins.status.failed"] = "加载失败",
-            ["settings.notifications.storage"] = "存储超限提醒",
-            ["settings.notifications.connection"] = "连接异常提醒",
-            ["settings.notifications.export"] = "导出完成提醒",
-            ["settings.notifications.retentionDays"] = "保留天数",
-            ["settings.connection.defaultBaudRate"] = "默认波特率",
-            ["settings.connection.defaultEncoding"] = "默认编码",
-            ["settings.connection.defaultAddCr"] = "默认追加 CR",
-            ["settings.connection.defaultAddLf"] = "默认追加 LF",
-            ["settings.display.maxMessages"] = "内存消息上限",
-            ["settings.display.autoScroll"] = "自动滚动",
-            ["settings.display.timestampFormat"] = "时间戳格式",
-            ["settings.export.defaultFormat"] = "默认格式",
-            ["settings.export.defaultDirectory"] = "默认导出目录",
-            ["settings.export.range"] = "范围",
-            ["settings.export.range.all"] = "全部",
-            ["settings.export.range.latest"] = "最近",
-            ["settings.export.range.count"] = "条数",
-            ["settings.actions.close"] = "关闭",
-
-            // Notifications
-            ["notifications.title"] = "通知中心",
-            ["notifications.empty"] = "暂无通知",
-            ["notifications.markAllRead"] = "全部已读",
-            ["notification.storage.limitExceeded"] = "日志占用超限（{0} MB / {1} MB）。",
-            ["notification.storage.autoDeleteApplied"] = "自动删除了 {0} 个日志文件。",
-            ["notification.connection.disconnected"] = "会话 {0} 断开（{1}）。",
-            ["notification.connection.unknownReason"] = "未知",
-            ["notification.export.completed"] = "导出完成：{0}"
+            ["notification.connection.unknownReason"] = "Unknown reason",
+            ["notification.export.completed"] = "Export completed: {0}",
+            ["command.defaults.groupName"] = "Default Quick Commands",
+            ["command.pinned.limit"] = "Quick commands support up to {0} pinned items."
         };
     }
 }

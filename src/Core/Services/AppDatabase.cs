@@ -219,6 +219,65 @@ public sealed class AppDatabase
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<LogFileRecord>> GetLogFilesBySessionAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return Array.Empty<LogFileRecord>();
+        }
+
+        var records = new List<LogFileRecord>();
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, session_id, session_name, file_path, start_time, end_time, size_bytes
+            FROM log_files
+            WHERE session_id = $sessionId;
+            """;
+        command.Parameters.AddWithValue("$sessionId", sessionId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            records.Add(new LogFileRecord
+            {
+                Id = reader.GetString(0),
+                SessionId = reader.GetString(1),
+                SessionName = reader.GetString(2),
+                FilePath = reader.GetString(3),
+                StartTime = DateTime.Parse(reader.GetString(4)),
+                EndTime = DateTime.Parse(reader.GetString(5)),
+                SizeBytes = reader.GetInt64(6)
+            });
+        }
+
+        return records;
+    }
+
+    public async Task RemoveLogFilesBySessionAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM log_files WHERE session_id = $sessionId;";
+        command.Parameters.AddWithValue("$sessionId", sessionId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task InsertConfigHistoryAsync(string settingsJson, CancellationToken cancellationToken = default)
     {
         await using var connection = CreateConnection();

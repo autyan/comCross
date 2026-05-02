@@ -1,0 +1,41 @@
+# Git And Collaboration Rules
+
+## Dirty Worktrees
+
+- The worktree may contain user changes.
+- Never revert user changes unless explicitly asked.
+- If user changes overlap the intended scope, inspect them and work with them.
+- If user changes are unrelated, leave them alone.
+
+## Commit Scope
+
+- Prefer one complete, reviewable scope per commit.
+- Do not mix architecture refactors, i18n cleanup, behavior changes, formatting churn, and documentation changes unless the user explicitly scopes them together.
+- Commit messages should describe the scope, not the implementation mechanics alone.
+
+## User Acceptance
+
+- When the user asks for commit-by-commit collaboration, implement and verify the scope, then wait for user acceptance before committing.
+- After a commit, report the commit hash, verification, residual risk, and the proposed next scope.
+- Do not continue into the next scope without user confirmation.
+
+## Release-Sensitive Work
+
+- Do not push, tag, publish, package, or alter release branches unless explicitly requested.
+- Do not change runtime or publish layout as part of unrelated refactors.
+
+## Verification Before Commit
+
+For code changes, run at least:
+
+```bash
+dotnet build ComCross.sln --no-restore
+```
+
+For boundary-sensitive changes, also run:
+
+```bash
+bash repo-tools/check-project-boundaries.sh
+```
+
+For Shell i18n work, run the i18n guardrails too.

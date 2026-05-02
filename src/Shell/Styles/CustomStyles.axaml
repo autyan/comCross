@@ -1,68 +1,121 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    
-    <!-- Button Styles -->
     <Style Selector="Button">
-        <Setter Property="Background" Value="#1B242A" />
-        <Setter Property="Foreground" Value="#E6EDF3" />
-        <Setter Property="BorderBrush" Value="#25303A" />
+        <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
     </Style>
 
     <Style Selector="Button:pointerover">
-        <Setter Property="Background" Value="#25303A" />
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
     </Style>
 
     <Style Selector="Button.accent">
-        <Setter Property="Background" Value="#3AA0FF" />
-        <Setter Property="Foreground" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="#3AA0FF" />
+        <Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WhiteBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
     </Style>
 
     <Style Selector="Button.accent:pointerover">
-        <Setter Property="Background" Value="#4FB0FF" />
+        <Setter Property="Background" Value="{StaticResource AccentBlueBrightBrush}" />
     </Style>
 
     <Style Selector="Button.secondary">
-        <Setter Property="Background" Value="#141B1F" />
-        <Setter Property="Foreground" Value="#B7C1CC" />
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
     </Style>
 
-    <!-- Tool Tab Styles (ToggleButton) -->
     <Style Selector="ToggleButton.tool-tab">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="#87909B" />
+        <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Padding" Value="10,6" />
-        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
 
     <Style Selector="ToggleButton.tool-tab:pointerover">
-        <Setter Property="Background" Value="#25303A" />
-        <Setter Property="Foreground" Value="#B7C1CC" />
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
     </Style>
 
     <Style Selector="ToggleButton.tool-tab:checked">
-        <Setter Property="Background" Value="#2F3A44" />
-        <Setter Property="Foreground" Value="#3AA0FF" />
+        <Setter Property="Background" Value="{StaticResource SelectionBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}" />
         <Setter Property="BorderThickness" Value="0,0,0,2" />
-        <Setter Property="BorderBrush" Value="#3AA0FF" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
     </Style>
 
     <Style Selector="ToggleButton.tool-tab:checked:pointerover">
-        <Setter Property="Background" Value="#2F3A44" />
-        <Setter Property="Foreground" Value="#5BB5FF" />
+        <Setter Property="Background" Value="{StaticResource SelectionBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrightBrush}" />
     </Style>
 
-    <!-- Button Styles (kept for backward compatibility) -->
+    <Style Selector="ToggleButton.tool-segment">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Text1Brush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:pointerover">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:checked">
+        <Setter Property="Background" Value="{StaticResource AccentBlueBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WhiteBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.tool-segment:checked:pointerover">
+        <Setter Property="Background" Value="{StaticResource AccentBlueBrightBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WhiteBrush}" />
+    </Style>
+
     <Style Selector="Button.tool-tab">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="#87909B" />
+        <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -70,58 +123,60 @@
     </Style>
 
     <Style Selector="Button.tool-tab:pointerover">
-        <Setter Property="Background" Value="#25303A" />
-        <Setter Property="Foreground" Value="#E6EDF3" />
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
     </Style>
 
-    <!-- TextBox Styles -->
     <Style Selector="TextBox">
-        <Setter Property="Background" Value="#1B242A" />
-        <Setter Property="Foreground" Value="#E6EDF3" />
-        <Setter Property="BorderBrush" Value="#25303A" />
+        <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
     </Style>
 
     <Style Selector="TextBox:focus">
-        <Setter Property="BorderBrush" Value="#3AA0FF" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
     </Style>
 
-    <!-- ComboBox Styles -->
     <Style Selector="ComboBox">
-        <Setter Property="Background" Value="#1B242A" />
-        <Setter Property="Foreground" Value="#E6EDF3" />
-        <Setter Property="BorderBrush" Value="#25303A" />
-        <Setter Property="CornerRadius" Value="4" />
-        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Padding" Value="8,6" />
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
     </Style>
 
-    <!-- CheckBox Styles -->
+    <Style Selector="ComboBoxItem">
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
     <Style Selector="CheckBox">
-        <Setter Property="Foreground" Value="#E6EDF3" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
         <Setter Property="FontSize" Value="13" />
     </Style>
 
-    <!-- ListBox Styles -->
     <Style Selector="ListBox">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="#E6EDF3" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
     </Style>
 
     <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-        <Setter Property="Background" Value="#25303A" />
+        <Setter Property="Background" Value="Transparent" />
     </Style>
 
     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#1B242A" />
+        <Setter Property="Background" Value="Transparent" />
     </Style>
 
-    <!-- Separator -->
     <Style Selector="Separator">
-        <Setter Property="Background" Value="#25303A" />
+        <Setter Property="Background" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="Height" Value="1" />
     </Style>
 </Styles>
