@@ -23,11 +23,11 @@ public sealed class SharedMemorySessionService
         _sharedMemoryIngest = sharedMemoryIngest ?? throw new ArgumentNullException(nameof(sharedMemoryIngest));
     }
 
-    public async Task CleanupAsync(string sessionId)
+    public Task CleanupAsync(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         try
@@ -45,6 +45,8 @@ public sealed class SharedMemorySessionService
         catch
         {
         }
+
+        return Task.CompletedTask;
     }
 
     public void StartReading(string sessionId)
@@ -63,11 +65,11 @@ public sealed class SharedMemorySessionService
         _sharedMemoryIngest.Register(sessionId, segment);
     }
 
-    public async Task ReleaseSegmentAsync(string sessionId)
+    public Task ReleaseSegmentAsync(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         try
@@ -85,6 +87,8 @@ public sealed class SharedMemorySessionService
         catch
         {
         }
+
+        return Task.CompletedTask;
     }
 
     public async Task<SharedMemorySegmentDescriptor> AllocateOrReplaceAsync(string sessionId, int requestedBytes)
@@ -108,7 +112,7 @@ public sealed class SharedMemorySessionService
             await CleanupAsync(sessionId);
         }
 
-        var segment = await _sharedMemoryManager.AllocateSegmentAsync(sessionId, requestedBytes);
+        var segment = _sharedMemoryManager.AllocateSegment(sessionId, requestedBytes);
 
         // Note: do NOT start reading until PluginHost successfully applies the descriptor,
         // so we don't spin reader loops on a segment that will be rolled back.
