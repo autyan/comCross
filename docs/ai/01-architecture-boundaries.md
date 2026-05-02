@@ -54,3 +54,23 @@ ComCross has an explicit producer/consumer boundary between the main program and
 - If Core needs durable session facts, persist the plugin-produced public metadata or patches. Do not reconstruct those facts later from plugin-private storage.
 
 Review smell: `Core` or `Shell` code that branches on a bus plugin id/capability id to decide listener/client semantics, parent-child topology, reconnectability, display icon, business labels, or parameter migration is presumed wrong unless it is clearly generic routing.
+
+## Async Boundary Rules
+
+- Use `async/await` only when a method crosses a real asynchronous boundary:
+  file, database, network, IPC, process, stream, cancellable wait, timer, or UI
+  dispatcher work.
+- Do not keep `async` on pure in-memory operations such as collection refresh,
+  ViewModel property synchronization, synchronous resource release, or logging.
+- If an interface, override, lifecycle contract, or public call chain must
+  return `Task` but the current implementation is synchronous, return
+  `Task.CompletedTask` or `Task.FromResult(...)` directly. Do not add
+  `await Task.CompletedTask`, `await Task.Yield()`, or fake background work to
+  silence compiler warnings.
+- If a method is currently synchronous but is part of a broader async lifecycle
+  where future I/O is plausible, keeping the `Task` contract is acceptable; the
+  implementation should still avoid an `async` state machine until it actually
+  awaits something.
+- Platform-specific APIs must declare their platform boundary explicitly with
+  supported-platform attributes or platform-specific project/file structure so
+  release builds do not hide CA1416 warnings.

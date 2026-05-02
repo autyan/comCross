@@ -46,7 +46,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
         _notificationService = notificationService;
 
         // 构造时自动根据当前 Session 加载数据
-        _ = LoadAsync();
+        Load();
     }
 
     public ObservableCollection<CommandDefinition> Commands { get; } = new();
@@ -282,7 +282,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
         }
     }
 
-    public async Task LoadAsync()
+    public void Load()
     {
         Commands.Clear();
         var items = _commandService.GetAllCommands(_sessionId);
@@ -298,7 +298,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
     {
         _sessionId = sessionId;
         _sessionName = sessionName ?? string.Empty;
-        _ = LoadAsync();
+        Load();
     }
 
     public async Task SaveAsync()
@@ -329,13 +329,13 @@ public sealed class CommandCenterViewModel : BaseViewModel
         command.IsPinned = EditorIsPinned;
 
         await _commandService.AddOrUpdateAsync(command);
-        await LoadAsync();
+        Load();
     }
 
     public async Task SaveCommandAsync(CommandDefinition command)
     {
         await _commandService.AddOrUpdateAsync(command);
-        await LoadAsync();
+        Load();
     }
 
     public async Task NotifyPinnedLimitAsync(int maxPinnedCommands)
@@ -371,7 +371,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
         }
 
         await _commandService.RemoveAsync(SelectedCommand);
-        await LoadAsync();
+        Load();
     }
 
     public async Task SendSelectedAsync()
@@ -417,7 +417,7 @@ public sealed class CommandCenterViewModel : BaseViewModel
             ? Path.Combine(_settingsService.Current.Export.DefaultDirectory, "commands.json")
             : filePath;
         await _commandService.ImportAsync(sourcePath);
-        await LoadAsync();
+        Load();
     }
 
     private void LoadEditor(CommandDefinition? command)

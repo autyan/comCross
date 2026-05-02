@@ -1,9 +1,11 @@
 using System.IO.MemoryMappedFiles;
+using System.Runtime.Versioning;
 
 namespace ComCross.Platform.SharedMemory;
 
 public sealed class SharedMemoryMapFactory : ISharedMemoryMapFactory
 {
+    [SupportedOSPlatform("windows")]
     public SharedMemoryMapHandle Create(SharedMemoryMapOptions options)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
