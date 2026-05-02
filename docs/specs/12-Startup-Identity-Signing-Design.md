@@ -484,6 +484,12 @@ security/keys/comcross-plugin-official-2026.pub.pem
 security/keys/comcross-windows-test-codesign-2026.cer
 ```
 
+The initial public key record is documented in:
+
+```text
+docs/security/signing-keys.md
+```
+
 Private key material should live in an encrypted operator-controlled location,
 for example:
 
