@@ -1,82 +1,144 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using ComCross.Shell.ViewModels;
+using ComCross.Shared.Models;
 
 namespace ComCross.Shell.Views;
 
-public partial class RightToolDock : UserControl
+public partial class RightToolDock : BaseUserControl
 {
-    public static readonly StyledProperty<bool> IsCommandsTabActiveProperty =
-        AvaloniaProperty.Register<RightToolDock, bool>(nameof(IsCommandsTabActive));
-
     public RightToolDock()
     {
         InitializeComponent();
     }
 
-    public bool IsCommandsTabActive
+    private async void OnSendClick(object? sender, RoutedEventArgs e)
     {
-        get => GetValue(IsCommandsTabActiveProperty);
-        set => SetValue(IsCommandsTabActiveProperty, value);
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            var addCr = this.FindControl<CheckBox>("AddCrCheckBox");
+            var addLf = this.FindControl<CheckBox>("AddLfCheckBox");
+
+            await vm.SendAsync(
+                vm.IsSendHexMode,
+                addCr?.IsChecked ?? false,
+                addLf?.IsChecked ?? false);
+        }
     }
 
-    private void OnSendTabClick(object? sender, RoutedEventArgs e)
+    private void OnToggleSendMode(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.ToggleSendMode();
+            e.Handled = true;
+        }
+    }
+
+    private async void OnQuickCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm && sender is Button { DataContext: CommandListItemViewModel item })
+        {
+            await vm.SendCommandAsync(item.Command);
+        }
+    }
+
+    private void OnEditCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm && sender is Button { DataContext: CommandListItemViewModel item })
+        {
+            vm.OpenCommandEditor(item.Command);
+        }
+    }
+
+    private void OnNewCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.OpenCommandEditor();
+        }
+    }
+
+    private void OnCancelCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.CloseCommandEditor();
+        }
+    }
+
+    private async void OnSaveCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.SaveCommandEditorAsync();
+        }
+    }
+
+    private async void OnDeleteCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.DeleteCommandEditorAsync();
+        }
+    }
+
+    private async void OnUnpinCommandEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            await vm.UnpinCommandEditorAsync();
+        }
+    }
+
+    private void OnOpenAllCommandsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.OpenCommandEditor();
+        }
+    }
+
+    private void OnClearInputClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.ClearInput();
+        }
+    }
+
+    private void OnToggleAdvancedOptionsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
+        {
+            vm.ToggleAdvancedOptions();
+        }
+    }
+
+    private void OnBackToSendClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is RightToolDockViewModel vm)
         {
             vm.SelectedToolTab = ToolDockTab.Send;
         }
     }
 
-    private void OnCommandsTabClick(object? sender, RoutedEventArgs e)
+    private async void OnSendMessageBoxKeyDown(object? sender, KeyEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        if (e.Key != Key.Enter || !e.KeyModifiers.HasFlag(KeyModifiers.Control) || DataContext is not RightToolDockViewModel vm)
         {
-            vm.SelectedToolTab = ToolDockTab.Commands;
+            return;
         }
-    }
-    
-    private void OnClearClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            vm.ClearMessages();
-        }
-    }
-    
-    private async void OnExportClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            await vm.ExportAsync();
-        }
-    }
-    
-    private async void OnSendClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            var sendBox = this.FindControl<TextBox>("SendMessageBox");
-            var hexMode = this.FindControl<CheckBox>("HexModeCheckBox");
-            var addCr = this.FindControl<CheckBox>("AddCrCheckBox");
-            var addLf = this.FindControl<CheckBox>("AddLfCheckBox");
-            var clearAfterSend = this.FindControl<CheckBox>("ClearAfterSendCheckBox");
-            
-            if (sendBox != null && !string.IsNullOrWhiteSpace(sendBox.Text))
-            {
-                await vm.SendAsync(
-                    sendBox.Text,
-                    hexMode?.IsChecked ?? false,
-                    addCr?.IsChecked ?? false,
-                    addLf?.IsChecked ?? false);
-                    
-                // Clear only if option is checked
-                if (clearAfterSend?.IsChecked ?? false)
-                {
-                    sendBox.Text = string.Empty;
-                }
-            }
-        }
+
+        var addCr = this.FindControl<CheckBox>("AddCrCheckBox");
+        var addLf = this.FindControl<CheckBox>("AddLfCheckBox");
+
+        await vm.SendAsync(
+            vm.IsSendHexMode,
+            addCr?.IsChecked ?? false,
+            addLf?.IsChecked ?? false);
+        e.Handled = true;
     }
 }

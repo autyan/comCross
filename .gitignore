@@ -15,8 +15,19 @@ Thumbs.db
 # Logs
 *.log
 
+# Development documentation (internal only - not for public repo)
+# NOTE: These folders are intentionally NOT tracked by git.
+dev-discussion/
+dev-develop/
+
+# Legacy names (keep ignored to avoid accidental commits)
+dev-docs/
+dev-discussions/
+
 # Publish outputs
 artifacts/
 
-# AI Development Rules (local configuration)
+# AI-generated contents
 .ai-rules.md
+
+.fake

@@ -1,0 +1,166 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ComCross.Shell.ViewModels"
+             mc:Ignorable="d"
+             d:DesignWidth="296"
+             d:DesignHeight="260"
+             x:Class="ComCross.Shell.Controls.QuickCommandPicker"
+             x:Name="Root"
+             x:DataType="vm:RightToolDockViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.quick-command-picker-input">
+            <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="14,0" />
+        </Style>
+
+        <Style Selector="Border.quick-command-picker-input.searching">
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
+        </Style>
+
+        <Style Selector="TextBox.quick-command-picker-textbox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <Popup IsOpen="{Binding ShowCommandSearchSuggestions}"
+               PlacementTarget="{Binding #PickerBar}"
+               Placement="Top"
+               VerticalOffset="-6"
+               IsLightDismissEnabled="True"
+               OverlayDismissEventPassThrough="True"
+               Closed="OnSuggestionsPopupClosed">
+            <Border Width="{Binding #PickerBar.Bounds.Width}"
+                    MaxHeight="220"
+                    CornerRadius="10"
+                    Background="{StaticResource Bg0Brush}"
+                    BorderBrush="{StaticResource AccentBlueBrush}"
+                    BorderThickness="1">
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding SearchCommands}"
+                                  Margin="4">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CommandListItemViewModel">
+                                <Grid ColumnDefinitions="*,34"
+                                      Width="{Binding #PickerBar.Bounds.Width}"
+                                      Height="38">
+                                    <Button Grid.Column="0"
+                                            Classes="prototype-plain"
+                                            HorizontalAlignment="Stretch"
+                                            Click="OnSelectSearchCommandClick">
+                                        <Border Background="Transparent"
+                                                CornerRadius="6">
+                                            <Grid ColumnDefinitions="96,12,*"
+                                                  Margin="12,0,8,0"
+                                                  VerticalAlignment="Center">
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding Name}"
+                                                           ToolTip.Tip="{Binding Name}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Text0Brush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Border Grid.Column="1"
+                                                        Width="1"
+                                                        Height="18"
+                                                        Background="{StaticResource BorderSubtleBrush}"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding PayloadPreview}"
+                                                           ToolTip.Tip="{Binding PayloadPreview}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Text2Brush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                    <Button Grid.Column="1"
+                                            Classes="prototype-icon-button"
+                                            Width="30"
+                                            Height="30"
+                                            Click="OnPinSearchCommandClick">
+                                        <Path Data="{StaticResource PlusIcon}"
+                                              Width="13"
+                                              Height="13"
+                                              Stretch="Uniform"
+                                              Stroke="{StaticResource Text1Brush}"
+                                              StrokeThickness="1.7"
+                                              StrokeLineCap="Round" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Popup>
+
+        <Grid x:Name="PickerBar"
+              ColumnDefinitions="*,40">
+            <Border Grid.Column="0"
+                    x:Name="PickerInput"
+                    Classes="quick-command-picker-input"
+                    PointerPressed="OnCommandSearchPressed">
+                <Grid>
+                    <TextBox x:Name="CommandSearchBox"
+                             Text="{Binding CommandSearchQuery}"
+                             Classes="prototype-embedded-input quick-command-picker-textbox"
+                             IsVisible="{Binding IsCommandSearchOpen}"
+                             KeyDown="OnCommandSearchKeyDown"
+                             Watermark="{Binding L[tool.commands.search]}" />
+                    <Grid IsVisible="{Binding IsCommandSelectionVisible}"
+                          ColumnDefinitions="96,12,*"
+                          VerticalAlignment="Center">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding SelectedCommandDisplayText}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Text0Brush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <Border Grid.Column="1"
+                                Width="1"
+                                Height="18"
+                                IsVisible="{Binding HasSelectedCommand}"
+                                Background="{StaticResource BorderSubtleBrush}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding SelectedCommandPayloadText}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource Text2Brush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Button Grid.Column="1"
+                    Classes="prototype-icon-button"
+                    Width="38"
+                    Height="40"
+                    Margin="6,0,0,0"
+                    ToolTip.Tip="{Binding L[tool.commands.send]}"
+                    IsEnabled="{Binding CanSendSelectedSearchCommand}"
+                    Click="OnSendSelectedCommandClick">
+                <Path Data="{StaticResource SendIcon}"
+                      Width="15"
+                      Height="15"
+                      Stretch="Uniform"
+                      Stroke="{StaticResource PrimaryButtonBrush}"
+                      StrokeThickness="1.7"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round" />
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

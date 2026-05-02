@@ -1,8 +1,5 @@
 using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,27 +10,29 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed class NotificationCenterViewModel : INotifyPropertyChanged
+public sealed class NotificationCenterViewModel : BaseViewModel
 {
     private readonly NotificationService _notificationService;
-    private readonly ILocalizationService _localization;
-    private readonly LocalizedStringsViewModel _localizedStrings;
+    private readonly IItemVmFactory<NotificationItemViewModel, NotificationItem> _itemFactory;
     private int _unreadCount;
 
     public NotificationCenterViewModel(
-        NotificationService notificationService,
         ILocalizationService localization,
-        LocalizedStringsViewModel localizedStrings)
+        NotificationService notificationService,
+        IItemVmFactory<NotificationItemViewModel, NotificationItem> itemFactory)
+        : base(localization)
     {
         _notificationService = notificationService;
-        _localization = localization;
-        _localizedStrings = localizedStrings;
+        _itemFactory = itemFactory;
         _notificationService.NotificationAdded += OnNotificationAdded;
+
+        Items = new ItemVmCollection<NotificationItemViewModel, NotificationItem>(_itemFactory);
+        
+        // 构造时同步加载数据
+        _ = LoadAsync();
     }
 
-    public LocalizedStringsViewModel LocalizedStrings => _localizedStrings;
-
-    public ObservableCollection<NotificationItemViewModel> Items { get; } = new();
+    public ItemVmCollection<NotificationItemViewModel, NotificationItem> Items { get; }
 
     public int UnreadCount
     {
@@ -61,7 +60,7 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
             Items.Clear();
             foreach (var item in items)
             {
-                Items.Add(new NotificationItemViewModel(item, _localization));
+                Items.Add(item);
             }
 
             UpdateUnreadCount();
@@ -113,22 +112,11 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
         });
     }
 
-    public void RefreshLocalizedText()
-    {
-        foreach (var item in Items)
-        {
-            item.RefreshMessage(_localization);
-        }
-
-        OnPropertyChanged(nameof(HasNotifications));
-        OnPropertyChanged(nameof(IsEmpty));
-    }
-
     private void OnNotificationAdded(object? sender, NotificationItem item)
     {
         Dispatcher.UIThread.Post(() =>
         {
-            Items.Insert(0, new NotificationItemViewModel(item, _localization));
+            Items.Insert(0, item);
             UpdateUnreadCount();
             OnPropertyChanged(nameof(HasNotifications));
             OnPropertyChanged(nameof(IsEmpty));
@@ -140,68 +128,63 @@ public sealed class NotificationCenterViewModel : INotifyPropertyChanged
         UnreadCount = Items.Count(i => !i.IsRead);
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    protected override void Dispose(bool disposing)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        if (disposing)
+        {
+            _notificationService.NotificationAdded -= OnNotificationAdded;
+            Items.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }
 
-public sealed class NotificationItemViewModel : INotifyPropertyChanged
+public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<NotificationItem>
 {
-    private readonly NotificationItem _item;
-    private string _message;
+    private NotificationItem? _item;
+    private object[] _args = Array.Empty<object>();
 
-    public NotificationItemViewModel(NotificationItem item, ILocalizationService localization)
+    public NotificationItemViewModel(ILocalizationService localization)
+        : base(localization)
     {
-        _item = item;
-        _message = FormatMessage(localization, item);
     }
 
-    public string Id => _item.Id;
-    public DateTime CreatedAt => _item.CreatedAt.ToLocalTime();
-    public NotificationLevel Level => _item.Level;
+    protected override void OnInit(NotificationItem item)
+    {
+        _item = item;
+        _args = ParseArgs(item.MessageArgsJson);
+        OnPropertyChanged(string.Empty);
+    }
+
+    public string Id => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Id;
+    public DateTime CreatedAt => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).CreatedAt.ToLocalTime();
+    public NotificationLevel Level => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Level;
 
     public string Message
     {
-        get => _message;
-        private set
+        get
         {
-            if (_message == value)
-            {
-                return;
-            }
-
-            _message = value;
-            OnPropertyChanged();
+            var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
+            return Localization.GetString(item.MessageKey, _args);
         }
     }
 
     public bool IsRead
     {
-        get => _item.IsRead;
+        get => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).IsRead;
         set
         {
-            if (_item.IsRead == value)
+            var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
+
+            if (item.IsRead == value)
             {
                 return;
             }
 
-            _item.IsRead = value;
+            item.IsRead = value;
             OnPropertyChanged();
         }
-    }
-
-    public void RefreshMessage(ILocalizationService localization)
-    {
-        Message = FormatMessage(localization, _item);
-    }
-
-    private static string FormatMessage(ILocalizationService localization, NotificationItem item)
-    {
-        var args = ParseArgs(item.MessageArgsJson);
-        return localization.GetString(item.MessageKey, args);
     }
 
     private static object[] ParseArgs(string json)
@@ -240,10 +223,4 @@ public sealed class NotificationItemViewModel : INotifyPropertyChanged
         };
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }

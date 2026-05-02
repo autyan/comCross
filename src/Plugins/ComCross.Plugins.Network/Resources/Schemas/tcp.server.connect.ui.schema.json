@@ -1,0 +1,45 @@
+{
+  "uiSchemaVersion": 1,
+  "titleKey": "network.adapter.connect.tcpServer.title",
+  "fields": [
+    {
+      "key": "listenHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.listenHost",
+      "defaultValue": "0.0.0.0"
+    },
+    {
+      "key": "listenPort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.listenPort",
+      "defaultValue": 502,
+      "min": 1,
+      "max": 65535,
+      "required": true
+    },
+    {
+      "key": "backlog",
+      "control": "number",
+      "labelKey": "network.adapter.connect.backlog",
+      "defaultValue": 128,
+      "min": 1,
+      "max": 8192
+    },
+    {
+      "key": "sessionName",
+      "control": "text",
+      "labelKey": "network.adapter.connect.sessionName"
+    }
+  ],
+  "layout": {
+    "kind": "stack",
+    "orientation": "vertical",
+    "spacing": 12,
+    "children": [
+      { "kind": "field", "key": "listenHost" },
+      { "kind": "field", "key": "listenPort" },
+      { "kind": "field", "key": "backlog" },
+      { "kind": "field", "key": "sessionName" }
+    ]
+  }
+}

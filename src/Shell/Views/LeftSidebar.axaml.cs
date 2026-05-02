@@ -1,139 +1,173 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 using ComCross.Shared.Models;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace ComCross.Shell.Views;
 
-public partial class LeftSidebar : UserControl
+public partial class LeftSidebar : BaseUserControl
 {
     public LeftSidebar()
     {
         InitializeComponent();
     }
-    
+
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm)
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
         {
-            await vm.QuickConnectAsync();
+            return;
+        }
+
+        if (owner.DataContext is MainWindowViewModel vm)
+        {
+            await ShellContext.ConnectDialogs.ShowAsync(owner, vm.PluginManager);
         }
     }
-    
-    private async void OnDisconnectClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            await vm.DisconnectAsync();
-        }
-    }
-    
-    private async void OnRefreshPortsClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            await vm.RefreshDevicesAsync();
-        }
-    }
-    
+
     private void OnSessionSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button button && button.DataContext is Session session && DataContext is MainWindowViewModel vm)
+        OpenSessionDetailFromSender(sender, openReconnectEditor: false);
+    }
+
+    private void OnSessionConnectionParametersClick(object? sender, RoutedEventArgs e)
+    {
+        OpenSessionDetailFromSender(sender, openReconnectEditor: true);
+    }
+
+    private void OpenSessionDetailFromSender(object? sender, bool openReconnectEditor)
+    {
+        if (sender is not Button button)
         {
-            var flyout = new MenuFlyout();
-            
-            var renameItem = new MenuItem { Header = vm.LocalizedStrings.SessionMenuRename };
-            renameItem.Click += async (s, args) => await ShowRenameDialogAsync(session, vm);
-            
-            var deleteItem = new MenuItem { Header = vm.LocalizedStrings.SessionMenuDelete };
-            deleteItem.Click += async (s, args) =>
-            {
-                if (DataContext is MainWindowViewModel viewModel)
-                {
-                    await viewModel.DeleteSessionAsync(session.Id);
-                }
-            };
-            
-            flyout.Items.Add(renameItem);
-            flyout.Items.Add(new Separator());
-            flyout.Items.Add(deleteItem);
-            
-            flyout.ShowAt(button);
+            return;
+        }
+
+        var session = button.DataContext switch
+        {
+            Session s => s,
+            SessionListItemViewModel itemVm => itemVm.Session,
+            LeftSidebarViewModel sidebarVm => sidebarVm.ActiveSession,
+            _ => null
+        };
+
+        if (session is null)
+        {
+            return;
+        }
+
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        vm.OpenSessionDetail(session, openReconnectEditor);
+    }
+
+    private void OnToggleParentCollapseClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var itemVm = button.DataContext as SessionListItemViewModel;
+        if (itemVm is null || !itemVm.HasChildSessions)
+        {
+            return;
+        }
+
+        if (DataContext is LeftSidebarViewModel sidebarVm)
+        {
+            sidebarVm.ToggleParentCollapsed(itemVm.Session.Id);
         }
     }
-    
-    private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
+
+    private async void OnRenameSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
         {
-            var dialog = new Window
+            return;
+        }
+
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        await ShowRenameDialogAsync(session, vm);
+    }
+
+    private async void OnDeleteSessionClick(object? sender, RoutedEventArgs e)
+    {
+        if (GetSessionFromSender(sender) is not { } session)
+        {
+            return;
+        }
+
+        var owner = ShellContext.GetOwner(this);
+        if (owner?.DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var hasChildren = DataContext is LeftSidebarViewModel sidebarVmForMessage
+                          && sidebarVmForMessage.GetChildSessionCount(session.Id) > 0;
+        var messageKey = hasChildren
+            ? "dialog.deleteSession.listener.message"
+            : "dialog.deleteSession.message";
+        var confirmed = await ShellContext.Dialogs.ShowConfirmAsync(
+            owner,
+            vm.L["dialog.deleteSession.title"],
+            string.Format(vm.L[messageKey], session.Name),
+            MessageBoxIcon.Warning);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        if (DataContext is LeftSidebarViewModel sidebarVm)
+        {
+            await sidebarVm.DeleteSessionAsync(session.Id);
+        }
+    }
+
+    private static Session? GetSessionFromSender(object? sender)
+    {
+        if (sender is not Control control)
+        {
+            return null;
+        }
+
+        return control.DataContext switch
+        {
+            Session s => s,
+            SessionListItemViewModel itemVm => itemVm.Session,
+            _ => null
+        };
+    }
+
+    private async Task ShowRenameDialogAsync(Session session, MainWindowViewModel vm)
+    {
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
+        {
+            return;
+        }
+
+        var result = await ShellContext.SessionRenameDialogs.ShowAsync(owner, session, vm);
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            if (DataContext is LeftSidebarViewModel sidebarVm)
             {
-                Title = vm.LocalizedStrings.SessionRenameTitle,
-                Width = 350,
-                Height = 150,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
-            };
-
-            var textBox = new TextBox
-            {
-                Text = session.Name,
-                Watermark = vm.LocalizedStrings.SessionRenamePlaceholder,
-                Margin = new Avalonia.Thickness(0, 0, 0, 10)
-            };
-
-            var okButton = new Button
-            {
-                Content = vm.LocalizedStrings.SessionRenameOk,
-                Width = 80,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                Margin = new Avalonia.Thickness(0, 0, 10, 0)
-            };
-
-            var cancelButton = new Button
-            {
-                Content = vm.LocalizedStrings.SessionRenameCancel,
-                Width = 80,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
-            };
-
-            okButton.Click += (s, args) =>
-            {
-                if (!string.IsNullOrWhiteSpace(textBox.Text))
-                {
-                    session.Name = textBox.Text;
-                }
-                dialog.Close();
-            };
-
-            cancelButton.Click += (s, args) => dialog.Close();
-
-            var buttonPanel = new StackPanel
-            {
-                Orientation = Avalonia.Layout.Orientation.Horizontal,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                Children = { okButton, cancelButton }
-            };
-
-            var mainPanel = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(20),
-                Children = 
-                {
-                    new TextBlock { Text = vm.LocalizedStrings.SessionRenameLabel, Margin = new Avalonia.Thickness(0, 0, 0, 5) },
-                    textBox,
-                    buttonPanel
-                }
-            };
-
-            dialog.Content = mainPanel;
-            
-            textBox.Focus();
-            textBox.SelectAll();
-
-            if (TopLevel.GetTopLevel(this) is Window owner)
-            {
-                await dialog.ShowDialog(owner);
+                await sidebarVm.RenameSessionAsync(session.Id, result);
             }
+        }
     }
 }

@@ -16,14 +16,14 @@ Outputs are placed under:
 - Self-contained: `artifacts/self-contained/ComCross-<rid>-Release/`
 - Archives: `artifacts/packages/<track>/ComCross-<rid>-Release.(zip|tar.gz)`
 
-The `ComCross.PluginHost` binary is published into the same folder for plugin isolation.
+`ComCross.PluginHost`, `ComCross.SessionHost`, and `ComCross.ExtensionHost` are published into the same folder so process-isolated plugin flows can start without relying on development paths.
 
 ## 2) Runtime Baseline
 
-Development uses the .NET 10 SDK, but release artifacts should target a lower
-runtime baseline for compatibility. Current baseline: .NET 8 LTS. Packaging for
-DEB/RPM should assume distro baselines that ship or support .NET 8 (for example
-Ubuntu 22.04, Debian 12, Fedora 39).
+Projects target `net8.0`. Development may use any installed SDK that can build
+`net8.0`, and release artifacts target the .NET 8 LTS runtime baseline.
+Packaging for DEB/RPM should assume distro baselines that ship or support .NET 8
+(for example Ubuntu 22.04, Debian 12, Fedora 39).
 
 If you do not bundle the runtime (framework-dependent publish), ensure the
 package declares runtime dependencies so installation fails when the runtime is
@@ -69,7 +69,17 @@ fpm -s dir -t rpm -n comcross -v <version> \
   -d dotnet-runtime-8.0
 ```
 
-## 5) Release Artifacts
+## 5) Plugin Layout
+
+Release packages place built-in plugins under:
+
+```
+plugins/<plugin-id>-<stable-hash>/
+```
+
+The package script computes the folder from the manifest plugin id and publishes each plugin with its dependencies into that folder.
+
+## 6) Release Artifacts
 
 Upload to GitHub Releases with consistent naming:
 
@@ -81,7 +91,7 @@ Upload to GitHub Releases with consistent naming:
 - `comcross_<version>_amd64.deb`
 - `comcross-<version>.x86_64.rpm`
 
-## 6) Symbols
+## 7) Symbols
 
 Public release builds do not include PDBs by default. Use
 `scripts/package-release.sh --include-symbols` if you need symbols for internal

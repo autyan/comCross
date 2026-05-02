@@ -11,10 +11,21 @@ namespace ComCross.Core.Services;
 public sealed class MessageStreamService : IMessageStreamService
 {
     private readonly ConcurrentDictionary<string, SessionStream> _streams = new();
+    private readonly ConcurrentDictionary<string, bool> _paused = new(StringComparer.Ordinal);
+
+    public event Action<string>? ConsumptionResumed;
+
+    private static void ThrowIfInvalidSessionId(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("SessionId cannot be empty.", nameof(sessionId));
+        }
+    }
 
     public void Append(string sessionId, LogMessage message)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(message);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionStream());
@@ -23,7 +34,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IReadOnlyList<LogMessage> GetMessages(string sessionId, int skip = 0, int take = 100)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
         {
@@ -35,7 +46,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IReadOnlyList<LogMessage> Search(string sessionId, string query, bool isRegex = false)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentException.ThrowIfNullOrEmpty(query);
 
         if (!_streams.TryGetValue(sessionId, out var stream))
@@ -48,7 +59,7 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public void Clear(string sessionId)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
 
         if (_streams.TryGetValue(sessionId, out var stream))
         {
@@ -58,11 +69,36 @@ public sealed class MessageStreamService : IMessageStreamService
 
     public IDisposable Subscribe(string sessionId, Action<LogMessage> handler)
     {
-        ArgumentException.ThrowIfNullOrEmpty(sessionId);
+        ThrowIfInvalidSessionId(sessionId);
         ArgumentNullException.ThrowIfNull(handler);
 
         var stream = _streams.GetOrAdd(sessionId, _ => new SessionStream());
         return stream.Subscribe(handler);
+    }
+
+    public bool IsConsumptionPaused(string sessionId)
+    {
+        ThrowIfInvalidSessionId(sessionId);
+        return _paused.TryGetValue(sessionId, out var paused) && paused;
+    }
+
+    public void SetConsumptionPaused(string sessionId, bool paused)
+    {
+        ThrowIfInvalidSessionId(sessionId);
+
+        var previous = _paused.TryGetValue(sessionId, out var existing) && existing;
+        _paused[sessionId] = paused;
+
+        if (previous && !paused)
+        {
+            try
+            {
+                ConsumptionResumed?.Invoke(sessionId);
+            }
+            catch
+            {
+            }
+        }
     }
 
     private sealed class SessionStream
@@ -113,7 +149,7 @@ public sealed class MessageStreamService : IMessageStreamService
                     {
                         var regex = new Regex(query, RegexOptions.IgnoreCase);
                         return _messages
-                            .Where(m => regex.IsMatch(m.Content))
+                            .Where(m => regex.IsMatch(BuildSearchText(m)))
                             .ToList();
                     }
                     catch (ArgumentException)
@@ -124,10 +160,23 @@ public sealed class MessageStreamService : IMessageStreamService
                 else
                 {
                     return _messages
-                        .Where(m => m.Content.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        .Where(m => BuildSearchText(m).Contains(query, StringComparison.OrdinalIgnoreCase))
                         .ToList();
                 }
             }
+        }
+
+        private static string BuildSearchText(LogMessage message)
+        {
+            if (message.Attributes.Count == 0)
+            {
+                return message.Content;
+            }
+
+            return string.Concat(
+                message.Content,
+                " ",
+                string.Join(" ", message.Attributes.Select(static x => $"{x.Key}={x.Value}")));
         }
 
         public void Clear()

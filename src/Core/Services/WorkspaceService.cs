@@ -1,11 +1,16 @@
+using System.Text.Json;
+using ComCross.Core.Models;
+using ComCross.PluginSdk;
+using ComCross.Shared.Events;
 using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 
 namespace ComCross.Core.Services;
 
 /// <summary>
-/// Workspace service that handles all business logic for serial port operations
-/// Decouples business logic from UI layer (View/ViewModel)
+/// Workspace service that handles all business logic for serial port operations and workspace state management.
+/// Decouples business logic from UI layer (View/ViewModel).
+/// In v0.4+, manages Workload abstraction layer.
 /// </summary>
 public sealed class WorkspaceService
 {
@@ -13,47 +18,85 @@ public sealed class WorkspaceService
     private readonly IMessageStreamService _messageStream;
     private readonly LogStorageService _logStorageService;
     private readonly NotificationService _notificationService;
-    private readonly ConfigService _configService;
+    private readonly WorkspaceStateStore _workspaceStateStore;
+    private readonly WorkloadService _workloadService;
+    private readonly PluginSessionInitializationService _sessionInitializationService;
+    private readonly SessionDataCleanupService _sessionDataCleanupService;
+    private readonly IEventBus _eventBus;
+
+    private bool _sessionsRestored;
 
     public WorkspaceService(
         DeviceService deviceService,
         IMessageStreamService messageStream,
         LogStorageService logStorageService,
         NotificationService notificationService,
-        ConfigService configService)
+        WorkspaceStateStore workspaceStateStore,
+        WorkloadService workloadService,
+        PluginSessionInitializationService sessionInitializationService,
+        SessionDataCleanupService sessionDataCleanupService,
+        IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
-        _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
+        _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
+        _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
+        _sessionDataCleanupService = sessionDataCleanupService ?? throw new ArgumentNullException(nameof(sessionDataCleanupService));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
     }
 
     /// <summary>
-    /// List all available serial devices
+    /// Get all active sessions.
     /// </summary>
-    public async Task<IReadOnlyList<Device>> ListDevicesAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<Session>> GetActiveSessionsAsync(CancellationToken cancellationToken = default)
     {
-        return await _deviceService.ListDevicesAsync(cancellationToken);
+        // Sessions are held by DeviceService in-memory.
+        // CancellationToken is accepted for API symmetry.
+        return Task.FromResult(_deviceService.GetAllSessions());
     }
 
     /// <summary>
-    /// Connect to a serial port
+    /// Connect to a device via plugin
     /// </summary>
-    public async Task<Session> ConnectAsync(string port, SerialSettings settings, string? sessionName = null, CancellationToken cancellationToken = default)
+    public async Task<Session> ConnectAsync(
+        string pluginId,
+        string capabilityId,
+        string parametersJson,
+        string? sessionName = null,
+        string? scopeSessionId = null,
+        string? resourceKind = null,
+        string? resourceId = null,
+        CancellationToken cancellationToken = default)
     {
+        var parameters = JsonSerializer.Deserialize<JsonElement>(parametersJson);
         var sessionId = $"session-{Guid.NewGuid()}";
-        var name = sessionName ?? port;
+        var name = string.IsNullOrWhiteSpace(sessionName) ? null : sessionName;
 
         try
         {
-            var session = await _deviceService.ConnectAsync(sessionId, port, name, settings, cancellationToken);
+            var session = await _deviceService.ConnectAsync(
+                pluginId,
+                capabilityId,
+                sessionId,
+                name,
+                parameters,
+                scopeSessionId,
+                resourceKind,
+                resourceId,
+                cancellationToken);
+            await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
             _logStorageService.StartSession(session);
+
+            // DeviceService publishes SessionCreatedEvent before workspace membership is updated.
+            // Publish a second upsert after membership so filtered session lists can include it immediately.
+            _eventBus.Publish(new SessionCreatedEvent(session));
             return session;
         }
         catch (Exception)
         {
-            // Let the exception bubble up, but could add logging here
             throw;
         }
     }
@@ -77,15 +120,26 @@ public sealed class WorkspaceService
     /// <summary>
     /// Send data to a session
     /// </summary>
-    public async Task<int> SendDataAsync(string sessionId, byte[] data, CancellationToken cancellationToken = default)
+    public async Task<PluginCommandResult> SendDataAsync(
+        string sessionId,
+        byte[] data,
+        string? transmitTargetId = null,
+        CancellationToken cancellationToken = default)
     {
-        return await _deviceService.SendAsync(sessionId, data, MessageFormat.Text, cancellationToken);
+        return await _deviceService.SendAsync(sessionId, data, MessageFormat.Text, transmitTargetId, cancellationToken);
     }
 
     /// <summary>
     /// Send formatted message to a session (text or hex)
     /// </summary>
-    public async Task<int> SendMessageAsync(string sessionId, string message, MessageFormat format, bool addCr, bool addLf, CancellationToken cancellationToken = default)
+    public async Task<PluginCommandResult> SendMessageAsync(
+        string sessionId,
+        string message,
+        MessageFormat format,
+        bool addCr,
+        bool addLf,
+        string? transmitTargetId = null,
+        CancellationToken cancellationToken = default)
     {
         byte[] data = format == MessageFormat.Hex
             ? Convert.FromHexString(message.Replace(" ", ""))
@@ -98,8 +152,13 @@ public sealed class WorkspaceService
             data = data.Concat(suffixBytes).ToArray();
         }
 
-        return await _deviceService.SendAsync(sessionId, data, format, cancellationToken);
+        return await _deviceService.SendAsync(sessionId, data, format, transmitTargetId, cancellationToken);
     }
+
+    public Task<PluginTransmitTargetSnapshot> GetTransmitTargetsAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+        => _deviceService.GetTransmitTargetsAsync(sessionId, cancellationToken);
 
     /// <summary>
     /// Clear messages for a session
@@ -150,12 +209,51 @@ public sealed class WorkspaceService
     }
 
     /// <summary>
-    /// Save current workspace state to persistent storage
+    /// Save current workspace state to persistent storage.
+    /// In v0.4+, this includes Workload information.
     /// </summary>
     public async Task SaveCurrentStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll = true, CancellationToken cancellationToken = default)
     {
-        var state = BuildWorkspaceState(sessions, activeSession, autoScroll);
-        await _configService.SaveWorkspaceStateAsync(state, cancellationToken);
+        await BuildWorkspaceStateAsync(sessions, activeSession, autoScroll, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Load workspace state from persistent storage.
+    /// </summary>
+    public async Task<WorkspaceState> LoadStateAsync(CancellationToken cancellationToken = default)
+    {
+        var state = await _workspaceStateStore.LoadAsync(cancellationToken);
+
+        // Restore persisted sessions as disconnected (no auto-reconnect).
+        if (!_sessionsRestored)
+        {
+            RestoreSessionsFromState(state);
+            _sessionsRestored = true;
+            await _sessionInitializationService.InitializeRestoredSessionsAsync(cancellationToken);
+        }
+        
+        return state;
+    }
+
+    private void RestoreSessionsFromState(WorkspaceState state)
+    {
+        if (state.SessionDescriptors is not { Count: > 0 })
+        {
+            return;
+        }
+
+        foreach (var descriptor in state.SessionDescriptors)
+        {
+            _deviceService.RestoreSession(descriptor);
+        }
+    }
+    
+    /// <summary>
+    /// Save workspace state to persistent storage (internal method).
+    /// </summary>
+    public async Task SaveStateAsync(WorkspaceState state, CancellationToken cancellationToken = default)
+    {
+        await _workspaceStateStore.SaveAsync(state, cancellationToken);
     }
 
     /// <summary>
@@ -163,38 +261,178 @@ public sealed class WorkspaceService
     /// </summary>
     public async Task DeleteSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        var session = _deviceService.GetSession(sessionId);
-        if (session != null && session.Status == SessionStatus.Connected)
+        var orderedSessionIds = CollectSessionDeletionOrder(_deviceService.GetAllSessions(), sessionId);
+        if (orderedSessionIds.Count == 0)
         {
-            await DisconnectAsync(sessionId, cancellationToken);
+            return;
         }
-        
-        ClearMessages(sessionId);
+
+        var cleanupTargets = orderedSessionIds
+            .Select(deleteId =>
+            {
+                var session = _deviceService.GetSession(deleteId);
+                return new SessionDataCleanupTarget(deleteId, session?.PluginId);
+            })
+            .ToList();
+
+        foreach (var deleteId in orderedSessionIds)
+        {
+            var session = _deviceService.GetSession(deleteId);
+            if (session != null && session.Status == SessionStatus.Connected)
+            {
+                await DisconnectAsync(deleteId, cancellationToken);
+            }
+
+            await _logStorageService.StopSessionAsync(deleteId);
+            _deviceService.RemoveSession(deleteId);
+            ClearMessages(deleteId);
+            await _workloadService.RemoveSessionFromAllWorkloadsAsync(deleteId);
+        }
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            state.SessionDescriptors.RemoveAll(descriptor =>
+                orderedSessionIds.Contains(descriptor.Id, StringComparer.Ordinal));
+
+            if (state.UiState?.ActiveSessionId is { Length: > 0 } activeSessionId
+                && orderedSessionIds.Contains(activeSessionId, StringComparer.Ordinal))
+            {
+                state.UiState.ActiveSessionId = null;
+            }
+        }, cancellationToken);
+
+        await _sessionDataCleanupService.DeleteSessionOwnedDataAsync(cleanupTargets, cancellationToken);
+
+        foreach (var deleteId in orderedSessionIds)
+        {
+            _eventBus.Publish(new SessionDeletedEvent(deleteId));
+        }
     }
 
-    private WorkspaceState BuildWorkspaceState(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll)
+    /// <summary>
+    /// Rename a session and persist the descriptor name.
+    /// </summary>
+    public async Task RenameSessionAsync(string sessionId, string name, CancellationToken cancellationToken = default)
     {
-        return new WorkspaceState
+        if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(name))
         {
-            WorkspaceId = "default",
-            Sessions = sessions.Select(s => new SessionState
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        var trimmedName = name.Trim();
+        if (string.Equals(session.Name, trimmedName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        session.Name = trimmedName;
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var descriptor = state.SessionDescriptors.FirstOrDefault(d => string.Equals(d.Id, sessionId, StringComparison.Ordinal));
+            if (descriptor is not null)
+            {
+                descriptor.Name = trimmedName;
+            }
+        }, cancellationToken);
+
+        _eventBus.Publish(new SessionRenamedEvent(sessionId, trimmedName));
+    }
+
+    /// <summary>
+    /// Build workspace state from current sessions and workloads.
+    /// In v0.4+, includes Workload information with session associations.
+    /// </summary>
+    private Task BuildWorkspaceStateAsync(IEnumerable<Session> sessions, Session? activeSession, bool autoScroll, CancellationToken cancellationToken)
+    {
+        var sessionDescriptors = sessions
+            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+            .Select(s => new SessionDescriptor
             {
                 Id = s.Id,
-                Port = s.Port,
                 Name = s.Name,
-                Settings = s.Settings,
-                Connected = s.Status == SessionStatus.Connected,
-                Metrics = new MetricsState
-                {
-                    Rx = s.RxBytes,
-                    Tx = s.TxBytes
-                }
-            }).ToList(),
-            UiState = new UiState
+                AdapterId = s.AdapterId,
+                PluginId = s.PluginId,
+                CapabilityId = s.CapabilityId,
+                ParametersJson = s.ParametersJson,
+                DisplayTitle = s.DisplayTitle,
+                DisplaySubtitle = s.DisplaySubtitle,
+                DisplayIcon = s.DisplayIcon,
+                CanReconnect = s.CanReconnect,
+                InitializationState = s.InitializationState,
+                InitializationError = s.InitializationError,
+                EnableDatabaseStorage = s.EnableDatabaseStorage,
+                ParentSessionId = s.ParentSessionId,
+                ManagedResourceKinds = s.ManagedResourceKinds.ToList()
+            })
+            .ToList();
+
+        return _workspaceStateStore.UpdateAsync(state =>
+        {
+            var runtimeIds = sessionDescriptors.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var existingById = state.SessionDescriptors
+                .Where(d => !string.IsNullOrWhiteSpace(d.Id))
+                .ToDictionary(d => d.Id, StringComparer.Ordinal);
+            var merged = new List<SessionDescriptor>(sessionDescriptors.Count + state.SessionDescriptors.Count);
+
+            // The caller-provided session sequence is the current UI/runtime order and is authoritative.
+            foreach (var descriptor in sessionDescriptors)
             {
-                ActiveSessionId = activeSession?.Id,
-                AutoScroll = autoScroll
+                if (existingById.TryGetValue(descriptor.Id, out var existing))
+                {
+                    descriptor.LastInitializedPluginVersion = existing.LastInitializedPluginVersion;
+                    descriptor.StorageSchemaVersion = existing.StorageSchemaVersion;
+                }
             }
-        };
+            merged.AddRange(sessionDescriptors);
+
+            // Preserve descriptors that are not currently materialized in DeviceService, without letting
+            // hidden workload sessions disturb the visible session order.
+            foreach (var existing in state.SessionDescriptors)
+            {
+                if (!string.IsNullOrWhiteSpace(existing.Id) && !runtimeIds.Contains(existing.Id))
+                {
+                    merged.Add(existing);
+                }
+            }
+
+            state.SessionDescriptors = merged;
+
+            state.UiState ??= new UiState();
+            state.UiState.ActiveSessionId = activeSession?.Id;
+            state.UiState.AutoScroll = autoScroll;
+        }, cancellationToken);
     }
+
+    private static List<string> CollectSessionDeletionOrder(IEnumerable<Session> sessions, string rootSessionId)
+    {
+        var byParent = sessions.ToLookup(session => session.ParentSessionId, StringComparer.Ordinal);
+        var ordered = new List<string>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        void Visit(string sessionId)
+        {
+            if (!visited.Add(sessionId))
+            {
+                return;
+            }
+
+            foreach (var child in byParent[sessionId])
+            {
+                Visit(child.Id);
+            }
+
+            ordered.Add(sessionId);
+        }
+
+        Visit(rootSessionId);
+        return ordered;
+    }
+
 }

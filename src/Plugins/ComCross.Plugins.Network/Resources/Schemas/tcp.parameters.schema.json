@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "host": { "type": "string" },
+    "port": { "type": "integer" },
+    "remoteHost": { "type": "string" },
+    "remotePort": { "type": "integer" },
+    "localHost": { "type": "string" },
+    "localPort": { "type": "integer" },
+    "actualLocalHost": { "type": "string" },
+    "actualLocalPort": { "type": "integer" },
+    "requestedLocalHost": { "type": "string" },
+    "requestedLocalPort": { "type": "integer" },
+    "endpoint": { "type": "string" },
+    "connectTimeoutMs": { "type": "integer" },
+    "sessionName": { "type": "string" }
+  },
+  "required": ["remoteHost", "remotePort"]
+}

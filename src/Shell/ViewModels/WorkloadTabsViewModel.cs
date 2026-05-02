@@ -1,0 +1,346 @@
+using System;
+using System.ComponentModel;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia.Threading;
+using ComCross.Core.Models;
+using ComCross.Core.Services;
+using ComCross.Shared.Events;
+using ComCross.Shared.Interfaces;
+using ComCross.Shared.Models;
+using ComCross.Shared.Services;
+using ComCross.Shell.Views;
+using ComCross.Shell.Services;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace ComCross.Shell.ViewModels;
+
+/// <summary>
+/// ViewModel for Workload tabs management
+/// </summary>
+public sealed class WorkloadTabsViewModel : BaseViewModel
+{
+    private readonly WorkloadService _workloadService;
+    private readonly IEventBus _eventBus;
+    private readonly IObjectFactory _objectFactory;
+    private readonly NotificationCenterViewModel _notificationCenter;
+    private readonly IItemVmFactory<WorkloadTabItemViewModel, WorkloadTabItemContext> _tabItemFactory;
+    private readonly IDisposable _workloadCreatedSubscription;
+    private readonly IDisposable _workloadRenamedSubscription;
+    private readonly IDisposable _workloadDeletedSubscription;
+    private readonly IDisposable _activeWorkloadChangedSubscription;
+    private WorkloadTabItemViewModel? _activeTab;
+
+    public WorkloadTabsViewModel(
+        ILocalizationService localization,
+        WorkloadService workloadService,
+        IEventBus eventBus,
+        NotificationCenterViewModel notificationCenter,
+        IObjectFactory objectFactory,
+        IItemVmFactory<WorkloadTabItemViewModel, WorkloadTabItemContext> tabItemFactory)
+        : base(localization)
+    {
+        _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _notificationCenter = notificationCenter;
+        _objectFactory = objectFactory;
+        _tabItemFactory = tabItemFactory;
+
+        Tabs = new ItemVmCollection<WorkloadTabItemViewModel, WorkloadTabItemContext>(_tabItemFactory);
+
+        // Create commands using AsyncRelayCommand and RelayCommand (same as MainWindowViewModel)
+        CreateWorkloadCommand = new AsyncRelayCommand(CreateWorkloadAsync);
+        ActivateWorkloadCommand = new AsyncRelayCommand<string>(ActivateWorkloadAsync);
+        DeleteWorkloadCommand = new AsyncRelayCommand<string>(DeleteWorkloadAsync);
+        RenameWorkloadCommand = new AsyncRelayCommand<string>(RenameWorkloadAsync);
+        CopyWorkloadCommand = new AsyncRelayCommand<string>(CopyWorkloadAsync);
+
+        _workloadCreatedSubscription = _eventBus.Subscribe<WorkloadCreatedEvent>(OnWorkloadCreated);
+        _workloadRenamedSubscription = _eventBus.Subscribe<WorkloadRenamedEvent>(OnWorkloadRenamed);
+        _workloadDeletedSubscription = _eventBus.Subscribe<WorkloadDeletedEvent>(OnWorkloadDeleted);
+        _activeWorkloadChangedSubscription = _eventBus.Subscribe<ActiveWorkloadChangedEvent>(OnActiveWorkloadChanged);
+        _notificationCenter.PropertyChanged += OnNotificationCenterPropertyChanged;
+    }
+
+    /// <summary>
+    /// Collection of workload tabs
+    /// </summary>
+    public ItemVmCollection<WorkloadTabItemViewModel, WorkloadTabItemContext> Tabs { get; }
+
+    /// <summary>
+    /// Currently active tab
+    /// </summary>
+    public WorkloadTabItemViewModel? ActiveTab
+    {
+        get => _activeTab;
+        private set
+        {
+            if (_activeTab != value)
+            {
+                if (_activeTab != null)
+                    _activeTab.IsActive = false;
+
+                _activeTab = value;
+
+                if (_activeTab != null)
+                    _activeTab.IsActive = true;
+
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public ICommand CreateWorkloadCommand { get; }
+    public ICommand ActivateWorkloadCommand { get; }
+    public ICommand DeleteWorkloadCommand { get; }
+    public ICommand RenameWorkloadCommand { get; }
+    public ICommand CopyWorkloadCommand { get; }
+
+    public NotificationCenterViewModel NotificationCenter => _notificationCenter;
+
+    public bool HasUnreadNotifications => _notificationCenter.UnreadCount > 0;
+
+    /// <summary>
+    /// Load all workloads and populate tabs
+    /// </summary>
+    public async Task LoadWorkloadsAsync()
+    {
+        var workloads = await _workloadService.GetAllWorkloadsAsync();
+
+        Tabs.Clear();
+        foreach (var workload in workloads)
+        {
+            Tabs.Add(new WorkloadTabItemContext(
+                workload,
+                ActivateWorkloadCommand,
+                DeleteWorkloadCommand,
+                RenameWorkloadCommand,
+                CopyWorkloadCommand));
+        }
+
+        // Activate the default workload or first one
+        var activeWorkloadId = await _workloadService.GetActiveWorkloadIdAsync();
+        var activeTab = Tabs.FirstOrDefault(t => t.Id == activeWorkloadId) ?? Tabs.FirstOrDefault();
+        if (activeTab != null)
+        {
+            ActiveTab = activeTab;
+        }
+    }
+
+    /// <summary>
+    /// Create a new workload
+    /// </summary>
+    private async Task CreateWorkloadAsync()
+    {
+        var dialog = _objectFactory.Create<CreateWorkloadDialog>();
+        dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
+        var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
+            ? desktop.MainWindow 
+            : null;
+        
+        if (mainWindow == null)
+            return;
+
+        var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
+
+        if (result != null)
+        {
+            await _workloadService.CreateWorkloadAsync(result.Name, result.Description);
+        }
+    }
+
+    /// <summary>
+    /// Activate a workload (switch to it)
+    /// </summary>
+    private async Task ActivateWorkloadAsync(string? workloadId)
+    {
+        if (string.IsNullOrEmpty(workloadId))
+            return;
+
+        var tab = Tabs.FirstOrDefault(t => t.Id == workloadId);
+        if (tab != null && tab != ActiveTab)
+        {
+            ActiveTab = tab;
+            await _workloadService.SetActiveWorkloadAsync(workloadId);
+            
+            // Notify that active workload has changed (so statistics can be updated)
+            _eventBus.Publish(new ActiveWorkloadChangedEvent(workloadId));
+        }
+    }
+
+    private void OnActiveWorkloadChanged(ActiveWorkloadChangedEvent e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var tab = Tabs.FirstOrDefault(t => string.Equals(t.Id, e.WorkloadId, StringComparison.Ordinal));
+            if (tab != null)
+            {
+                ActiveTab = tab;
+            }
+        });
+    }
+
+    private void OnNotificationCenterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(NotificationCenterViewModel.UnreadCount), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(HasUnreadNotifications));
+        }
+    }
+
+    /// <summary>
+    /// Close a workload tab
+    /// </summary>
+    private async Task DeleteWorkloadAsync(string? workloadId)
+    {
+        if (string.IsNullOrEmpty(workloadId))
+            return;
+
+        var tab = Tabs.FirstOrDefault(t => t.Id == workloadId);
+        if (tab == null || !tab.CanDelete)
+            return;
+
+        var confirmed = await MessageBoxService.ShowConfirmAsync(
+            L["dialog.deleteWorkload.title"],
+            string.Format(L["dialog.deleteWorkload.message"], tab.FullName));
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var (success, errorMessage) = await _workloadService.DeleteWorkloadAsync(workloadId);
+        if (!success && !string.IsNullOrWhiteSpace(errorMessage))
+        {
+            await MessageBoxService.ShowWarningAsync(L["dialog.deleteWorkload.title"], errorMessage);
+        }
+    }
+
+    /// <summary>
+    /// Rename a workload
+    /// </summary>
+    private async Task RenameWorkloadAsync(string? workloadId)
+    {
+        if (string.IsNullOrEmpty(workloadId))
+            return;
+
+        var tab = Tabs.FirstOrDefault(t => t.Id == workloadId);
+        if (tab == null || !tab.CanRename)
+            return;
+
+        var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
+            ? desktop.MainWindow 
+            : null;
+        
+        if (mainWindow == null)
+            return;
+
+        var dialog = _objectFactory.Create<RenameWorkloadDialog>();
+        dialog.DataContext = _objectFactory.Create<RenameWorkloadDialogViewModel>(tab.Name);
+
+        var result = await dialog.ShowDialog<string?>(mainWindow);
+
+        if (!string.IsNullOrWhiteSpace(result) && result != tab.Name)
+        {
+            await _workloadService.RenameWorkloadAsync(workloadId, result);
+        }
+    }
+
+    /// <summary>
+    /// Copy a workload (state + data)
+    /// </summary>
+    private async Task CopyWorkloadAsync(string? workloadId)
+    {
+        if (string.IsNullOrEmpty(workloadId))
+            return;
+
+        var sourceTab = Tabs.FirstOrDefault(t => t.Id == workloadId);
+        if (sourceTab == null || !sourceTab.CanCopy)
+            return;
+
+        var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
+            ? desktop.MainWindow 
+            : null;
+        
+        if (mainWindow == null)
+            return;
+
+        // Show dialog to input new name
+        var dialog = _objectFactory.Create<CreateWorkloadDialog>();
+        dialog.DataContext = _objectFactory.Create<CreateWorkloadDialogViewModel>();
+        var result = await dialog.ShowDialog<CreateWorkloadResult?>(mainWindow);
+
+        if (result != null)
+        {
+            // Copy workload with new name
+            await _workloadService.CopyWorkloadAsync(workloadId, result.Name);
+        }
+    }
+
+    private void OnWorkloadCreated(WorkloadCreatedEvent e)
+    {
+        _ = OnWorkloadCreatedAsync(e);
+    }
+
+    private void OnWorkloadRenamed(WorkloadRenamedEvent e)
+    {
+        var tab = Tabs.FirstOrDefault(t => t.Id == e.WorkloadId);
+        if (tab != null)
+        {
+            tab.Name = e.NewName;
+        }
+    }
+
+    private void OnWorkloadDeleted(WorkloadDeletedEvent e)
+    {
+        var tab = Tabs.FirstOrDefault(t => t.Id == e.WorkloadId);
+        if (tab != null)
+        {
+            Tabs.Remove(tab);
+
+            // If deleted tab was active, activate default
+            if (tab == ActiveTab)
+            {
+                var defaultTab = Tabs.FirstOrDefault(t => t.IsDefault);
+                if (defaultTab != null)
+                {
+                    _ = ActivateWorkloadAsync(defaultTab.Id);
+                }
+            }
+        }
+    }
+
+    private async Task OnWorkloadCreatedAsync(WorkloadCreatedEvent e)
+    {
+        var workload = await _workloadService.GetWorkloadAsync(e.WorkloadId);
+        if (workload == null)
+        {
+            return;
+        }
+
+        Tabs.Add(new WorkloadTabItemContext(
+            workload,
+            ActivateWorkloadCommand,
+            DeleteWorkloadCommand,
+            RenameWorkloadCommand,
+            CopyWorkloadCommand));
+
+        await ActivateWorkloadAsync(workload.Id);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _notificationCenter.PropertyChanged -= OnNotificationCenterPropertyChanged;
+            Tabs.Dispose();
+            _workloadCreatedSubscription.Dispose();
+            _workloadRenamedSubscription.Dispose();
+            _workloadDeletedSubscription.Dispose();
+            _activeWorkloadChangedSubscription.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+}

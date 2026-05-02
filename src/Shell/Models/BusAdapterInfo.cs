@@ -1,0 +1,76 @@
+using System;
+using ComCross.PluginSdk;
+
+namespace ComCross.Shell.Models;
+
+/// <summary>
+/// Information about a bus adapter plugin
+/// </summary>
+public sealed class BusAdapterInfo
+{
+    /// <summary>
+    /// Unique identifier for the adapter (e.g., "serial", "tcp-client", "udp")
+    /// </summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Display name for the adapter (e.g., "Serial (RS232)", "TCP/IP Client")
+    /// </summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Icon/emoji for the adapter (e.g., "🔌", "🌐", "📡")
+    /// </summary>
+    public string Icon { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Type of the configuration panel UserControl for this adapter
+    /// Set to null if no custom config panel is needed
+    /// </summary>
+    public Type? ConfigPanelType { get; init; }
+
+    /// <summary>
+    /// Description of the adapter (optional)
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Is this adapter currently available/enabled?
+    /// </summary>
+    public bool IsEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Display text for ComboBox (Icon + Name)
+    /// </summary>
+    public string DisplayText => string.Concat(Icon, ' ', Name);
+
+    /// <summary>
+    /// Optional plugin id backing this adapter (when adapter is provided by a plugin capability).
+    /// </summary>
+    public string? PluginId { get; init; }
+
+    /// <summary>
+    /// Optional capability id backing this adapter (when adapter is provided by a plugin capability).
+    /// </summary>
+    public string? CapabilityId { get; init; }
+
+    /// <summary>
+    /// Optional default parameters JSON for the capability.
+    /// </summary>
+    public string? DefaultParametersJson { get; init; }
+
+    /// <summary>
+    /// Optional plugin-declared exclusive connection resource descriptor.
+    /// </summary>
+    public PluginConnectionResourceDescriptor? ConnectionResource { get; init; }
+
+    /// <summary>
+    /// JSON schema for parameters.
+    /// </summary>
+    public string? JsonSchema { get; init; }
+
+    /// <summary>
+    /// UI schema for the configuration panel.
+    /// </summary>
+    public string? UiSchema { get; init; }
+}

@@ -1,174 +1,73 @@
-using System.IO.Pipes;
-using System.Reflection;
-using System.Text;
+using System.Diagnostics;
 using System.Text.Json;
+using ComCross.PluginSdk;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
+using ComCross.Shared.Helpers;
+using ComCross.PluginHost.Logging;
+using ComCross.PluginHost.Events;
+using ComCross.PluginHost.Runtime;
+using ComCross.PluginHost.Ipc;
+using ComCross.PluginHost.Hosting;
 
-var argsMap = ParseArgs(args);
-
-if (!argsMap.TryGetValue("--pipe", out var pipeName) ||
-    !argsMap.TryGetValue("--plugin", out var pluginPath) ||
-    !argsMap.TryGetValue("--entry", out var entryPoint))
+namespace ComCross.PluginHost;
+internal static class Program
 {
-    Console.Error.WriteLine("Missing required arguments: --pipe --plugin --entry");
-    return 2;
-}
-
-var state = new HostState(entryPoint, pluginPath);
-state.TryLoadPlugin();
-
-var server = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-await server.WaitForConnectionAsync();
-
-using var reader = new StreamReader(server, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
-using var writer = new StreamWriter(server, Encoding.UTF8, bufferSize: 1024, leaveOpen: true)
-{
-    AutoFlush = true
-};
-
-var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-while (true)
-{
-    var line = await reader.ReadLineAsync();
-    if (line is null)
+    public static async Task<int> Main(string[] args)
     {
-        break;
-    }
-
-    PluginHostRequest? request;
-    try
-    {
-        request = JsonSerializer.Deserialize<PluginHostRequest>(line, jsonOptions);
-    }
-    catch (Exception ex)
-    {
-        var response = new PluginHostResponse(Guid.NewGuid().ToString("N"), false, ex.Message);
-        await writer.WriteLineAsync(JsonSerializer.Serialize(response, jsonOptions));
-        continue;
-    }
-
-    if (request is null)
-    {
-        var response = new PluginHostResponse(Guid.NewGuid().ToString("N"), false, "Invalid request.");
-        await writer.WriteLineAsync(JsonSerializer.Serialize(response, jsonOptions));
-        continue;
-    }
-
-    var responseMessage = request.Type switch
-    {
-        PluginHostMessageTypes.Ping => HandlePing(request, state),
-        PluginHostMessageTypes.Notify => HandleNotify(request, state),
-        PluginHostMessageTypes.Shutdown => HandleShutdown(request),
-        _ => new PluginHostResponse(request.Id, false, $"Unknown request type: {request.Type}")
-    };
-
-    await writer.WriteLineAsync(JsonSerializer.Serialize(responseMessage, jsonOptions));
-
-    if (request.Type == PluginHostMessageTypes.Shutdown)
-    {
-        break;
-    }
-}
-
-return 0;
-
-static PluginHostResponse HandlePing(PluginHostRequest request, HostState state)
-{
-    if (!state.IsLoaded)
-    {
-        return new PluginHostResponse(request.Id, false, state.LoadError ?? "Plugin load failed.");
-    }
-
-    return new PluginHostResponse(request.Id, true);
-}
-
-static PluginHostResponse HandleNotify(PluginHostRequest request, HostState state)
-{
-    if (!state.IsLoaded)
-    {
-        return new PluginHostResponse(request.Id, false, state.LoadError ?? "Plugin load failed.");
-    }
-
-    if (request.Notification is null)
-    {
-        return new PluginHostResponse(request.Id, false, "Missing notification payload.");
-    }
-
-    if (state.Instance is not IPluginNotificationSubscriber subscriber)
-    {
-        return new PluginHostResponse(request.Id, true);
-    }
-
-    try
-    {
-        subscriber.OnNotification(request.Notification);
-        return new PluginHostResponse(request.Id, true);
-    }
-    catch (Exception ex)
-    {
-        var restarted = state.TryRestart();
-        return new PluginHostResponse(request.Id, false, ex.Message, restarted);
-    }
-}
-
-static PluginHostResponse HandleShutdown(PluginHostRequest request)
-{
-    return new PluginHostResponse(request.Id, true);
-}
-
-static Dictionary<string, string> ParseArgs(string[] args)
-{
-    var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    for (var i = 0; i < args.Length - 1; i++)
-    {
-        if (!args[i].StartsWith("--", StringComparison.Ordinal))
+        if (!PluginHostBootstrap.TryParse(args, out var options, out var error))
         {
-            continue;
+            Console.Error.WriteLine(error);
+            return 2;
         }
 
-        map[args[i]] = args[i + 1];
-        i++;
-    }
+        var fileKey = PluginHostLogKey.Build(Process.GetCurrentProcess().Id, options.PluginId, options.Role);
+        var logService = new PluginHostLogService();
+        logService.Initialize(new PluginHostLogOptions(
+            Directory: string.IsNullOrWhiteSpace(options.LogDir) ? string.Empty : options.LogDir,
+            Format: string.IsNullOrWhiteSpace(options.LogFormat) ? "txt" : options.LogFormat,
+            MinLevel: string.IsNullOrWhiteSpace(options.LogMinLevel) ? "Info" : options.LogMinLevel,
+            FileKey: fileKey,
+            ArchiveAboveBytes: 30L * 1024 * 1024,
+            RetentionDays: 15));
 
-    return map;
-}
-
-sealed class HostState
-{
-    private readonly string _entryPoint;
-    private readonly string _pluginPath;
-
-    public HostState(string entryPoint, string pluginPath)
-    {
-        _entryPoint = entryPoint;
-        _pluginPath = pluginPath;
-    }
-
-    public object? Instance { get; private set; }
-    public string? LoadError { get; private set; }
-    public bool IsLoaded => Instance != null && LoadError is null;
-
-    public void TryLoadPlugin()
-    {
-        try
+        // Linux hardening: prevent this host process (and its children) from gaining new privileges via exec.
+        if (!LinuxNoNewPrivs.TryEnable(out var nnpError))
         {
-            var assembly = Assembly.LoadFrom(_pluginPath);
-            var type = assembly.GetType(_entryPoint, throwOnError: true);
-            Instance = Activator.CreateInstance(type!);
-            LoadError = null;
+            logService.Warn($"no_new_privs could not be enabled: {nnpError}");
         }
-        catch (Exception ex)
+
+        logService.Info($"PluginHost starting: role={options.Role}, pluginId={options.PluginId}, pluginPath={options.PluginPath}, entry={options.EntryPoint}");
+
+        _ = PluginHostBootstrap.StartParentMonitorIfRequested(args);
+
+        var state = new HostRuntime(options.EntryPoint, options.PluginPath, options.FixedSessionId);
+        state.SetHostToken(options.HostToken);
+        state.TryLoadPlugin();
+
+        using var eventSink = new HostEventSink(options.EventPipeName);
+        // Allow both UI host and session host to publish UI-state invalidation.
+        // This is required for listener-style session plugins that discover peers in the session host.
+        state.SetUiStateEventSink(eventSink.PublishUiStateInvalidated);
+        state.SetSessionLifecycleEventSink(eventSink.PublishSessionClosed);
+
+        state.SetSessionRegisteredSink(eventSink.PublishSessionRegistered);
+        eventSink.PublishHostRegistered(options.HostToken);
+
+        using var shutdownCts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
         {
-            Instance = null;
-            LoadError = ex.Message;
-        }
+            e.Cancel = true;
+            try { shutdownCts.Cancel(); } catch { }
+        };
+
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var router = new PluginHostRequestRouter(options.Role, state, jsonOptions);
+        var rpcServer = new PluginHostRpcServer(options.PipeName, jsonOptions, logService);
+        await rpcServer.RunAsync(router.HandleAsync, shutdownCts.Token);
+
+        logService.Info("PluginHost shutting down.");
+        return 0;
     }
 
-    public bool TryRestart()
-    {
-        TryLoadPlugin();
-        return IsLoaded;
-    }
 }

@@ -1,0 +1,21 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style Selector="Border.collapsible-surface">
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="MaxHeight" Value="0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+                <DoubleTransition Property="MaxHeight" Duration="0:0:0.18" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.collapsible-surface.expanded">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="MaxHeight" Value="1600" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+</Styles>

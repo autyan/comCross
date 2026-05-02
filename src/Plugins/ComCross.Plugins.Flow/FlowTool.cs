@@ -1,12 +1,21 @@
 using System;
+using ComCross.PluginSdk;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 
 namespace ComCross.Plugins.Flow;
 
-public sealed class FlowTool : IPluginNotificationSubscriber
+public sealed class FlowTool : IExtensionPlugin, IPluginNotificationSubscriber
 {
     private string _title = "Flow Tool";
+
+    public PluginMetadata Metadata { get; } = new()
+    {
+        Id = "serial.flow",
+        Name = "Flow Builder",
+        Version = "0.3.1",
+        Type = PluginType.FlowProcessor
+    };
 
     public string Title => _title;
 

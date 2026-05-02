@@ -4,77 +4,182 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
 
-public partial class MessageStreamView : UserControl
+public partial class MessageStreamView : BaseUserControl
 {
-    public static readonly StyledProperty<string?> TimestampFormatProperty =
-        AvaloniaProperty.Register<MessageStreamView, string?>(nameof(TimestampFormat));
-
-    public static readonly StyledProperty<string> MessageFontFamilyProperty =
-        AvaloniaProperty.Register<MessageStreamView, string>(nameof(MessageFontFamily), "Consolas");
-
-    public static readonly StyledProperty<int> MessageFontSizeProperty =
-        AvaloniaProperty.Register<MessageStreamView, int>(nameof(MessageFontSize), 11);
-
     private INotifyCollectionChanged? _currentMessages;
-
-    public string? TimestampFormat
-    {
-        get => GetValue(TimestampFormatProperty);
-        set => SetValue(TimestampFormatProperty, value);
-    }
-
-    public string MessageFontFamily
-    {
-        get => GetValue(MessageFontFamilyProperty);
-        set => SetValue(MessageFontFamilyProperty, value);
-    }
-
-    public int MessageFontSize
-    {
-        get => GetValue(MessageFontSizeProperty);
-        set => SetValue(MessageFontSizeProperty, value);
-    }
+    private int _messageSubscriptionVersion;
+    private bool _isDetached;
 
     public MessageStreamView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        AttachedToVisualTree += OnAttachedToVisualTree;
+        DetachedFromVisualTree += OnDetachedFromVisualTree;
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _isDetached = false;
+        AttachCurrentMessages();
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        DetachCurrentMessages();
+        _isDetached = true;
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        AttachCurrentMessages();
+    }
+
+    private void AttachCurrentMessages()
+    {
+        DetachCurrentMessages();
+
+        if (_isDetached)
+        {
+            return;
+        }
+
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            _currentMessages = vm.MessageItems;
+            _currentMessages.CollectionChanged += OnMessagesChanged;
+            unchecked
+            {
+                _messageSubscriptionVersion++;
+            }
+        }
+    }
+
+    private void DetachCurrentMessages()
     {
         if (_currentMessages != null)
         {
             _currentMessages.CollectionChanged -= OnMessagesChanged;
             _currentMessages = null;
-        }
-
-        if (DataContext is MainWindowViewModel vm)
-        {
-            _currentMessages = vm.Messages;
-            _currentMessages.CollectionChanged += OnMessagesChanged;
+            unchecked
+            {
+                _messageSubscriptionVersion++;
+            }
         }
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        var version = _messageSubscriptionVersion;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnMessagesChangedOnUiThread(sender, version));
+            return;
+        }
+
+        OnMessagesChangedOnUiThread(sender, version);
+    }
+
+    private void OnMessagesChangedOnUiThread(object? sender, int version)
+    {
+        if (_isDetached
+            || version != _messageSubscriptionVersion
+            || !ReferenceEquals(sender, _currentMessages))
         {
             return;
         }
 
-        if (!vm.AutoScrollEnabled || vm.Messages.Count == 0)
+        if (DataContext is not MessageStreamViewModel vm)
+        {
+            return;
+        }
+
+        if (!vm.Display.AutoScrollEnabled || vm.MessageItems.Count == 0)
         {
             return;
         }
 
         Dispatcher.UIThread.Post(() =>
         {
-            MessageList.ScrollIntoView(vm.Messages.Last());
+            ScrollToLatestMessage(vm, sender, version);
         });
+    }
+
+    private void ScrollToLatestMessage(MessageStreamViewModel vm, object? sender, int version)
+    {
+        if (_isDetached
+            || version != _messageSubscriptionVersion
+            || !ReferenceEquals(sender, _currentMessages)
+            || !ReferenceEquals(DataContext, vm)
+            || !vm.Display.AutoScrollEnabled
+            || vm.MessageItems.Count == 0)
+        {
+            return;
+        }
+
+        var latest = vm.MessageItems.LastOrDefault();
+        if (latest is not null)
+        {
+            MessageList.ScrollIntoView(latest);
+        }
+    }
+
+    private void OnToggleDisplayMode(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ToggleDisplayMode();
+            e.Handled = true;
+        }
+    }
+
+    private void OnOpenSessionDetailClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.OpenSessionDetail(vm.ActiveSession);
+        }
+    }
+
+    private void OnToggleRightDockClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.ToggleRightToolDock();
+        }
+    }
+
+    private void OnToggleMetricsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ToggleMetricsBar();
+        }
+    }
+
+    private void OnExportMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            _ = vm.ExportAsync();
+        }
+    }
+
+    private void OnClearMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = this.FindAncestorOfType<Window>();
+        if (window?.DataContext is MainWindowViewModel vm)
+        {
+            vm.ClearMessages();
+        }
     }
 }

@@ -1,0 +1,106 @@
+{
+  "id": "serial.adapter",
+  "name": "Serial Adapter",
+  "version": "0.4.0",
+  "targetCoreVersion": "0.4",
+  "entryPoint": "ComCross.Plugins.Serial.SerialBusAdapterPlugin",
+  "pluginType": "BusAdapter",
+  "toolGroup": "serial",
+  "permissions": ["serial.read", "serial.write", "workspace.read"],
+  "settingsPages": [
+    {
+      "id": "serial-scan",
+      "titleKey": "serial.adapter.settings.scan.title",
+      "uiSchema": {
+        "uiSchemaVersion": 1,
+        "titleKey": "serial.adapter.settings.scan.title",
+        "fields": [
+          {
+            "key": "scanPatterns",
+            "control": "text",
+            "labelKey": "serial.adapter.settings.scan.patterns",
+            "defaultValue": "/dev/ttyUSB*,/dev/ttyACM*,/dev/serial/by-id/*,/dev/serial/by-path/*,/dev/rfcomm*,/dev/ttyGS*,/dev/tnt*,/dev/ttyAMA*,/dev/ttyS0,/dev/ttyS1,/dev/ttyS2,/dev/ttyS3"
+          }
+        ],
+        "layout": {
+          "kind": "stack",
+          "orientation": "vertical",
+          "spacing": 12,
+          "children": [
+            { "kind": "field", "key": "scanPatterns", "labelWidth": 3, "totalWidth": 10 }
+          ]
+        }
+      }
+    }
+  ],
+  "i18n": {
+    "en-US": {
+      "serial.adapter.name": "Serial Adapter",
+      "serial.adapter.capability.serial.name": "Serial (RS232)",
+      "serial.adapter.capability.serial.description": "Serial port communication (RS232/RS485/RS422)",
+      "serial.adapter.connect.title": "Connect (Serial)",
+      "serial.adapter.connect.port": "Port",
+      "serial.adapter.connect.baudRate": "Baud Rate",
+      "serial.adapter.connect.dataBits": "Data Bits",
+      "serial.adapter.connect.parity": "Parity",
+      "serial.adapter.connect.stopBits": "Stop Bits",
+      "serial.adapter.connect.flowControl": "Flow Control",
+
+      "serial.adapter.connect.parity.none": "None",
+      "serial.adapter.connect.parity.odd": "Odd",
+      "serial.adapter.connect.parity.even": "Even",
+      "serial.adapter.connect.parity.mark": "Mark",
+      "serial.adapter.connect.parity.space": "Space",
+
+      "serial.adapter.connect.stopBits.none": "None",
+      "serial.adapter.connect.stopBits.one": "1",
+      "serial.adapter.connect.stopBits.onePointFive": "1.5",
+      "serial.adapter.connect.stopBits.two": "2",
+
+      "serial.adapter.connect.flowControl.none": "None",
+      "serial.adapter.connect.flowControl.xonxoff": "XON/XOFF",
+      "serial.adapter.connect.flowControl.rts": "RTS",
+      "serial.adapter.connect.flowControl.rtsXonxoff": "RTS + XON/XOFF",
+      
+      "serial.adapter.connect.sessionName": "Session Name",
+      "serial.adapter.connect.action.connect": "Connect",
+      "serial.adapter.connect.action.refreshPorts": "Refresh Ports"
+      ,"serial.adapter.settings.scan.title": "Serial Scan"
+      ,"serial.adapter.settings.scan.patterns": "Scan Patterns (comma-separated)"
+    },
+    "zh-CN": {
+      "serial.adapter.name": "串口适配器",
+      "serial.adapter.capability.serial.name": "串口（RS232）",
+      "serial.adapter.capability.serial.description": "串口通信（RS232/RS485/RS422）",
+      "serial.adapter.connect.title": "连接（串口）",
+      "serial.adapter.connect.port": "端口",
+      "serial.adapter.connect.baudRate": "波特率",
+      "serial.adapter.connect.dataBits": "数据位",
+      "serial.adapter.connect.parity": "校验",
+      "serial.adapter.connect.stopBits": "停止位",
+      "serial.adapter.connect.flowControl": "流控",
+
+      "serial.adapter.connect.parity.none": "无",
+      "serial.adapter.connect.parity.odd": "奇校验",
+      "serial.adapter.connect.parity.even": "偶校验",
+      "serial.adapter.connect.parity.mark": "标记",
+      "serial.adapter.connect.parity.space": "空格",
+
+      "serial.adapter.connect.stopBits.none": "无",
+      "serial.adapter.connect.stopBits.one": "1",
+      "serial.adapter.connect.stopBits.onePointFive": "1.5",
+      "serial.adapter.connect.stopBits.two": "2",
+
+      "serial.adapter.connect.flowControl.none": "无",
+      "serial.adapter.connect.flowControl.xonxoff": "软件流控（XON/XOFF）",
+      "serial.adapter.connect.flowControl.rts": "硬件流控（RTS）",
+      "serial.adapter.connect.flowControl.rtsXonxoff": "混合流控（RTS+XON/XOFF）",
+      
+      "serial.adapter.connect.sessionName": "会话名称",
+      "serial.adapter.connect.action.connect": "连接",
+      "serial.adapter.connect.action.refreshPorts": "刷新端口列表"
+      ,"serial.adapter.settings.scan.title": "串口扫描"
+      ,"serial.adapter.settings.scan.patterns": "扫描路径（逗号分隔）"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "uiSchemaVersion": 1,
+  "titleKey": "network.adapter.connect.tcp.title",
+  "fields": [
+    {
+      "key": "remoteHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.remoteHost",
+      "defaultStatePath": "defaultParameters.tcp.remoteHost",
+      "required": true
+    },
+    {
+      "key": "remotePort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.remotePort",
+      "defaultStatePath": "defaultParameters.tcp.remotePort",
+      "defaultValue": 502,
+      "min": 1,
+      "max": 65535,
+      "required": true
+    },
+    {
+      "key": "localHost",
+      "control": "text",
+      "labelKey": "network.adapter.connect.localHost",
+      "defaultStatePath": "defaultParameters.tcp.localHost"
+    },
+    {
+      "key": "localPort",
+      "control": "number",
+      "labelKey": "network.adapter.connect.localPort",
+      "defaultStatePath": "defaultParameters.tcp.localPort",
+      "defaultValue": 0,
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "key": "connectTimeoutMs",
+      "control": "number",
+      "labelKey": "network.adapter.connect.timeoutMs",
+      "defaultStatePath": "defaultParameters.tcp.connectTimeoutMs",
+      "defaultValue": 3000,
+      "min": 1,
+      "max": 600000
+    },
+    {
+      "key": "sessionName",
+      "control": "text",
+      "labelKey": "network.adapter.connect.sessionName"
+    }
+  ],
+  "layout": {
+    "kind": "stack",
+    "orientation": "vertical",
+    "spacing": 12,
+    "children": [
+      { "kind": "field", "key": "remoteHost" },
+      { "kind": "field", "key": "remotePort" },
+      { "kind": "field", "key": "localHost" },
+      { "kind": "field", "key": "localPort" },
+      { "kind": "field", "key": "connectTimeoutMs" },
+      { "kind": "field", "key": "sessionName" }
+    ]
+  }
+}

@@ -1,60 +1,91 @@
 # Workspace State
 
 ## Overview
-Workspace state is split into two layers:
-- Toolset: tool selection and layout.
-- WorkState: active sessions and UI state.
 
-## Toolset (Tool Combination)
-- Enabled tools
-- Dock layout
-- Tool defaults
+ComCross v0.4 persists workspace state as user-owned application data. The persisted model stores descriptors and UI state, not live transport connections.
 
-## WorkState (Working State)
-- Sessions and port settings
-- UI state (filters, highlights, scroll)
-- Send history
+Sessions are restored as disconnected descriptors at startup. Plugins may normalize plugin-owned session state during startup initialization, but ComCross does not auto-reconnect sessions.
 
-## JSON Example
-```
-{
-  "toolset": {
-    "id": "default",
-    "name": "Default Toolset",
-    "enabledTools": ["serial.send", "serial.filter"],
-    "layout": {
-      "panels": [
-        {"toolId": "serial.send", "dock": "right", "width": 320, "isOpen": true},
-        {"toolId": "serial.filter", "dock": "right", "width": 320, "isOpen": false}
-      ]
-    },
-    "toolSettings": {
-      "serial.send": {"defaultMode": "STR", "appendNewline": true}
-    }
-  },
-  "workState": {
-    "workspaceId": "last",
-    "sessions": [
-      {
-        "id": "ttyUSB0",
-        "port": "/dev/ttyUSB0",
-        "settings": {
-          "baud": 115200,
-          "dataBits": 8,
-          "parity": "None",
-          "stopBits": 1
-        },
-        "connected": true,
-        "metrics": {"rx": 12345, "tx": 678}
-      }
-    ],
-    "uiState": {
-      "activeSessionId": "ttyUSB0",
-      "autoScroll": true,
-      "filters": {"keyword": "ERROR", "regex": null},
-      "highlightRules": ["default"]
-    },
-    "sendHistory": ["AT+RST", "AT+GMR"]
-  }
-}
-```
+## WorkspaceState
+
+Current top-level fields:
+
+- `Version`: workspace state format version. Current value: `0.4.0`.
+- `WorkspaceId`: workspace identifier.
+- `Workloads`: workload list.
+- `ActiveWorkloadId`: workload selected on startup.
+- `SessionDescriptors`: persisted session definitions.
+- `UiState`: Shell UI state.
+- `SendHistory`: send panel history.
+
+v0.4 intentionally removed the legacy v0.3 `Sessions` model. Old session state is not migrated.
+
+## Workloads
+
+A workload groups sessions for user workflow organization. `EnsureDefaultWorkload()` creates a default workload when none exists.
+
+Workload data is application-owned. It is not a plugin contract.
+
+## SessionDescriptor
+
+Session descriptors store the public information needed to show and reconnect a session manually:
+
+- `Id`
+- `Name`
+- `AdapterId`
+- `PluginId`
+- `CapabilityId`
+- `ParametersJson`
+- `DisplayTitle`
+- `DisplaySubtitle`
+- `DisplayIcon`
+- `EnableDatabaseStorage`
+- `CanReconnect`
+- `InitializationState`
+- `InitializationError`
+- `LastInitializedPluginVersion`
+- `StorageSchemaVersion`
+- `ParentSessionId`
+- `ManagedResourceKinds`
+
+`ParametersJson` represents the last committed connection parameters. Core/Shell should not parse it for plugin-private semantics unless a public descriptor explicitly identifies a host-consumable field, such as `PluginConnectionResourceDescriptor.ParameterKey`.
+
+## Plugin-Owned Session Storage
+
+Plugins can own session storage through the plugin session-state initialization contract. Core stores and deletes that data, but the plugin owns its schema and meaning.
+
+At startup:
+
+1. Core restores session descriptors.
+2. Core asks the owning plugin to initialize session state when the plugin supports the initializer.
+3. The plugin returns metadata and storage patches.
+4. Core applies patches as one update and marks the session ready, or marks it unavailable on failure.
+
+Plugins do not access workspace files directly.
+
+## Deletion Semantics
+
+Deleting a session is destructive.
+
+Core removes:
+
+- the session descriptor
+- plugin-owned storage for that session
+- runtime/session references managed by Core services
+
+ComCross does not promise recovery, archival, or soft-delete behavior in v0.4.
+
+## UI State
+
+`UiState` stores Shell-owned presentation state:
+
+- `ActiveSessionId`
+- `AutoScroll`
+- `Filters`
+- `HighlightRules`
+
+Plugin UI state is not persisted here as arbitrary Shell state. Plugins produce UI state through their contracts when Shell requests it.
+
+## Message Storage
+
+v0.4 message display uses the current frame store and message stream pipeline. Future v0.5 work may move display onto file-stream-backed storage to reduce memory pressure and improve durable write behavior.

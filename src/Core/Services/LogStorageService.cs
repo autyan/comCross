@@ -198,7 +198,10 @@ public sealed class LogStorageService
             {
                 EnsureWriter(settings);
 
-                var line = $"{message.Timestamp:O}\t{message.Level}\t{message.Source}\t{message.Content}";
+                var attributes = message.Attributes.Count == 0
+                    ? string.Empty
+                    : string.Join(" ", message.Attributes.Select(static x => $"{x.Key}={x.Value}"));
+                var line = $"{message.Timestamp:O}\t{message.Level}\t{message.Source}\t{attributes}\t{message.Content}";
                 _writer?.WriteLine(line);
                 _writer?.Flush();
 
