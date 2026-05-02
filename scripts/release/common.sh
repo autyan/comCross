@@ -19,7 +19,7 @@ release_require_command() {
 release_normalize_version() {
   local version="$1"
   version="${version#v}"
-  if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+){1,3}([._+-][A-Za-z0-9]+)?$ ]]; then
+  if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
     echo "Invalid release version: ${version}" >&2
     return 1
   fi

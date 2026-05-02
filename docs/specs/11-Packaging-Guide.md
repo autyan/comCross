@@ -22,6 +22,10 @@ Default release assets:
 - Verification:
   - `SHA256SUMS`
   - `SHA256SUMS.asc` when signing material is provided
+- Release notes:
+  - `docs/release/notes/v<version>.md`
+- Changelog:
+  - `docs/release/changelog/v<version>.md`
 
 Portable `.tar.gz` and `.zip` publish archives are no longer default release
 assets. Users who need bare publish outputs should build them locally from
@@ -40,6 +44,25 @@ runtime. AppImage is the fallback package for users on distributions that are
 not covered by DEB/RPM.
 
 Windows MSI packages are self-contained and installed per user.
+
+## 2.1) Supported Operating Systems
+
+The current official package support baseline is:
+
+| OS | Minimum version | Architecture | Package |
+|---|---|---|---|
+| Windows | Windows 10 22H2 / Windows 11 22H2 | x64, ARM64 | MSI |
+| Ubuntu | 22.04 LTS | x64, ARM64 | DEB, AppImage |
+| Debian | 12 | x64, ARM64 | DEB, AppImage |
+| Fedora | 40 | x64 | RPM, AppImage |
+
+This is the project compatibility target, not a claim that every desktop
+environment, graphics stack, and hardware configuration is fully tested today.
+
+Other Linux distributions may work but are outside the formal support
+commitment. AppImage packages are the recommended fallback for these users.
+
+ComCross does not currently provide official macOS packages.
 
 ## 3) Runtime Directories
 
@@ -243,11 +266,65 @@ Expected secret names for future CI release work:
 - `COMCROSS_GPG_PRIVATE_KEY`
 - `COMCROSS_GPG_PASSPHRASE`
 - `COMCROSS_GPG_KEY_ID`
+- `COMCROSS_PLUGIN_SIGNING_KEY_PEM`
+- `COMCROSS_PLUGIN_SIGNING_KEY_ID`
 - `COMCROSS_WINDOWS_CERT_PFX_BASE64`
 - `COMCROSS_WINDOWS_CERT_PASSWORD`
 
 Formal release jobs must fail when required signing material is missing. Local
 dry runs may skip signing unless `--require-signing` is passed.
+
+## 8.1) GitHub Actions Release Workflow
+
+The automated release workflow is:
+
+```text
+.github/workflows/release.yml
+```
+
+It is manually triggered so pre-release validation and final release publishing
+remain explicit release-manager actions:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0-rc.1 \
+  -f prerelease=true \
+  -f draft=true \
+  -f require_signing=false
+```
+
+For formal releases, use `require_signing=true` after the signing secrets are
+configured and pass `release_notes_path`:
+
+```bash
+gh workflow run release.yml \
+  -f version=0.5.0 \
+  -f prerelease=false \
+  -f draft=false \
+  -f require_signing=true \
+  -f release_notes_path=docs/release/notes/v0.5.0.md
+```
+
+The workflow builds Linux packages on Ubuntu, Windows MSI packages on Windows,
+regenerates a unified `SHA256SUMS` file across all package assets, optionally
+signs the checksum file, and creates the GitHub Release or Pre-release.
+
+Release notes are stored under:
+
+```text
+docs/release/notes/
+```
+
+Version changelogs are stored under:
+
+```text
+docs/release/changelog/
+```
+
+Final public releases must provide matching release notes and changelog files in
+the release branch before the workflow is triggered. Release notes should stay
+short and link to the full changelog. Validation-only draft pre-releases may
+omit release notes and must be deleted after validation.
 
 ## 9) Plugin Layout
 

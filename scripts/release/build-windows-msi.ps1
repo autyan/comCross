@@ -16,11 +16,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:MSBUILDDISABLENODEREUSE = "1"
+$DotNetPublishBuildArgs = @("-maxcpucount:1", "-nodeReuse:false")
+$DotNetPublishProperties = @("--property:DebugType=none", "--property:DebugSymbols=false")
 
 function Normalize-Version {
     param([Parameter(Mandatory=$true)][string]$InputVersion)
     $normalized = $InputVersion.TrimStart("v")
-    if ($normalized -notmatch '^[0-9]+(\.[0-9]+){1,3}([._+-][A-Za-z0-9]+)?$') {
+    if ($normalized -notmatch '^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$') {
         throw "Invalid release version: $InputVersion"
     }
     return $normalized
@@ -48,6 +51,27 @@ function Assert-Command {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "Required command not found: $Name"
     }
+}
+
+function Get-SigntoolPath {
+    $command = Get-Command signtool -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $kitsBin = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+    if (Test-Path $kitsBin) {
+        $candidate = Get-ChildItem -Path $kitsBin -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+        if ($candidate) {
+            return $candidate.FullName
+        }
+    }
+
+    throw "Required command not found: signtool"
 }
 
 function Invoke-Native {
@@ -203,11 +227,11 @@ function Publish-ComCrossWindows {
     }
     New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
 
-    Invoke-Native dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/Startup/ComCross.Startup.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    Invoke-Native dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir @DotNetPublishProperties @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/Startup/ComCross.Startup.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir @DotNetPublishProperties @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir @DotNetPublishProperties @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir @DotNetPublishProperties @DotNetPublishBuildArgs
+    Invoke-Native dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir @DotNetPublishProperties @DotNetPublishBuildArgs
 
     Write-InstanceManifest -PublishDir $PublishDir
 
@@ -227,7 +251,8 @@ function Publish-ComCrossWindows {
         $stableHash = Get-StableHash -PluginId $pluginId
         $pluginOut = Join-Path $pluginsDir "$pluginId-$stableHash"
 
-        Invoke-Native dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut -p:DebugType=none -p:DebugSymbols=false
+        Invoke-Native dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut @DotNetPublishProperties @DotNetPublishBuildArgs
+        Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $pluginOut "ComCross.Plugin.Manifest.json") -Force
         Sign-PluginPackage -PluginDir $pluginOut
     }
 }
@@ -399,8 +424,8 @@ foreach ($rid in $Rids) {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($CertificatePfxPath)) {
-        Assert-Command signtool
-        Invoke-Native signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
+        $signtool = Get-SigntoolPath
+        Invoke-Native $signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
     } elseif ($RequireSigning) {
         throw "MSI signing is required but CertificatePfxPath was not provided."
     }

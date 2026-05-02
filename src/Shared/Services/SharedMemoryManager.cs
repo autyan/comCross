@@ -103,7 +103,7 @@ public class SharedMemoryManager : IDisposable
     /// <summary>
     /// 为Session分配Segment
     /// </summary>
-    public async Task<SessionSegment> AllocateSegmentAsync(
+    public SessionSegment AllocateSegment(
         string sessionId,
         int requestedSize)
     {
@@ -410,5 +410,4 @@ public class SessionMemoryInfo
     public DateTime LastActivityTime { get; set; }
     public BackpressureLevel BackpressureLevel { get; set; } = BackpressureLevel.None;
 }
-
 

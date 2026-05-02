@@ -67,7 +67,7 @@ public class MainWindowViewModel : BaseViewModel
         set => LeftSidebar.ActiveSession = value;
     }
 
-    public async Task UpdateSessionNameAsync(string newName)
+    public void UpdateSessionName(string newName)
     {
         if (ActiveSession == null || string.IsNullOrWhiteSpace(newName))
         {

@@ -35,6 +35,7 @@ This is the repository-level entry point for AI coding agents. Read this file be
 - Localized GitHub-facing documentation must include an AI-assisted documentation notice and must preserve the English source meaning for security, signing, release verification, compatibility, and implementation claims.
 - Shell composite input controls must use one visual frame; when an outer control owns the frame, keep inner inputs visually transparent and borderless.
 - Do not use Service Locator outside the composition root unless the reason and boundary are explicit.
+- Do not declare `async` only to satisfy naming style. Use `async/await` only when the method has a real asynchronous boundary such as file/database/network/IPC/process/stream I/O, cancellable waits, timers, or UI dispatcher work. Interface-compatible synchronous implementations should return `Task.CompletedTask` or `Task.FromResult(...)` without `async`.
 - Do not change runtime entry points, publish layout, plugin directory layout, or data directory rules unless the task explicitly targets those contracts.
 - Do not put new responsibilities into `Shared`, `Core`, or `Shell` when the responsibility clearly needs a narrower project or domain.
 

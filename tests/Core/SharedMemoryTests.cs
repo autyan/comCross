@@ -204,7 +204,7 @@ public class SharedMemoryTests : IDisposable
     }
 
     [Fact]
-    public async Task SharedMemoryManager_TryGetSegmentDescriptor_ReturnsExpectedValues()
+    public void SharedMemoryManager_TryGetSegmentDescriptor_ReturnsExpectedValues()
     {
         // Arrange
         var backingFile = Path.Combine(Path.GetTempPath(), "comcross-tests", $"{Guid.NewGuid():N}.mmf");
@@ -222,7 +222,7 @@ public class SharedMemoryTests : IDisposable
         manager.Initialize();
 
         // Act
-        await manager.AllocateSegmentAsync("session1", requestedSize: 512 * 1024);
+        manager.AllocateSegment("session1", requestedSize: 512 * 1024);
         var ok = manager.TryGetSegmentDescriptor("session1", out SharedMemorySegmentDescriptor descriptor);
 
         // Assert
@@ -359,7 +359,7 @@ public class SharedMemoryTests : IDisposable
     }
     
     [Fact]
-    public void ConcurrentWriteAndRead_NoDataLoss()
+    public async Task ConcurrentWriteAndRead_NoDataLoss()
     {
         // Arrange - 使用足够大的共享内存避免空间不足
         var largeSharedMemory = new SegmentedSharedMemory(
@@ -404,7 +404,7 @@ public class SharedMemoryTests : IDisposable
             }
         });
         
-        Task.WaitAll(writeTask, readTask);
+        await Task.WhenAll(writeTask, readTask);
         
         // Assert
         Assert.Equal(totalFrames, writeCount);
