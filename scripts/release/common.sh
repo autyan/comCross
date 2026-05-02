@@ -58,3 +58,13 @@ release_split_csv() {
   local input="$1"
   printf '%s' "${input//,/ }"
 }
+
+release_channel_defaults() {
+  local channel="$1"
+  case "${channel}" in
+    Stable) printf '%s\n' "ComCross comcross-stable" ;;
+    Dev) printf '%s\n' "ComCrossDev comcross-dev" ;;
+    EAP) printf '%s\n' "ComCrossEAP comcross-eap" ;;
+    *) echo "Unsupported release channel: ${channel}" >&2; return 1 ;;
+  esac
+}

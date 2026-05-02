@@ -133,15 +133,16 @@ for rid in ${rids}; do
   mkdir -p "${staging_dir}/usr/share/icons/hicolor/256x256/apps"
 
   cp -a "${source_dir}/." "${staging_dir}/opt/comcross/"
+  chmod +x "${staging_dir}/opt/comcross/ComCross.Startup" || true
   chmod +x "${staging_dir}/opt/comcross/ComCross.Shell" || true
 
   cat > "${staging_dir}/usr/bin/comcross" <<'EOF'
 #!/usr/bin/env bash
-exec /opt/comcross/ComCross.Shell "$@"
+exec /opt/comcross/ComCross.Startup "$@"
 EOF
   chmod +x "${staging_dir}/usr/bin/comcross"
 
-  sed 's#^Exec=.*#Exec=/opt/comcross/ComCross.Shell#' \
+  sed 's#^Exec=.*#Exec=/opt/comcross/ComCross.Startup#; s#^StartupWMClass=.*#StartupWMClass=ComCross.Startup#' \
     src/Assets/Resources/comcross.desktop \
     > "${staging_dir}/usr/share/applications/comcross.desktop"
   cp src/Assets/Resources/Icons/app-icon-256.png \

@@ -106,17 +106,18 @@ for rid in ${rids}; do
   mkdir -p "${appdir}/usr/share/icons/hicolor/256x256/apps"
 
   cp -a "${source_dir}/." "${appdir}/usr/lib/comcross/"
+  chmod +x "${appdir}/usr/lib/comcross/ComCross.Startup" || true
   chmod +x "${appdir}/usr/lib/comcross/ComCross.Shell" || true
 
   cat > "${appdir}/AppRun" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${here}/usr/lib/comcross/ComCross.Shell" "$@"
+exec "${here}/usr/lib/comcross/ComCross.Startup" "$@"
 EOF
   chmod +x "${appdir}/AppRun"
 
-  sed 's#^Exec=.*#Exec=ComCross#' \
+  sed 's#^Exec=.*#Exec=ComCross#; s#^StartupWMClass=.*#StartupWMClass=ComCross.Startup#' \
     src/Assets/Resources/comcross.desktop \
     > "${appdir}/comcross.desktop"
   cp "${appdir}/comcross.desktop" "${appdir}/usr/share/applications/comcross.desktop"

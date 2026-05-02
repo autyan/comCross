@@ -1,34 +1,36 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-    Name="ComCross"
+    Name="$(var.ProductName)"
     Manufacturer="autyan"
-    Version="$(var.ProductVersion)"
-    UpgradeCode="2D0F7581-E54A-4E77-8F17-0DD6E82290E1"
-    Scope="perMachine">
+    Version="$(var.PackageVersion)"
+    UpgradeCode="$(var.UpgradeCode)"
+    Scope="perUser">
 
     <SummaryInformation Description="ComCross $(var.PlatformRid)" Manufacturer="autyan" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of ComCross is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <Feature Id="MainFeature" Title="ComCross" Level="1">
+    <Feature Id="MainFeature" Title="$(var.ProductName)" Level="1">
       <ComponentGroupRef Id="AppComponents" />
       <ComponentRef Id="ApplicationShortcut" />
     </Feature>
 
-    <StandardDirectory Id="ProgramFilesFolder">
-      <Directory Id="INSTALLFOLDER" Name="ComCross" />
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="$(var.InstallFolderName)" />
+      </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ApplicationProgramsFolder" Name="ComCross" />
+      <Directory Id="ApplicationProgramsFolder" Name="$(var.ProductName)" />
     </StandardDirectory>
 
     <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="*">
       <Shortcut
         Id="ComCrossStartMenuShortcut"
-        Name="ComCross"
+        Name="$(var.ShortcutName)"
         Description="Cross-platform embedded communication toolbox"
-        Target="[INSTALLFOLDER]ComCross.Shell.exe"
+        Target="[INSTALLFOLDER]ComCross.Startup.exe"
         WorkingDirectory="INSTALLFOLDER" />
       <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue

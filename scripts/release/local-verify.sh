@@ -19,6 +19,13 @@ gpg_private_key=""
 gpg_passphrase="${COMCROSS_GPG_PASSPHRASE:-}"
 gpg_key_id="${COMCROSS_GPG_KEY_ID:-}"
 require_signing=false
+channel="Stable"
+directory_name=""
+instance_id=""
+schema_line="v0"
+plugin_signing_key=""
+plugin_signing_key_id="comcross-plugin-official-2026"
+require_plugin_signing=false
 
 usage() {
   cat <<'EOF'
@@ -39,6 +46,13 @@ Options:
   --gpg-passphrase VALUE      GPG passphrase. Defaults to COMCROSS_GPG_PASSPHRASE.
   --gpg-key-id VALUE          Signing key id. Defaults to COMCROSS_GPG_KEY_ID.
   --require-signing           Fail when signing inputs are missing.
+  --channel CHANNEL           Instance channel: Stable, Dev, or EAP. Default: Stable.
+  --directory-name NAME       Override instance directoryName.
+  --instance-id ID            Override instance id.
+  --schema-line VALUE         Instance schema line. Default: v0.
+  --plugin-signing-key FILE   PEM private key used to sign bundled official plugins.
+  --plugin-signing-key-id ID  Plugin signing key id. Default: comcross-plugin-official-2026.
+  --require-plugin-signing    Fail if plugin signing key is missing.
   -h, --help                  Show help.
 EOF
 }
@@ -89,6 +103,34 @@ while [[ $# -gt 0 ]]; do
       require_signing=true
       shift
       ;;
+    --channel)
+      channel="${2:-}"
+      shift 2
+      ;;
+    --directory-name)
+      directory_name="${2:-}"
+      shift 2
+      ;;
+    --instance-id)
+      instance_id="${2:-}"
+      shift 2
+      ;;
+    --schema-line)
+      schema_line="${2:-}"
+      shift 2
+      ;;
+    --plugin-signing-key)
+      plugin_signing_key="${2:-}"
+      shift 2
+      ;;
+    --plugin-signing-key-id)
+      plugin_signing_key_id="${2:-}"
+      shift 2
+      ;;
+    --require-plugin-signing)
+      require_plugin_signing=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -110,12 +152,30 @@ fi
 version="$(release_normalize_version "${version}")"
 rid_csv="$(printf '%s' "${rids}" | tr ' ' ',')"
 
+publish_args=(
+  --version "${version}"
+  --config "${config}"
+  --output "${output_dir}"
+  --rids "${rid_csv}"
+  --channel "${channel}"
+  --schema-line "${schema_line}"
+  --plugin-signing-key-id "${plugin_signing_key_id}"
+)
+if [[ -n "${directory_name}" ]]; then
+  publish_args+=(--directory-name "${directory_name}")
+fi
+if [[ -n "${instance_id}" ]]; then
+  publish_args+=(--instance-id "${instance_id}")
+fi
+if [[ -n "${plugin_signing_key}" ]]; then
+  publish_args+=(--plugin-signing-key "${plugin_signing_key}")
+fi
+if [[ "${require_plugin_signing}" == "true" ]]; then
+  publish_args+=(--require-plugin-signing)
+fi
+
 if [[ "${skip_publish}" != "true" ]]; then
-  scripts/release/build-publish-output.sh \
-    --version "${version}" \
-    --config "${config}" \
-    --output "${output_dir}" \
-    --rids "${rid_csv}"
+  scripts/release/build-publish-output.sh "${publish_args[@]}"
 fi
 
 if [[ "${skip_linux_packages}" != "true" ]]; then
@@ -152,5 +212,23 @@ if [[ "${require_signing}" == "true" ]]; then
 fi
 
 scripts/release/sign-artifacts.sh "${sign_args[@]}"
+
+for rid in ${rids}; do
+  for mode in framework-dependent self-contained; do
+    publish_dir="${output_dir}/${mode}/ComCross-${rid}-${config}"
+    [[ -d "${publish_dir}" ]] || continue
+    for required in ComCross.Startup ComCross.Shell ComCross.Instance.json bundled-plugins; do
+      if [[ ! -e "${publish_dir}/${required}" ]]; then
+        echo "Release verification failed: missing ${required} in ${publish_dir}" >&2
+        exit 1
+      fi
+    done
+  done
+done
+
+if [[ ! -f "${output_dir}/packages/SHA256SUMS" ]]; then
+  echo "Release verification failed: missing ${output_dir}/packages/SHA256SUMS" >&2
+  exit 1
+fi
 
 printf 'Local release verification complete for %s.\n' "${version}"

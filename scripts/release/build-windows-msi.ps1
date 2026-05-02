@@ -2,9 +2,16 @@ param(
     [Parameter(Mandatory=$true)][string]$Version,
     [string]$Configuration = "Release",
     [ValidateSet("win-x64", "win-arm64")][string[]]$Rids = @("win-x64", "win-arm64"),
+    [ValidateSet("Stable", "Dev", "EAP")][string]$Channel = "Stable",
+    [string]$DirectoryName = "",
+    [string]$InstanceId = "",
+    [string]$SchemaLine = "v0",
     [string]$OutputDir = "artifacts/release",
+    [string]$PluginSigningKeyPath = "",
+    [string]$PluginSigningKeyId = "comcross-plugin-official-2026",
     [string]$CertificatePfxPath = "",
     [string]$CertificatePassword = $env:COMCROSS_WINDOWS_CERT_PASSWORD,
+    [switch]$RequirePluginSigning,
     [switch]$RequireSigning
 )
 
@@ -19,6 +26,23 @@ function Normalize-Version {
     return $normalized
 }
 
+function Get-MsiProductVersion {
+    param([Parameter(Mandatory=$true)][string]$InputVersion)
+
+    if ($InputVersion -notmatch '^([0-9]+)(?:\.([0-9]+))?(?:\.([0-9]+))?') {
+        throw "MSI product version requires numeric major/minor/patch components: $InputVersion"
+    }
+
+    $major = [int]$Matches[1]
+    $minor = if ($Matches[2]) { [int]$Matches[2] } else { 0 }
+    $patch = if ($Matches[3]) { [int]$Matches[3] } else { 0 }
+    if ($major -ge 256 -or $minor -ge 256 -or $patch -ge 65536) {
+        throw "MSI product version is out of range: $major.$minor.$patch"
+    }
+
+    return "$major.$minor.$patch"
+}
+
 function Assert-Command {
     param([Parameter(Mandatory=$true)][string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -26,9 +50,92 @@ function Assert-Command {
     }
 }
 
+function Invoke-Native {
+    if ($args.Count -lt 1) {
+        throw "Invoke-Native requires a command."
+    }
+
+    $Command = [string]$args[0]
+    $Arguments = @($args | Select-Object -Skip 1)
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
+    }
+}
+
+function Get-DefaultDirectoryName {
+    param([Parameter(Mandatory=$true)][string]$InputChannel)
+    switch ($InputChannel) {
+        "Stable" { return "ComCross" }
+        "Dev" { return "ComCrossDev" }
+        "EAP" { return "ComCrossEAP" }
+        default { throw "Unsupported channel: $InputChannel" }
+    }
+}
+
+function Get-DefaultInstanceId {
+    param([Parameter(Mandatory=$true)][string]$InputChannel)
+    switch ($InputChannel) {
+        "Stable" { return "comcross-stable" }
+        "Dev" { return "comcross-dev" }
+        "EAP" { return "comcross-eap" }
+        default { throw "Unsupported channel: $InputChannel" }
+    }
+}
+
+function Get-DefaultProductName {
+    param([Parameter(Mandatory=$true)][string]$InputChannel)
+    switch ($InputChannel) {
+        "Stable" { return "ComCross" }
+        "Dev" { return "ComCross Dev" }
+        "EAP" { return "ComCross EAP" }
+        default { throw "Unsupported channel: $InputChannel" }
+    }
+}
+
+function Get-UpgradeCode {
+    param([Parameter(Mandatory=$true)][string]$InputChannel)
+    switch ($InputChannel) {
+        "Stable" { return "2D0F7581-E54A-4E77-8F17-0DD6E82290E1" }
+        "Dev" { return "DEA4F4F0-42B8-45A9-8307-E887D5FEECCB" }
+        "EAP" { return "817B2890-6522-4871-9F63-18BA70B07422" }
+        default { throw "Unsupported channel: $InputChannel" }
+    }
+}
+
+function Write-InstanceManifest {
+    param([Parameter(Mandatory=$true)][string]$PublishDir)
+
+    $manifest = [ordered]@{
+        schemaVersion = 1
+        product = "ComCross"
+        instanceId = $InstanceId
+        channel = $Channel.ToLowerInvariant()
+        schemaLine = $SchemaLine
+        directoryName = $DirectoryName
+    }
+
+    $manifestPath = Join-Path $PublishDir "ComCross.Instance.json"
+    $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding UTF8
+}
+
+function Sign-PluginPackage {
+    param([Parameter(Mandatory=$true)][string]$PluginDir)
+
+    if ([string]::IsNullOrWhiteSpace($PluginSigningKeyPath)) {
+        return
+    }
+
+    Invoke-Native dotnet run --project src/Tools/ComCross.Tools.csproj -- `
+        sign-plugin `
+        --plugin-dir $PluginDir `
+        --private-key $PluginSigningKeyPath `
+        --key-id $PluginSigningKeyId
+}
+
 function Get-PluginIdFromManifest {
     param([Parameter(Mandatory=$true)][string]$ManifestPath)
-    $json = Get-Content -Raw -Path $ManifestPath | ConvertFrom-Json
+    $json = Get-Content -Raw -Encoding UTF8 -Path $ManifestPath | ConvertFrom-Json
     $pluginId = [string]$json.id
     if ([string]::IsNullOrWhiteSpace($pluginId)) {
         throw "Manifest missing id: $ManifestPath"
@@ -70,6 +177,21 @@ function Get-StableHash {
     return (Get-Base32 -Bytes $hash).Substring(0, 8).ToLowerInvariant()
 }
 
+function Get-RelativePath {
+    param(
+        [Parameter(Mandatory=$true)][string]$BasePath,
+        [Parameter(Mandatory=$true)][string]$TargetPath
+    )
+
+    $baseFullPath = (Resolve-Path -LiteralPath $BasePath).ProviderPath.TrimEnd('\', '/')
+    $targetFullPath = (Resolve-Path -LiteralPath $TargetPath).ProviderPath
+    $prefix = $baseFullPath + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $targetFullPath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Target path is not under base path. Base: $baseFullPath Target: $targetFullPath"
+    }
+    return $targetFullPath.Substring($prefix.Length)
+}
+
 function Publish-ComCrossWindows {
     param(
         [Parameter(Mandatory=$true)][string]$Rid,
@@ -81,12 +203,20 @@ function Publish-ComCrossWindows {
     }
     New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
 
-    dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
-    dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/Shell/ComCross.Shell.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/Startup/ComCross.Startup.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/PluginHost/ComCross.PluginHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/ExtensionHost/ComCross.ExtensionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
+    Invoke-Native dotnet publish src/SessionHost/ComCross.SessionHost.csproj -c $Configuration -r $Rid --self-contained true -o $PublishDir -p:DebugType=none -p:DebugSymbols=false
 
-    $pluginsDir = Join-Path $PublishDir "plugins"
+    Write-InstanceManifest -PublishDir $PublishDir
+
+    $legacyPluginsDir = Join-Path $PublishDir "plugins"
+    if (Test-Path $legacyPluginsDir) {
+        Remove-Item -Recurse -Force $legacyPluginsDir
+    }
+
+    $pluginsDir = Join-Path $PublishDir "bundled-plugins"
     New-Item -ItemType Directory -Force -Path $pluginsDir | Out-Null
 
     Get-ChildItem -Path "src/Plugins" -Filter "*.csproj" -Recurse | ForEach-Object {
@@ -97,7 +227,8 @@ function Publish-ComCrossWindows {
         $stableHash = Get-StableHash -PluginId $pluginId
         $pluginOut = Join-Path $pluginsDir "$pluginId-$stableHash"
 
-        dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut -p:DebugType=none -p:DebugSymbols=false
+        Invoke-Native dotnet publish $pluginProj -c $Configuration -r $Rid --self-contained false -o $pluginOut -p:DebugType=none -p:DebugSymbols=false
+        Sign-PluginPackage -PluginDir $pluginOut
     }
 }
 
@@ -108,8 +239,13 @@ function New-WixId {
         $clean = "I_$clean"
     }
     if ($clean.Length -gt 60) {
-        $hashBytes = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Value))
-        $hash = [Convert]::ToHexString($hashBytes).Substring(0, 12).ToLowerInvariant()
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
+        } finally {
+            $sha.Dispose()
+        }
+        $hash = [BitConverter]::ToString($hashBytes).Replace("-", "").Substring(0, 12).ToLowerInvariant()
         $clean = $clean.Substring(0, 47) + "_" + $hash
     }
     return $clean
@@ -130,7 +266,7 @@ function New-HarvestedWxs {
     }
 
     foreach ($file in $files) {
-        $relative = [System.IO.Path]::GetRelativePath($PublishDir, $file.FullName).Replace('\', '/')
+        $relative = (Get-RelativePath -BasePath $PublishDir -TargetPath $file.FullName).Replace('\', '/')
         $parts = $relative.Split('/')
         $node = $root
         if ($parts.Count -gt 1) {
@@ -212,8 +348,25 @@ $componentRefs
 }
 
 $Version = Normalize-Version -InputVersion $Version
+$MsiProductVersion = Get-MsiProductVersion -InputVersion $Version
 Assert-Command dotnet
-Assert-Command wix
+
+if ([string]::IsNullOrWhiteSpace($DirectoryName)) {
+    $DirectoryName = Get-DefaultDirectoryName -InputChannel $Channel
+}
+if ([string]::IsNullOrWhiteSpace($InstanceId)) {
+    $InstanceId = Get-DefaultInstanceId -InputChannel $Channel
+}
+$ProductName = Get-DefaultProductName -InputChannel $Channel
+$UpgradeCode = Get-UpgradeCode -InputChannel $Channel
+if ($RequirePluginSigning -and [string]::IsNullOrWhiteSpace($PluginSigningKeyPath)) {
+    throw "Plugin signing is required but PluginSigningKeyPath was not provided."
+}
+if (-not [string]::IsNullOrWhiteSpace($PluginSigningKeyPath) -and -not (Test-Path $PluginSigningKeyPath)) {
+    throw "Plugin signing key was not found: $PluginSigningKeyPath"
+}
+
+Invoke-Native dotnet tool restore
 
 $packageDir = Join-Path $OutputDir "packages/windows"
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
@@ -232,14 +385,22 @@ foreach ($rid in $Rids) {
     New-HarvestedWxs -PublishDir $publishDir -OutputPath $harvested
 
     $msiPath = Join-Path $packageDir "ComCross-$Version-$rid.msi"
-    wix build packaging/windows/ComCross.Product.wxs $harvested `
+    Invoke-Native dotnet tool run wix -- build -acceptEula wix7 packaging/windows/ComCross.Product.wxs $harvested `
         -d "ProductVersion=$Version" `
+        -d "PackageVersion=$MsiProductVersion" `
         -d "PlatformRid=$rid" `
+        -d "ProductName=$ProductName" `
+        -d "UpgradeCode=$UpgradeCode" `
+        -d "InstallFolderName=$DirectoryName" `
+        -d "ShortcutName=$ProductName" `
         -o $msiPath
+    if (-not (Test-Path $msiPath)) {
+        throw "WiX completed without producing expected MSI: $msiPath"
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($CertificatePfxPath)) {
         Assert-Command signtool
-        signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
+        Invoke-Native signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
     } elseif ($RequireSigning) {
         throw "MSI signing is required but CertificatePfxPath was not provided."
     }
