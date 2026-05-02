@@ -22,7 +22,7 @@ $DotNetPublishBuildArgs = @("-maxcpucount:1", "-nodeReuse:false")
 function Normalize-Version {
     param([Parameter(Mandatory=$true)][string]$InputVersion)
     $normalized = $InputVersion.TrimStart("v")
-    if ($normalized -notmatch '^[0-9]+(\.[0-9]+){1,3}([._+-][A-Za-z0-9]+)?$') {
+    if ($normalized -notmatch '^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$') {
         throw "Invalid release version: $InputVersion"
     }
     return $normalized
