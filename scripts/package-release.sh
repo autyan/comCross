@@ -91,8 +91,11 @@ build_plugins() {
 copy_plugins() {
   local out_path="$1"
   local rid="$2"
-  local plugins_dir="${out_path}/plugins"
+  local plugins_dir="${out_path}/bundled-plugins"
+  local legacy_plugins_dir="${out_path}/plugins"
   
+  rm -rf "${legacy_plugins_dir}"
+  rm -rf "${plugins_dir}"
   mkdir -p "${plugins_dir}"
 
   # Track folder-name collisions within one packaging run.

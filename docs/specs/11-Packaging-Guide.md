@@ -71,13 +71,29 @@ fpm -s dir -t rpm -n comcross -v <version> \
 
 ## 5) Plugin Layout
 
-Release packages place built-in plugins under:
+Official plugins are normal plugin packages. Build and release outputs carry
+them as bundled seed content under:
 
 ```
-plugins/<plugin-id>-<stable-hash>/
+bundled-plugins/<plugin-id>-<stable-hash>/
 ```
 
 The package script computes the folder from the manifest plugin id and publishes each plugin with its dependencies into that folder.
+
+At runtime, Core synchronizes bundled official plugin packages into the
+user-local runtime plugin root and discovers plugins from there:
+
+```
+Windows:
+%LocalAppData%\ComCross\plugins\
+
+Linux:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+This is a pre-stable breaking directory relocation. The old
+`AppContext.BaseDirectory/plugins` runtime layout is not kept as a compatibility
+read path.
 
 ## 6) Release Artifacts
 

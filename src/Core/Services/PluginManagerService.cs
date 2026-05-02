@@ -16,6 +16,8 @@ public sealed class PluginManagerService
     private readonly ExtensionRuntimeService _extensionRuntimeService;
     private readonly SessionHostRuntimeService _sessionHostRuntimeService;
     private readonly PluginDiscoveryService _discoveryService;
+    private readonly BundledPluginSynchronizationService _pluginSynchronizationService;
+    private readonly ComCrossPathService _paths;
     private readonly PluginUiStateManager _uiStateManager;
     private readonly SettingsService _settingsService;
     private readonly PluginHostEventRouterService _eventRouter;
@@ -31,6 +33,8 @@ public sealed class PluginManagerService
         ExtensionRuntimeService extensionRuntimeService,
         SessionHostRuntimeService sessionHostRuntimeService,
         PluginDiscoveryService discoveryService,
+        BundledPluginSynchronizationService pluginSynchronizationService,
+        ComCrossPathService paths,
         PluginUiStateManager uiStateManager,
         SettingsService settingsService,
         PluginHostEventRouterService eventRouter,
@@ -41,6 +45,8 @@ public sealed class PluginManagerService
         _extensionRuntimeService = extensionRuntimeService;
         _sessionHostRuntimeService = sessionHostRuntimeService;
         _discoveryService = discoveryService;
+        _pluginSynchronizationService = pluginSynchronizationService;
+        _paths = paths;
         _uiStateManager = uiStateManager;
         _settingsService = settingsService;
         _eventRouter = eventRouter;
@@ -152,6 +158,8 @@ public sealed class PluginManagerService
             .ToList();
     }
 
+    public string RuntimePluginsDirectory => _paths.RuntimePluginsDirectory;
+
     public async Task<PluginToggleResult> SetPluginEnabledAsync(string pluginId, bool enabled, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pluginId))
@@ -253,7 +261,9 @@ public sealed class PluginManagerService
 
     private PluginDiscoverySnapshot DiscoverPlugins()
     {
-        var pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
+        _pluginSynchronizationService.Synchronize();
+
+        var pluginsDir = _paths.RuntimePluginsDirectory;
         var plugins = _discoveryService.Discover(pluginsDir);
         var busPlugins = new List<PluginInfo>();
         var extensionPlugins = new List<PluginInfo>();

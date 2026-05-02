@@ -9,13 +9,39 @@
 
 ## Plugin Layout
 
-Release packages place plugins under:
+Runtime plugin packages live under the user-local plugin root:
 
 ```text
-plugins/
+<runtime-plugin-root>/
   <plugin-id>-<stable-hash>/
     <plugin assembly and dependencies>
 ```
+
+Runtime plugin roots:
+
+```text
+Windows:
+%LocalAppData%\ComCross\plugins\
+
+Linux:
+${XDG_DATA_HOME:-$HOME/.local/share}/ComCross/plugins/
+```
+
+Official plugins are normal plugin packages. Build and release outputs carry
+official plugins as bundled seed content under the application install
+directory:
+
+```text
+bundled-plugins/
+```
+
+On startup, Core synchronizes bundled official plugin packages into the runtime
+plugin root. Runtime discovery scans the runtime plugin root, not the
+application install directory.
+
+This is a pre-stable breaking directory relocation. The old
+`AppContext.BaseDirectory/plugins` runtime layout is not kept as a compatibility
+read path.
 
 Each plugin embeds:
 

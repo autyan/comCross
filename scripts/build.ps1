@@ -77,7 +77,12 @@ function Publish-Plugins {
         [Parameter(Mandatory=$true)][string]$Configuration
     )
 
-    $pluginsDir = Join-Path $OutPath 'plugins'
+    $pluginsDir = Join-Path $OutPath 'bundled-plugins'
+    $legacyPluginsDir = Join-Path $OutPath 'plugins'
+    if (Test-Path $legacyPluginsDir) {
+        Remove-Item -Recurse -Force $legacyPluginsDir
+    }
+
     if (Test-Path $pluginsDir) {
         Remove-Item -Recurse -Force $pluginsDir
     }
