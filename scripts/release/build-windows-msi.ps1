@@ -53,6 +53,27 @@ function Assert-Command {
     }
 }
 
+function Get-SigntoolPath {
+    $command = Get-Command signtool -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $kitsBin = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+    if (Test-Path $kitsBin) {
+        $candidate = Get-ChildItem -Path $kitsBin -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+        if ($candidate) {
+            return $candidate.FullName
+        }
+    }
+
+    throw "Required command not found: signtool"
+}
+
 function Invoke-Native {
     if ($args.Count -lt 1) {
         throw "Invoke-Native requires a command."
@@ -403,8 +424,8 @@ foreach ($rid in $Rids) {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($CertificatePfxPath)) {
-        Assert-Command signtool
-        Invoke-Native signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
+        $signtool = Get-SigntoolPath
+        Invoke-Native $signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $CertificatePfxPath /p $CertificatePassword $msiPath
     } elseif ($RequireSigning) {
         throw "MSI signing is required but CertificatePfxPath was not provided."
     }
