@@ -36,6 +36,7 @@ This is the repository-level entry point for AI coding agents. Read this file be
 - Shell composite input controls must use one visual frame; when an outer control owns the frame, keep inner inputs visually transparent and borderless.
 - Do not use Service Locator outside the composition root unless the reason and boundary are explicit.
 - Do not declare `async` only to satisfy naming style. Use `async/await` only when the method has a real asynchronous boundary such as file/database/network/IPC/process/stream I/O, cancellable waits, timers, or UI dispatcher work. Interface-compatible synchronous implementations should return `Task.CompletedTask` or `Task.FromResult(...)` without `async`.
+- Before creating a release branch, confirm all code intended for that release has already entered both `main` and `develop`, then create a prerelease review branch from `develop` and complete the release-readiness review documented in `docs/release/prerelease-review.md`.
 - Do not change runtime entry points, publish layout, plugin directory layout, or data directory rules unless the task explicitly targets those contracts.
 - Do not put new responsibilities into `Shared`, `Core`, or `Shell` when the responsibility clearly needs a narrower project or domain.
 
