@@ -23,6 +23,14 @@
 
 - Do not push, tag, publish, package, or alter release branches unless explicitly requested.
 - Do not change runtime or publish layout as part of unrelated refactors.
+- Before creating a release branch, ensure the release code has already been
+  merged into both `main` and `develop`.
+- After `main` and `develop` contain the release code, create a prerelease
+  review branch from `develop` using the pattern
+  `feature/v<version>_prerelease`.
+- Complete and document the prerelease review before opening the release
+  branch. The required checklist lives in
+  `docs/release/prerelease-review.md`.
 - Final release branches must carry both concise GitHub Release notes under
   `docs/release/notes/v<version>.md` and complete version changelogs under
   `docs/release/changelog/v<version>.md`.
