@@ -413,6 +413,9 @@ Recommended first implementation:
   Ed25519 and accepts the dependency/tooling cost;
 - public keys stored in a trusted plugin key registry in the repository;
 - signatures stored per plugin package.
+- runtime enforcement is controlled by plugin trust policy. Development may
+  leave enforcement disabled or explicitly allow unsigned plugin ids, but
+  Stable/EAP enforcement must not rely on an unsigned allow-list.
 
 Signature file:
 
@@ -443,6 +446,16 @@ Example:
 Signature payload should be deterministic canonical JSON without the
 `signature` field.
 
+The first verifier canonicalizes the payload by writing the fields in this
+order:
+
+```text
+schemaVersion, keyId, pluginId, version, algorithm, signedAt, files
+```
+
+File entries are normalized to slash-separated relative paths and sorted by
+path before verification.
+
 Verification must check:
 
 - signature schema version;
@@ -450,6 +463,8 @@ Verification must check:
 - algorithm is supported;
 - plugin id matches the embedded plugin manifest;
 - package file hashes match the signature file;
+- every package file except `ComCross.Plugin.Signature.json` is listed in the
+  signature payload;
 - signature validates with the trusted official plugin public key.
 
 Stable/EAP failure behavior:
