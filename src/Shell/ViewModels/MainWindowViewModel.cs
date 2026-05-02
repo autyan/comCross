@@ -347,11 +347,11 @@ public class MainWindowViewModel : BaseViewModel
             () => IsSessionReconnectEditorOpen = !IsSessionReconnectEditorOpen,
             () => SessionDetailSession is not null && LeftSidebar.CanOpenConnectionParameters);
         DirectReconnectCommand = new AsyncRelayCommand(
-            async () =>
+            () =>
             {
                 LeftSidebar.DirectReconnectCommand.Execute(null);
-                await Task.CompletedTask;
                 OnPropertyChanged(nameof(SessionDetailStatusLabel));
+                return Task.CompletedTask;
             },
             () => LeftSidebar.CanReconnectActiveSession);
         

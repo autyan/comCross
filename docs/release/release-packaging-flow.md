@@ -91,6 +91,22 @@ committed to the repository.
 
 ## GitHub Actions Release Flow
 
+Before a release branch is opened, the project must pass a prerelease review.
+The release code must already be merged into both `main` and `develop`, and the
+review must run on a branch created from `develop`:
+
+```text
+feature/v<version>_prerelease
+```
+
+This keeps final release branches limited to already-reviewed release state and
+prevents release publication before the next development stage is documented.
+The required review checklist is maintained in:
+
+```text
+docs/release/prerelease-review.md
+```
+
 The release workflow is:
 
 ```text

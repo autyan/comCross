@@ -406,7 +406,7 @@ public sealed class NetworkBusAdapterPlugin :
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
         if (string.Equals(mode, "bind", StringComparison.Ordinal))
         {
-            return await Task.FromResult(BindTcpAcceptedConnection(command));
+            return BindTcpAcceptedConnection(command);
         }
 
         var host = TryReadString(command.Parameters, "remoteHost");
@@ -510,28 +510,28 @@ public sealed class NetworkBusAdapterPlugin :
         }
     }
 
-    private async Task<PluginConnectResult> ConnectUdpAsync(PluginConnectCommand command, CancellationToken cancellationToken)
+    private Task<PluginConnectResult> ConnectUdpAsync(PluginConnectCommand command, CancellationToken cancellationToken)
     {
         var mode = TryReadString(command.Parameters, "mode")?.Trim().ToLowerInvariant();
         if (string.Equals(mode, "bind", StringComparison.Ordinal))
         {
-            return await Task.FromResult(new PluginConnectResult(false, "UDP bind mode is not supported."));
+            return Task.FromResult(new PluginConnectResult(false, "UDP bind mode is not supported."));
         }
 
         var remoteHost = TryReadString(command.Parameters, "remoteHost");
         if (string.IsNullOrWhiteSpace(remoteHost))
         {
-            return new PluginConnectResult(false, "Missing required parameter: remoteHost");
+            return Task.FromResult(new PluginConnectResult(false, "Missing required parameter: remoteHost"));
         }
 
         if (!TryReadInt(command.Parameters, "remotePort", out var remotePort))
         {
-            return new PluginConnectResult(false, "Missing required parameter: remotePort");
+            return Task.FromResult(new PluginConnectResult(false, "Missing required parameter: remotePort"));
         }
 
         if (remotePort is < 1 or > 65535)
         {
-            return new PluginConnectResult(false, "Invalid remotePort (expected 1..65535)." );
+            return Task.FromResult(new PluginConnectResult(false, "Invalid remotePort (expected 1..65535)." ));
         }
 
         var localHost = TryReadString(command.Parameters, "localHost");
@@ -583,19 +583,18 @@ public sealed class NetworkBusAdapterPlugin :
             }
 
             UiStateInvalidated?.Invoke(this, new PluginUiStateInvalidatedEvent("udp", SessionId: null, ViewKind: "connect-dialog", Reason: "connected"));
-            await Task.CompletedTask;
-            return new PluginConnectResult(
+            return Task.FromResult(new PluginConnectResult(
                 true,
                 SessionId: command.SessionId,
                 CommittedParameters: committed,
                 DisplayTitle: "UDP Socket",
                 DisplaySubtitle: subtitle,
-                SessionIcon: "NetworkIcon");
+                SessionIcon: "NetworkIcon"));
         }
         catch (Exception ex)
         {
             CleanupSession(command.SessionId, "connect-failed", remoteInitiated: false, error: ex.Message);
-            return new PluginConnectResult(false, ex.Message);
+            return Task.FromResult(new PluginConnectResult(false, ex.Message));
         }
     }
 

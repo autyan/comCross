@@ -52,7 +52,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
         }
     }
 
-    public async Task LoadAsync()
+    public Task LoadAsync()
     {
         Plugins.Clear();
         
@@ -67,7 +67,7 @@ public sealed class PluginManagerViewModel : BaseViewModel
 
         PluginsReloaded?.Invoke(this, EventArgs.Empty);
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     protected override void Dispose(bool disposing)
