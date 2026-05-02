@@ -2,10 +2,28 @@
 
 A cross-platform embedded communication toolbox for serial, TCP, and UDP workflows.
 
+> Documentation notice: repository documentation may be drafted or translated
+> with AI assistance. Treat translated documents as convenience references.
+> For security, release verification, and implementation decisions, verify
+> against the English source documents and project history.
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)
 ![Version](https://img.shields.io/badge/version-v0.4.0-blue.svg)
+
+## Languages
+
+- English: [README.md](README.md)
+- Simplified Chinese: [docs/i18n/README.zh-CN.md](docs/i18n/README.zh-CN.md)
+- Traditional Chinese: [docs/i18n/README.zh-TW.md](docs/i18n/README.zh-TW.md)
+- Japanese: [docs/i18n/README.ja.md](docs/i18n/README.ja.md)
+- Korean: [docs/i18n/README.ko.md](docs/i18n/README.ko.md)
+- Spanish: [docs/i18n/README.es.md](docs/i18n/README.es.md)
+- French: [docs/i18n/README.fr.md](docs/i18n/README.fr.md)
+- German: [docs/i18n/README.de.md](docs/i18n/README.de.md)
+- Portuguese (Brazil): [docs/i18n/README.pt-BR.md](docs/i18n/README.pt-BR.md)
+- Russian: [docs/i18n/README.ru.md](docs/i18n/README.ru.md)
 
 ## Status
 

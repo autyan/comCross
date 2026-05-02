@@ -13,3 +13,4 @@ Read only the files relevant to the current task, but always keep the root workf
 - `04-plugins-hosts-ipc.md`: plugin/host/capability boundaries, IPC, shared memory, and publish layout.
 - `05-guardrails-verification.md`: repository guardrail scripts and verification expectations.
 - `06-git-collaboration.md`: commits, dirty worktrees, user acceptance, and release-sensitive operations.
+- `07-documentation-localization.md`: localized documentation, AI-assisted documentation notices, and translation discipline.
