@@ -183,11 +183,11 @@ if target.endswith(".zip"):
 else:
     with tarfile.open(target, "w:gz") as tf:
         tf.add(source, arcname=".")
-  # Portable release marker (empty file). This is intentionally added only to tar.*
-  # archives so it won't leak into DEB/RPM packaging that reuses publish outputs.
-  info = tarfile.TarInfo(name="comcross.portable")
-  info.size = 0
-  tf.addfile(info, fileobj=io.BytesIO(b""))
+        # Portable release marker (empty file). This is intentionally added only to tar.*
+        # archives so it won't leak into DEB/RPM packaging that reuses publish outputs.
+        info = tarfile.TarInfo(name="comcross.portable")
+        info.size = 0
+        tf.addfile(info, fileobj=io.BytesIO(b""))
 PY
 }
 
