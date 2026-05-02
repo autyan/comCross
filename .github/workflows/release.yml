@@ -1,0 +1,270 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without leading v, for example 0.5.0 or 0.5.0-rc.1"
+        required: true
+        type: string
+      prerelease:
+        description: "Create a GitHub pre-release"
+        required: true
+        default: true
+        type: boolean
+      draft:
+        description: "Create the GitHub release as a draft"
+        required: true
+        default: true
+        type: boolean
+      require_signing:
+        description: "Require all configured release signing material"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  RELEASE_OUTPUT: artifacts/release
+
+jobs:
+  validate:
+    name: Validate repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ComCross.sln
+
+      - name: Build
+        run: dotnet build ComCross.sln --no-restore
+
+      - name: Project boundary guardrail
+        run: bash repo-tools/check-project-boundaries.sh
+
+  linux-packages:
+    name: Build Linux packages
+    runs-on: ubuntu-latest
+    needs: validate
+    env:
+      COMCROSS_GPG_PRIVATE_KEY: ${{ secrets.COMCROSS_GPG_PRIVATE_KEY }}
+      COMCROSS_GPG_PASSPHRASE: ${{ secrets.COMCROSS_GPG_PASSPHRASE }}
+      COMCROSS_GPG_KEY_ID: ${{ secrets.COMCROSS_GPG_KEY_ID }}
+      COMCROSS_PLUGIN_SIGNING_KEY_PEM: ${{ secrets.COMCROSS_PLUGIN_SIGNING_KEY_PEM }}
+      COMCROSS_PLUGIN_SIGNING_KEY_ID: ${{ secrets.COMCROSS_PLUGIN_SIGNING_KEY_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build Linux release packages
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          REQUIRE_SIGNING: ${{ inputs.require_signing }}
+        run: |
+          set -euo pipefail
+
+          signing_args=()
+          if [[ -n "${COMCROSS_GPG_PRIVATE_KEY}" ]]; then
+            gpg_key_file="$(mktemp)"
+            chmod 600 "${gpg_key_file}"
+            printf '%s' "${COMCROSS_GPG_PRIVATE_KEY}" > "${gpg_key_file}"
+            signing_args+=(--gpg-private-key "${gpg_key_file}")
+          fi
+          if [[ -n "${COMCROSS_GPG_KEY_ID}" ]]; then
+            signing_args+=(--gpg-key-id "${COMCROSS_GPG_KEY_ID}")
+          fi
+          if [[ -n "${COMCROSS_GPG_PASSPHRASE}" ]]; then
+            signing_args+=(--gpg-passphrase "${COMCROSS_GPG_PASSPHRASE}")
+          fi
+
+          plugin_args=()
+          if [[ -n "${COMCROSS_PLUGIN_SIGNING_KEY_PEM}" ]]; then
+            plugin_key_file="$(mktemp)"
+            chmod 600 "${plugin_key_file}"
+            printf '%s' "${COMCROSS_PLUGIN_SIGNING_KEY_PEM}" > "${plugin_key_file}"
+            plugin_args+=(--plugin-signing-key "${plugin_key_file}")
+          fi
+          if [[ -n "${COMCROSS_PLUGIN_SIGNING_KEY_ID}" ]]; then
+            plugin_args+=(--plugin-signing-key-id "${COMCROSS_PLUGIN_SIGNING_KEY_ID}")
+          fi
+
+          if [[ "${REQUIRE_SIGNING}" == "true" ]]; then
+            signing_args+=(--require-signing)
+            plugin_args+=(--require-plugin-signing)
+          fi
+
+          scripts/release/local-verify.sh \
+            --version "${RELEASE_VERSION}" \
+            "${signing_args[@]}" \
+            "${plugin_args[@]}"
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          if-no-files-found: error
+          path: |
+            artifacts/release/packages/linux/*.deb
+            artifacts/release/packages/linux/*.rpm
+            artifacts/release/packages/linux/*.AppImage
+
+  windows-msi:
+    name: Build Windows MSI
+    runs-on: windows-latest
+    needs: validate
+    env:
+      COMCROSS_PLUGIN_SIGNING_KEY_PEM: ${{ secrets.COMCROSS_PLUGIN_SIGNING_KEY_PEM }}
+      COMCROSS_PLUGIN_SIGNING_KEY_ID: ${{ secrets.COMCROSS_PLUGIN_SIGNING_KEY_ID }}
+      COMCROSS_WINDOWS_CERT_PFX_BASE64: ${{ secrets.COMCROSS_WINDOWS_CERT_PFX_BASE64 }}
+      COMCROSS_WINDOWS_CERT_PASSWORD: ${{ secrets.COMCROSS_WINDOWS_CERT_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build Windows MSI packages
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          REQUIRE_SIGNING: ${{ inputs.require_signing }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $params = @{
+            Version = $env:RELEASE_VERSION
+            Configuration = "Release"
+            OutputDir = $env:RELEASE_OUTPUT
+            Rids = @("win-x64", "win-arm64")
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:COMCROSS_PLUGIN_SIGNING_KEY_PEM)) {
+            $pluginKeyPath = Join-Path $env:RUNNER_TEMP "comcross-plugin-signing-key.pem"
+            Set-Content -Path $pluginKeyPath -Value $env:COMCROSS_PLUGIN_SIGNING_KEY_PEM -Encoding UTF8 -NoNewline
+            $params.PluginSigningKeyPath = $pluginKeyPath
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:COMCROSS_PLUGIN_SIGNING_KEY_ID)) {
+            $params.PluginSigningKeyId = $env:COMCROSS_PLUGIN_SIGNING_KEY_ID
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:COMCROSS_WINDOWS_CERT_PFX_BASE64)) {
+            $pfxPath = Join-Path $env:RUNNER_TEMP "comcross-windows-code-signing.pfx"
+            [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:COMCROSS_WINDOWS_CERT_PFX_BASE64))
+            $params.CertificatePfxPath = $pfxPath
+          }
+
+          if ($env:REQUIRE_SIGNING -eq "true") {
+            $params.RequireSigning = $true
+            $params.RequirePluginSigning = $true
+          }
+
+          ./scripts/release/build-windows-msi.ps1 @params
+
+      - name: Upload Windows MSI packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          if-no-files-found: error
+          path: artifacts/release/packages/windows/*.msi
+
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs:
+      - linux-packages
+      - windows-msi
+    env:
+      COMCROSS_GPG_PRIVATE_KEY: ${{ secrets.COMCROSS_GPG_PRIVATE_KEY }}
+      COMCROSS_GPG_PASSPHRASE: ${{ secrets.COMCROSS_GPG_PASSPHRASE }}
+      COMCROSS_GPG_KEY_ID: ${{ secrets.COMCROSS_GPG_KEY_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/release/packages
+          merge-multiple: true
+
+      - name: Generate checksums and optional signature
+        env:
+          REQUIRE_SIGNING: ${{ inputs.require_signing }}
+        run: |
+          set -euo pipefail
+
+          scripts/release/generate-checksums.sh \
+            --package-dir artifacts/release/packages
+
+          signing_args=()
+          if [[ -n "${COMCROSS_GPG_PRIVATE_KEY}" ]]; then
+            gpg_key_file="$(mktemp)"
+            chmod 600 "${gpg_key_file}"
+            printf '%s' "${COMCROSS_GPG_PRIVATE_KEY}" > "${gpg_key_file}"
+            signing_args+=(--gpg-private-key "${gpg_key_file}")
+          fi
+          if [[ -n "${COMCROSS_GPG_KEY_ID}" ]]; then
+            signing_args+=(--gpg-key-id "${COMCROSS_GPG_KEY_ID}")
+          fi
+          if [[ -n "${COMCROSS_GPG_PASSPHRASE}" ]]; then
+            signing_args+=(--gpg-passphrase "${COMCROSS_GPG_PASSPHRASE}")
+          fi
+          if [[ "${REQUIRE_SIGNING}" == "true" ]]; then
+            signing_args+=(--require-signing)
+          fi
+
+          scripts/release/sign-artifacts.sh \
+            --package-dir artifacts/release/packages \
+            "${signing_args[@]}"
+
+      - name: Upload combined release packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          if-no-files-found: error
+          path: artifacts/release/packages/**
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+          RELEASE_DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+
+          tag="v${RELEASE_VERSION}"
+          release_args=(
+            "${tag}"
+            artifacts/release/packages/*
+            --target "${GITHUB_SHA}"
+            --title "ComCross ${tag}"
+            --notes "Automated ComCross release package validation for ${tag}."
+          )
+
+          if [[ "${RELEASE_PRERELEASE}" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+          if [[ "${RELEASE_DRAFT}" == "true" ]]; then
+            release_args+=(--draft)
+          fi
+
+          gh release create "${release_args[@]}"
