@@ -1,0 +1,72 @@
+{
+  "version": "0.5.1",
+  "packageVersionLabel": "Package release v0.5.1",
+  "releaseUrl": "https://github.com/autyan/comCross/releases/tag/v0.5.1",
+  "checksumsUrl": "https://github.com/autyan/comCross/releases/download/v0.5.1/SHA256SUMS",
+  "assets": [
+    {
+      "id": "windows-x64-msi",
+      "os": "windows",
+      "arch": "x64",
+      "format": "msi",
+      "label": "Windows x64 MSI",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/ComCross-0.5.1-win-x64.msi"
+    },
+    {
+      "id": "windows-arm64-msi",
+      "os": "windows",
+      "arch": "arm64",
+      "format": "msi",
+      "label": "Windows ARM64 MSI",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/ComCross-0.5.1-win-arm64.msi"
+    },
+    {
+      "id": "linux-x64-appimage",
+      "os": "linux",
+      "arch": "x64",
+      "format": "appimage",
+      "label": "Linux x64 AppImage",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/ComCross-0.5.1-linux-x64.AppImage"
+    },
+    {
+      "id": "linux-arm64-appimage",
+      "os": "linux",
+      "arch": "arm64",
+      "format": "appimage",
+      "label": "Linux ARM64 AppImage",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/ComCross-0.5.1-linux-arm64.AppImage"
+    },
+    {
+      "id": "linux-x64-deb",
+      "os": "linux",
+      "arch": "x64",
+      "format": "deb",
+      "label": "Linux x64 DEB",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/comcross_0.5.1_amd64.deb"
+    },
+    {
+      "id": "linux-arm64-deb",
+      "os": "linux",
+      "arch": "arm64",
+      "format": "deb",
+      "label": "Linux ARM64 DEB",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/comcross_0.5.1_arm64.deb"
+    },
+    {
+      "id": "linux-x64-rpm",
+      "os": "linux",
+      "arch": "x64",
+      "format": "rpm",
+      "label": "Linux x64 RPM",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/comcross-0.5.1-1.x86_64.rpm"
+    },
+    {
+      "id": "linux-arm64-rpm",
+      "os": "linux",
+      "arch": "arm64",
+      "format": "rpm",
+      "label": "Linux ARM64 RPM",
+      "url": "https://github.com/autyan/comCross/releases/download/v0.5.1/comcross-0.5.1-1.aarch64.rpm"
+    }
+  ]
+}

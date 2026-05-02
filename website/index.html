@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ComCross is a cross-platform embedded communication toolbox for serial, TCP, and UDP workflows.">
+    <title>ComCross - Embedded Communication Toolbox</title>
+    <link rel="icon" href="assets/comcross-icon.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="ComCross home">
+        <img src="assets/comcross-icon.png" alt="" width="32" height="32">
+        <span>ComCross</span>
+      </a>
+      <nav class="main-nav" aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="#docs">Docs</a>
+        <a href="#roadmap">v0.6</a>
+        <a class="nav-strong" href="https://github.com/autyan/comCross">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero section-band">
+        <div class="hero-copy">
+          <p class="eyebrow">Serial, TCP, and UDP workflows</p>
+          <h1>ComCross</h1>
+          <p class="hero-lede">
+            A cross-platform embedded communication toolbox for connecting,
+            inspecting, and sending messages through plugin-isolated bus
+            adapters.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#download">Download</a>
+            <a class="button button-secondary" href="https://github.com/autyan/comCross">View on GitHub</a>
+          </div>
+          <dl class="status-list" aria-label="Project status">
+            <div>
+              <dt>Current release</dt>
+              <dd>v0.5.0</dd>
+            </div>
+            <div>
+              <dt>Runtime</dt>
+              <dd>.NET 8 LTS</dd>
+            </div>
+            <div>
+              <dt>License</dt>
+              <dd>MIT</dd>
+            </div>
+          </dl>
+        </div>
+
+        <figure class="product-preview">
+          <img
+            src="assets/screenshots/comcross-udp-listener.png"
+            alt="ComCross desktop window showing a UDP listener session, message stream, transmit target picker, and quick commands.">
+        </figure>
+      </section>
+
+      <section id="features" class="content-section">
+        <div class="section-heading">
+          <p class="eyebrow">What it does</p>
+          <h2>Built for repeated communication work</h2>
+          <p>
+            ComCross keeps transport adapters isolated while the desktop shell
+            focuses on sessions, message flow, quick commands, and inspection.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>Bus adapters</h3>
+            <p>Use Serial, TCP client/server, and UDP socket/listener adapters through a common workflow.</p>
+          </article>
+          <article>
+            <h3>Session workspace</h3>
+            <p>Organize connections as sessions, switch between workloads, and track RX/TX counters.</p>
+          </article>
+          <article>
+            <h3>Message stream</h3>
+            <p>Inspect searchable RX/TX messages with bounded attributes supplied by plugins.</p>
+          </article>
+          <article>
+            <h3>Quick commands</h3>
+            <p>Store common payloads and send them without leaving the active communication surface.</p>
+          </article>
+        </div>
+        <div class="screenshot-grid" aria-label="ComCross workflow screenshots">
+          <figure>
+            <img
+              src="assets/screenshots/comcross-quick-create.png"
+              alt="ComCross quick create panel showing network adapter connection parameters.">
+            <figcaption>Quick session creation for Serial, TCP, and UDP adapters.</figcaption>
+          </figure>
+          <figure>
+            <img
+              src="assets/screenshots/comcross-session-details.png"
+              alt="ComCross session details panel showing UDP listener status and adapter settings.">
+            <figcaption>Session details keep adapter state visible without leaving the workspace.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="download" class="content-section download-section">
+        <div class="section-heading">
+          <p class="eyebrow">Download</p>
+          <h2>Release packages</h2>
+          <p>
+            Official packages are published from GitHub Releases. The support
+            matrix below describes the current baseline target.
+          </p>
+        </div>
+        <div class="download-layout">
+          <div class="release-card download-card">
+            <span class="release-label">Recommended</span>
+            <h3 id="download-title">ComCross packages</h3>
+            <p id="download-summary">Choose a platform package, or let the site recommend one for this device.</p>
+            <div class="download-selectors" aria-label="Download selector">
+              <label>
+                <span>Platform</span>
+                <select id="download-os">
+                  <option value="windows">Windows</option>
+                  <option value="linux">Linux</option>
+                </select>
+              </label>
+              <label>
+                <span>Architecture</span>
+                <select id="download-arch">
+                  <option value="x64">x64</option>
+                  <option value="arm64">ARM64</option>
+                </select>
+              </label>
+              <label>
+                <span>Package</span>
+                <select id="download-format"></select>
+              </label>
+            </div>
+            <a id="download-button" class="button button-primary" href="https://github.com/autyan/comCross/releases">Download package</a>
+            <div class="download-links">
+              <a id="checksums-link" href="https://github.com/autyan/comCross/releases">Checksums</a>
+              <a id="all-downloads-link" href="https://github.com/autyan/comCross/releases">All downloads</a>
+            </div>
+          </div>
+          <table class="platform-table">
+            <thead>
+              <tr>
+                <th>System</th>
+                <th>Minimum</th>
+                <th>Architecture</th>
+                <th>Package</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Windows</td>
+                <td>10 22H2 / 11 22H2</td>
+                <td>x64, ARM64</td>
+                <td>MSI</td>
+              </tr>
+              <tr>
+                <td>Ubuntu</td>
+                <td>22.04 LTS</td>
+                <td>x64, ARM64</td>
+                <td>DEB, AppImage</td>
+              </tr>
+              <tr>
+                <td>Debian</td>
+                <td>12</td>
+                <td>x64, ARM64</td>
+                <td>DEB, AppImage</td>
+              </tr>
+              <tr>
+                <td>Fedora</td>
+                <td>40</td>
+                <td>x64</td>
+                <td>RPM, AppImage</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="support-note">
+          ComCross does not currently provide official macOS packages. Other
+          Linux distributions may work, but they are outside the formal support
+          commitment.
+        </p>
+      </section>
+
+      <section class="content-section architecture-section">
+        <div class="section-heading">
+          <p class="eyebrow">Architecture</p>
+          <h2>Plugins produce facts, the shell consumes them</h2>
+          <p>
+            Transport plugins own bus-specific behavior. Core and Shell consume
+            public facts for lifecycle, persistence, rendering, and user
+            workflows.
+          </p>
+        </div>
+        <div class="architecture-flow">
+          <div>
+            <span>1</span>
+            <h3>Bus plugins</h3>
+            <p>Produce transport facts, metadata, topology, and plugin-owned UI state.</p>
+          </div>
+          <div>
+            <span>2</span>
+            <h3>Core</h3>
+            <p>Coordinates plugin runtimes, sessions, persistence, IPC, and message flow.</p>
+          </div>
+          <div>
+            <span>3</span>
+            <h3>Shell</h3>
+            <p>Renders workflows without inferring plugin-private transport semantics.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="roadmap" class="content-section roadmap-section">
+        <div class="section-heading">
+          <p class="eyebrow">Planned for v0.6.0</p>
+          <h2>Data interpretation and large-message experience</h2>
+          <p>
+            The next development scope focuses on derived protocol data while
+            preserving raw messages as the source of truth.
+          </p>
+        </div>
+        <div class="roadmap-list">
+          <article>
+            <h3>Custom protocol profiles</h3>
+            <p>Bounded CPDL profiles for frame rules, message matching, field decoding, and validation.</p>
+          </article>
+          <article>
+            <h3>Analyzer pipeline</h3>
+            <p>Cancellable parsing that produces searchable derived fields and structured warnings.</p>
+          </article>
+          <article>
+            <h3>Large message sessions</h3>
+            <p>Append-first storage, windowed loading, and search with progress and navigation.</p>
+          </article>
+          <article>
+            <h3>Analysis consumer</h3>
+            <p>Initial charts for throughput, counts, payload size, warnings, and decoded numeric fields.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="docs" class="content-section docs-section">
+        <div class="section-heading">
+          <p class="eyebrow">Documentation</p>
+          <h2>Project references</h2>
+          <p>Use the repository documentation for implementation, release, and compatibility details.</p>
+        </div>
+        <div class="docs-grid">
+          <a href="https://github.com/autyan/comCross/blob/main/README.md">README</a>
+          <a href="https://github.com/autyan/comCross/blob/main/docs/specs/00-Index.md">Specification index</a>
+          <a href="https://github.com/autyan/comCross/blob/main/docs/specs/10-Plugin-Development-Guide.md">Plugin guide</a>
+          <a href="https://github.com/autyan/comCross/blob/main/docs/specs/11-Packaging-Guide.md">Packaging guide</a>
+          <a href="https://github.com/autyan/comCross/blob/main/docs/release/notes/v0.5.0.md">v0.5.0 release notes</a>
+          <a href="https://github.com/autyan/comCross/blob/main/docs/roadmap/v0.6.0-scope.md">v0.6.0 scope</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <b>ComCross</b>
+        <p>
+          Documentation may be drafted or translated with AI assistance. For
+          security, release verification, compatibility, and implementation
+          decisions, verify against the English source documents and project
+          history.
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/autyan/comCross">GitHub</a>
+        <a href="https://github.com/autyan/comCross/releases">Releases</a>
+        <a href="https://github.com/autyan/comCross/blob/main/LICENSE">MIT License</a>
+      </div>
+      <small>&copy; <span id="year">2026</span> ComCross.</small>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>
