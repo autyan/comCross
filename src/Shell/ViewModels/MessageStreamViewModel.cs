@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using Avalonia.Threading;
@@ -9,9 +10,12 @@ using ComCross.Shared.Services;
 
 namespace ComCross.Shell.ViewModels;
 
+public sealed record MessageDisplayDensityOption(MessageDisplayDensity Density, string Label);
+
 public sealed class MessageStreamViewModel : BaseViewModel
 {
     private readonly IMessageStreamService _messageStream;
+    private readonly IMessageFrameQueryService _messageFrameQuery;
     private readonly SettingsService _settingsService;
     private readonly IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> _itemFactory;
 
@@ -20,22 +24,35 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     private Session? _activeSession;
     private string _searchQuery = string.Empty;
-    private bool _isHexDisplayMode;
+    private PayloadRenderMode _payloadRenderMode = PayloadRenderMode.String;
+    private MessageDisplayDensity _displayDensity = MessageDisplayDensity.Detailed;
+    private MessageFrameDataSource _dataSource = MessageFrameDataSource.LiveSpool;
+    private MessageDisplayDensityOption? _selectedDisplayDensityOption;
     private bool _isMetricsBarVisible;
 
     public MessageStreamViewModel(
         ILocalizationService localization,
         IMessageStreamService messageStream,
+        IMessageFrameQueryService messageFrameQuery,
         SettingsService settingsService,
         DisplaySettingsViewModel display,
         IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> itemFactory)
         : base(localization)
     {
         _messageStream = messageStream;
+        _messageFrameQuery = messageFrameQuery;
         _settingsService = settingsService;
         Display = display;
         _itemFactory = itemFactory;
         _activeSessionPropertyChangedHandler = OnActiveSessionPropertyChanged;
+        _payloadRenderMode = _settingsService.Current.Export.DefaultPayloadRenderMode;
+        DisplayDensityOptions =
+        [
+            new(MessageDisplayDensity.Plain, L["stream.density.plain"]),
+            new(MessageDisplayDensity.Slim, L["stream.density.slim"]),
+            new(MessageDisplayDensity.Detailed, L["stream.density.detailed"])
+        ];
+        _selectedDisplayDensityOption = DisplayDensityOptions.First(x => x.Density == _displayDensity);
 
         MessageItems = new ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext>(_itemFactory);
 
@@ -45,6 +62,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
     public DisplaySettingsViewModel Display { get; }
 
     public ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext> MessageItems { get; }
+
+    public IReadOnlyList<MessageDisplayDensityOption> DisplayDensityOptions { get; }
 
     public Session? ActiveSession
     {
@@ -66,15 +85,59 @@ public sealed class MessageStreamViewModel : BaseViewModel
         }
     }
 
-    public bool IsHexDisplayMode
+    public PayloadRenderMode PayloadRenderMode
     {
-        get => _isHexDisplayMode;
+        get => _payloadRenderMode;
         set
         {
-            if (SetProperty(ref _isHexDisplayMode, value))
+            if (SetProperty(ref _payloadRenderMode, value))
             {
                 OnPropertyChanged(nameof(DisplayModeLabel));
-                RefreshDisplayMode();
+                RefreshPayloadRenderMode();
+            }
+        }
+    }
+
+    public MessageDisplayDensity DisplayDensity
+    {
+        get => _displayDensity;
+        set
+        {
+            if (SetProperty(ref _displayDensity, value))
+            {
+                OnPropertyChanged(nameof(DisplayDensityLabel));
+                _selectedDisplayDensityOption = DisplayDensityOptions.FirstOrDefault(x => x.Density == value);
+                OnPropertyChanged(nameof(SelectedDisplayDensityOption));
+                RefreshDisplayDensity();
+            }
+        }
+    }
+
+    public MessageDisplayDensityOption? SelectedDisplayDensityOption
+    {
+        get => _selectedDisplayDensityOption;
+        set
+        {
+            if (value is null || Equals(_selectedDisplayDensityOption, value))
+            {
+                return;
+            }
+
+            _selectedDisplayDensityOption = value;
+            OnPropertyChanged();
+            DisplayDensity = value.Density;
+        }
+    }
+
+    public MessageFrameDataSource DataSource
+    {
+        get => _dataSource;
+        private set
+        {
+            if (SetProperty(ref _dataSource, value))
+            {
+                OnPropertyChanged(nameof(DataSourceLabel));
+                LoadMessages();
             }
         }
     }
@@ -85,7 +148,20 @@ public sealed class MessageStreamViewModel : BaseViewModel
         set => SetProperty(ref _isMetricsBarVisible, value);
     }
 
-    public string DisplayModeLabel => IsHexDisplayMode ? "HEX" : "STR";
+    public string DisplayModeLabel => PayloadRenderMode == PayloadRenderMode.Hex ? "HEX" : "STR";
+
+    public string DisplayDensityLabel => DisplayDensity switch
+    {
+        MessageDisplayDensity.Plain => L["stream.density.plain"],
+        MessageDisplayDensity.Slim => L["stream.density.slim"],
+        _ => L["stream.density.detailed"]
+    };
+
+    public string DataSourceLabel => DataSource switch
+    {
+        MessageFrameDataSource.Archive => L["stream.source.history"],
+        _ => L["stream.source.live"]
+    };
 
     public bool HasActiveSession => _activeSession is not null;
 
@@ -132,7 +208,10 @@ public sealed class MessageStreamViewModel : BaseViewModel
         }
     }
 
-    public void ToggleDisplayMode() => IsHexDisplayMode = !IsHexDisplayMode;
+    public void ToggleDisplayMode()
+        => PayloadRenderMode = PayloadRenderMode == PayloadRenderMode.Hex
+            ? PayloadRenderMode.String
+            : PayloadRenderMode.Hex;
 
     public void ToggleMetricsBar() => IsMetricsBarVisible = !IsMetricsBarVisible;
 
@@ -173,7 +252,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
                     return;
                 }
 
-                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
+                MessageItems.Add(CreateItemContext(message));
                 TrimMessages();
             });
         });
@@ -193,43 +272,38 @@ public sealed class MessageStreamViewModel : BaseViewModel
             return;
         }
 
-        var max = _settingsService.Current.Display.MaxMessages;
-
-        var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
-        foreach (var message in messages)
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
-            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
+            LoadSearchResults();
+            return;
         }
 
-        ApplyFilter();
+        var result = _messageFrameQuery.Query(new MessageFrameQuery(
+            _activeSession.Id,
+            DataSource,
+            MessageFrameQueryKind.Latest,
+            0,
+            _settingsService.Current.Display.MaxMessages));
+
+        foreach (var frame in result.Frames)
+        {
+            MessageItems.Add(CreateItemContext(frame));
+        }
     }
 
-    private void ApplyFilter()
+    private void ApplyFilter() => LoadMessages();
+
+    private void LoadSearchResults()
     {
         if (_activeSession?.Id is not { Length: > 0 })
         {
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        var filtered = _messageStream.Search(_activeSession.Id, _searchQuery);
+        foreach (var message in filtered)
         {
-            var filtered = _messageStream.Search(_activeSession.Id, _searchQuery);
-            MessageItems.Clear();
-            foreach (var message in filtered)
-            {
-                MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
-            }
-
-            return;
-        }
-
-        // If no query, reload baseline (up to max).
-        MessageItems.Clear();
-        var max = _settingsService.Current.Display.MaxMessages;
-        var messages = _messageStream.GetMessages(_activeSession.Id, 0, max);
-        foreach (var message in messages)
-        {
-            MessageItems.Add(new LogMessageListItemContext(message, Display.TimestampFormat, IsHexDisplayMode));
+            MessageItems.Add(CreateItemContext(message));
         }
     }
 
@@ -264,11 +338,19 @@ public sealed class MessageStreamViewModel : BaseViewModel
         OnPropertyChanged(nameof(ActiveSessionTypeLabel));
     }
 
-    private void RefreshDisplayMode()
+    private void RefreshPayloadRenderMode()
     {
         foreach (var item in MessageItems)
         {
-            item.UpdateDisplayMode(IsHexDisplayMode);
+            item.UpdatePayloadRenderMode(PayloadRenderMode);
+        }
+    }
+
+    private void RefreshDisplayDensity()
+    {
+        foreach (var item in MessageItems)
+        {
+            item.UpdateDisplayDensity(DisplayDensity);
         }
     }
 
@@ -279,6 +361,35 @@ public sealed class MessageStreamViewModel : BaseViewModel
         {
             MessageItems.RemoveAt(0);
         }
+    }
+
+    private LogMessageListItemContext CreateItemContext(MessageFrameRecord frame)
+        => CreateItemContext(new LogMessage
+        {
+            Id = frame.FrameId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Timestamp = frame.TimestampUtc,
+            Content = FormatContent(frame.RawData, frame.Format),
+            Level = LogLevel.Info,
+            Source = frame.Direction == FrameDirection.Tx ? "TX" : "RX",
+            RawData = frame.RawData,
+            Format = frame.Format,
+            Attributes = frame.Attributes,
+            AttributeSchemaVersion = frame.AttributeSchemaVersion
+        });
+
+    private LogMessageListItemContext CreateItemContext(LogMessage message)
+        => new(message, Display.TimestampFormat, PayloadRenderMode, DisplayDensity);
+
+    private static string FormatContent(byte[] rawData, MessageFormat format)
+    {
+        if (rawData.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return format == MessageFormat.Hex
+            ? BitConverter.ToString(rawData).Replace("-", " ")
+            : System.Text.Encoding.UTF8.GetString(rawData);
     }
 
     private void OnDisplayPropertyChanged(object? sender, PropertyChangedEventArgs e)

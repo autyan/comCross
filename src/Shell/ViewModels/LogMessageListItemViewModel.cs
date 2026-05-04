@@ -4,11 +4,16 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Runtime.CompilerServices;
+using Avalonia;
 using ComCross.Shared.Models;
 
 namespace ComCross.Shell.ViewModels;
 
-public sealed record LogMessageListItemContext(LogMessage Message, string? TimestampFormat, bool IsHexDisplayMode);
+public sealed record LogMessageListItemContext(
+    LogMessage Message,
+    string? TimestampFormat,
+    PayloadRenderMode PayloadRenderMode,
+    MessageDisplayDensity DisplayDensity);
 
 public sealed record MessageAttributeListItemViewModel(string Key, string Value)
 {
@@ -21,7 +26,8 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
     private string _timestampText;
     private string _content;
     private IReadOnlyList<MessageAttributeListItemViewModel> _attributes;
-    private bool _isHexDisplayMode;
+    private PayloadRenderMode _payloadRenderMode;
+    private MessageDisplayDensity _displayDensity;
     private bool _isInitialized;
 
     public LogMessageListItemViewModel()
@@ -41,8 +47,9 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
         _isInitialized = true;
         _message = context.Message;
         _timestampText = FormatTimestamp(context.Message.Timestamp, context.TimestampFormat);
-        _isHexDisplayMode = context.IsHexDisplayMode;
-        _content = FormatDisplayContent(context.Message, _isHexDisplayMode);
+        _payloadRenderMode = context.PayloadRenderMode;
+        _displayDensity = context.DisplayDensity;
+        _content = FormatDisplayContent(context.Message, _payloadRenderMode);
         _attributes = context.Message.Attributes
             .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .Select(static x => new MessageAttributeListItemViewModel(x.Key, x.Value))
@@ -78,7 +85,21 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
 
     public IReadOnlyList<MessageAttributeListItemViewModel> Attributes => _attributes;
 
-    public bool HasAttributes => _attributes.Count > 0;
+    public bool ShowDirectionMarker => _displayDensity is MessageDisplayDensity.Slim or MessageDisplayDensity.Detailed;
+
+    public bool ShowTimestamp => _displayDensity == MessageDisplayDensity.Detailed;
+
+    public bool ShowSource => _displayDensity is MessageDisplayDensity.Slim or MessageDisplayDensity.Detailed;
+
+    public bool HasVisibleAttributes => _displayDensity == MessageDisplayDensity.Detailed && _attributes.Count > 0;
+
+    public Thickness RowPadding => _displayDensity == MessageDisplayDensity.Detailed
+        ? new Thickness(8, 4)
+        : new Thickness(8, 1);
+
+    public Thickness RowBorderThickness => _displayDensity == MessageDisplayDensity.Detailed
+        ? new Thickness(0, 0, 0, 1)
+        : new Thickness(0);
 
     public string TimestampText
     {
@@ -100,19 +121,35 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
         TimestampText = FormatTimestamp(Message.Timestamp, timestampFormat);
     }
 
-    public void UpdateDisplayMode(bool isHexDisplayMode)
+    public void UpdatePayloadRenderMode(PayloadRenderMode payloadRenderMode)
     {
-        if (_isHexDisplayMode == isHexDisplayMode)
+        if (_payloadRenderMode == payloadRenderMode)
         {
             return;
         }
 
-        _isHexDisplayMode = isHexDisplayMode;
-        _content = FormatDisplayContent(Message, _isHexDisplayMode);
+        _payloadRenderMode = payloadRenderMode;
+        _content = FormatDisplayContent(Message, _payloadRenderMode);
         OnPropertyChanged(nameof(Content));
     }
 
-    private static string FormatDisplayContent(LogMessage message, bool isHexDisplayMode)
+    public void UpdateDisplayDensity(MessageDisplayDensity displayDensity)
+    {
+        if (_displayDensity == displayDensity)
+        {
+            return;
+        }
+
+        _displayDensity = displayDensity;
+        OnPropertyChanged(nameof(ShowDirectionMarker));
+        OnPropertyChanged(nameof(ShowTimestamp));
+        OnPropertyChanged(nameof(ShowSource));
+        OnPropertyChanged(nameof(HasVisibleAttributes));
+        OnPropertyChanged(nameof(RowPadding));
+        OnPropertyChanged(nameof(RowBorderThickness));
+    }
+
+    private static string FormatDisplayContent(LogMessage message, PayloadRenderMode payloadRenderMode)
     {
         // System messages or text-only entries
         var raw = message.RawData;
@@ -121,18 +158,9 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
             return message.Content ?? string.Empty;
         }
 
-        var source = message.Source ?? string.Empty;
-        var isTx = source.Equals("TX", StringComparison.OrdinalIgnoreCase);
-        var isRx = source.Equals("RX", StringComparison.OrdinalIgnoreCase);
-
-        // TX follows the send-time format; RX follows the view mode.
-        var useHex = isTx
-            ? message.Format == MessageFormat.Hex
-            : isRx
-                ? isHexDisplayMode
-                : message.Format == MessageFormat.Hex;
-
-        return useHex ? ToHex(raw) : EscapeControlChars(Encoding.UTF8.GetString(raw));
+        return payloadRenderMode == PayloadRenderMode.Hex
+            ? ToHex(raw)
+            : EscapeControlChars(Encoding.UTF8.GetString(raw));
     }
 
     private static string ToHex(byte[] data)

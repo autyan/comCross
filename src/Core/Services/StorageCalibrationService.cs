@@ -12,8 +12,8 @@ namespace ComCross.Core.Services;
 public sealed class StorageCalibrationService : IStorageCalibrationService
 {
     private const int FingerprintSchemaVersion = 1;
-    private const int CalibrationSchemaVersion = 1;
-    private const int SampleBytes = 4 * 1024 * 1024;
+    private const int CalibrationSchemaVersion = 2;
+    private const int SampleBytes = 8 * 1024 * 1024;
 
     private readonly ComCrossPathService _paths;
     private readonly NotificationService _notificationService;
@@ -140,7 +140,7 @@ public sealed class StorageCalibrationService : IStorageCalibrationService
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.WriteThrough))
+            await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length))
             {
                 var remaining = SampleBytes;
                 while (remaining > 0)
@@ -175,9 +175,9 @@ public sealed class StorageCalibrationService : IStorageCalibrationService
     private static StorageTier Classify(double mbPerSecond)
         => mbPerSecond switch
         {
-            < 8 => StorageTier.Conservative,
-            < 32 => StorageTier.Limited,
-            < 128 => StorageTier.Normal,
+            < 4 => StorageTier.Conservative,
+            < 16 => StorageTier.Limited,
+            < 96 => StorageTier.Normal,
             _ => StorageTier.HighCapacity
         };
 

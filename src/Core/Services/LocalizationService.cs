@@ -500,6 +500,11 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             
             // Message Stream
             ["stream.search.placeholder"] = "Search messages...",
+            ["stream.source.live"] = "Live",
+            ["stream.source.history"] = "History",
+            ["stream.density.plain"] = "Plain",
+            ["stream.density.slim"] = "Slim",
+            ["stream.density.detailed"] = "Detailed",
             ["stream.metrics.rx"] = "RX:",
             ["stream.metrics.tx"] = "TX:",
             ["stream.metrics.lines"] = "Lines:",
