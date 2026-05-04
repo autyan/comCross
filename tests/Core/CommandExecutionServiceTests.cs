@@ -124,6 +124,10 @@ public sealed class CommandExecutionServiceTests
         public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
             => Task.CompletedTask;
 
+        public bool HasSessionArchiveData(string sessionId) => false;
+
+        public Task DeleteSessionArchiveDataAsync(string sessionId) => Task.CompletedTask;
+
         public Task<PluginCommandResult> SendMessageAsync(
             string sessionId,
             string message,

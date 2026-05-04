@@ -119,9 +119,14 @@ public partial class LeftSidebar : BaseUserControl
 
         var hasChildren = DataContext is LeftSidebarViewModel sidebarVmForMessage
                           && sidebarVmForMessage.GetChildSessionCount(session.Id) > 0;
-        var messageKey = hasChildren
-            ? "dialog.deleteSession.listener.message"
-            : "dialog.deleteSession.message";
+        var hasArchive = session.ArchiveState != SessionArchiveState.Disabled;
+        var messageKey = (hasChildren, hasArchive) switch
+        {
+            (true, true) => "dialog.deleteSession.listenerWithArchive.message",
+            (true, false) => "dialog.deleteSession.listener.message",
+            (false, true) => "dialog.deleteSession.withArchive.message",
+            _ => "dialog.deleteSession.message"
+        };
         var confirmed = await ShellContext.Dialogs.ShowConfirmAsync(
             owner,
             vm.L["dialog.deleteSession.title"],

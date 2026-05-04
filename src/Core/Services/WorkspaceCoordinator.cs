@@ -40,6 +40,8 @@ public interface IWorkspaceCoordinator
     Task RenameSessionAsync(string sessionId, string name);
     Task DeleteSessionAsync(string sessionId);
     Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null);
+    bool HasSessionArchiveData(string sessionId);
+    Task DeleteSessionArchiveDataAsync(string sessionId);
     Task<PluginCommandResult> SendMessageAsync(
         string sessionId,
         string message,
@@ -195,6 +197,12 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
     public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
         => _workspaceService.SetSessionArchiveStateAsync(sessionId, state, error);
+
+    public bool HasSessionArchiveData(string sessionId)
+        => _workspaceService.HasSessionArchiveData(sessionId);
+
+    public Task DeleteSessionArchiveDataAsync(string sessionId)
+        => _workspaceService.DeleteSessionArchiveDataAsync(sessionId);
 
     public Task<PluginCommandResult> SendMessageAsync(
         string sessionId,

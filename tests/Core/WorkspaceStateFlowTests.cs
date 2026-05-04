@@ -378,6 +378,41 @@ public sealed class WorkspaceStateFlowTests
         Assert.Null(descriptor.ArchiveError);
     }
 
+    [Fact]
+    public async Task DeleteSessionArchiveDataAsync_RemovesArchiveAndDisablesSessionArchive()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var archiveStore = harness.Services.GetRequiredService<ISessionArchiveStore>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+        var descriptor = CreateDescriptor("session-archive-delete");
+        descriptor.ArchiveState = SessionArchiveState.Stopped;
+        deviceService.RestoreSession(descriptor);
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, descriptor.Id);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+        archiveStore.Append(new MessageFrameRecord(1, descriptor.Id, DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "test"));
+
+        Assert.True(workspaceService.HasSessionArchiveData(descriptor.Id));
+
+        await workspaceService.DeleteSessionArchiveDataAsync(descriptor.Id);
+
+        Assert.False(workspaceService.HasSessionArchiveData(descriptor.Id));
+        var session = deviceService.GetSession(descriptor.Id);
+        Assert.NotNull(session);
+        Assert.Equal(SessionArchiveState.Disabled, session!.ArchiveState);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+        var persistedDescriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == descriptor.Id);
+        Assert.Equal(SessionArchiveState.Disabled, persistedDescriptor.ArchiveState);
+    }
+
     private static SessionDescriptor CreateDescriptor(
         string sessionId,
         string? parentSessionId = null,
