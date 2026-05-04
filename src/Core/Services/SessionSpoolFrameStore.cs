@@ -436,23 +436,31 @@ public sealed class SessionSpoolFrameStore : IFrameStore
     private void InitializeSegmentFile(SessionSpoolState state, SpoolSegmentManifest segment)
     {
         var path = Path.Combine(state.Directory, segment.FileName);
-        var headerBytes = WriteSegmentHeader(path, state.SessionId, segment.SegmentId, segment.CreatedAtUtc);
-        segment.ByteCount = headerBytes;
-
         var policy = _storagePolicy.Current;
         var segmentMaxBytes = GetSegmentMaxBytes(policy);
-        if (policy.PreallocateSegments)
+        long headerBytes = 0;
+
+        var preallocated = policy.PreallocateSegments
+            && TryWriteSegmentHeader(
+                path,
+                state.SessionId,
+                segment.SegmentId,
+                segment.CreatedAtUtc,
+                segmentMaxBytes,
+                out headerBytes);
+        if (!preallocated)
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read, 4096);
-            stream.SetLength(segmentMaxBytes);
-            segment.AllocatedBytes = segmentMaxBytes;
-            segment.Preallocated = true;
+            if (policy.PreallocateSegments)
+            {
+                ReportStoragePressure("segment-preallocation-failed");
+            }
+
+            headerBytes = WriteSegmentHeader(path, state.SessionId, segment.SegmentId, segment.CreatedAtUtc);
         }
-        else
-        {
-            segment.AllocatedBytes = headerBytes;
-            segment.Preallocated = false;
-        }
+
+        segment.ByteCount = headerBytes;
+        segment.AllocatedBytes = preallocated ? segmentMaxBytes : headerBytes;
+        segment.Preallocated = preallocated;
     }
 
     private static long WriteSegmentHeader(string path, string sessionId, long segmentId, DateTime createdAtUtc)
@@ -468,6 +476,46 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         writer.Flush();
         stream.Flush();
         return stream.Position;
+    }
+
+    private static bool TryWriteSegmentHeader(
+        string path,
+        string sessionId,
+        long segmentId,
+        DateTime createdAtUtc,
+        long preallocationBytes,
+        out long headerBytes)
+    {
+        headerBytes = 0;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.Read,
+                BufferSize = 4096,
+                PreallocationSize = preallocationBytes
+            };
+
+            using var stream = new FileStream(path, options);
+            using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+            writer.Write(SegmentMagic);
+            writer.Write(SegmentSchemaVersion);
+            writer.Write(segmentId);
+            writer.Write(createdAtUtc.Ticks);
+            WriteString(writer, sessionId);
+            writer.Flush();
+            stream.Flush();
+            headerBytes = stream.Position;
+            return true;
+        }
+        catch
+        {
+            TryDeleteFile(path);
+            return false;
+        }
     }
 
     private static byte[] EncodeRecord(MessageFrameRecord record)

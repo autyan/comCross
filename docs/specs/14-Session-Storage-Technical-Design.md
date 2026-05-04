@@ -219,6 +219,10 @@ MVP preallocation rules:
   segment size.
 - `Normal` and `HighCapacity` should avoid preallocation by default to keep the
   fast path simple on SSD/NVMe storage.
+- Preallocation should use platform-supported file preallocation when available
+  so the logical file length remains the valid written prefix.
+- If preallocation fails, Core falls back to a normal segment, reports storage
+  pressure or degradation, and keeps the session running.
 - Readers must use manifest `byteCount` or scan-derived valid length, not the
   physical file length.
 - Cleanup and user-visible spool size accounting should use allocated bytes

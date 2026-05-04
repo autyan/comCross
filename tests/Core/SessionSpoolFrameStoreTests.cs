@@ -1,6 +1,7 @@
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using Xunit;
 
 namespace ComCross.Tests.Core;
@@ -66,31 +67,32 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
     }
 
     [Fact]
-    public void ConservativePolicy_PreallocatesSegments()
+    public void ConservativePolicy_RecordsPreallocatedSegments()
     {
         var store = CreateStore(StorageTier.Conservative);
 
         store.Append("session-prealloc", DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "rx");
 
-        var segment = Directory.EnumerateFiles(Path.Combine(_root, "data", "session-spool"), "*.csf", SearchOption.AllDirectories)
-            .Single();
-        var length = new FileInfo(segment).Length;
+        var manifest = ReadSingleManifest();
+        var segment = manifest.RootElement.GetProperty("Segments")[0];
 
-        Assert.Equal(1024 * 1024, length);
+        Assert.True(segment.GetProperty("Preallocated").GetBoolean());
+        Assert.Equal(1024 * 1024, segment.GetProperty("AllocatedBytes").GetInt64());
+        Assert.True(segment.GetProperty("ByteCount").GetInt64() < 1024 * 1024);
     }
 
     [Fact]
-    public void HighCapacityPolicy_DoesNotPreallocateSegments()
+    public void HighCapacityPolicy_RecordsNonPreallocatedSegments()
     {
         var store = CreateStore(StorageTier.HighCapacity);
 
         store.Append("session-no-prealloc", DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "rx");
 
-        var segment = Directory.EnumerateFiles(Path.Combine(_root, "data", "session-spool"), "*.csf", SearchOption.AllDirectories)
-            .Single();
-        var length = new FileInfo(segment).Length;
+        var manifest = ReadSingleManifest();
+        var segment = manifest.RootElement.GetProperty("Segments")[0];
 
-        Assert.True(length < 1024 * 1024);
+        Assert.False(segment.GetProperty("Preallocated").GetBoolean());
+        Assert.True(segment.GetProperty("AllocatedBytes").GetInt64() < 1024 * 1024);
     }
 
     public void Dispose()
@@ -123,5 +125,12 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
         var policy = new StoragePolicyService(health);
         health.ApplyTier(tier);
         return new SessionSpoolFrameStore(paths, settings, policy, health, NullLogger<SessionSpoolFrameStore>.Instance);
+    }
+
+    private JsonDocument ReadSingleManifest()
+    {
+        var manifestPath = Directory.EnumerateFiles(Path.Combine(_root, "data", "session-spool"), "manifest.json", SearchOption.AllDirectories)
+            .Single();
+        return JsonDocument.Parse(File.ReadAllText(manifestPath));
     }
 }
