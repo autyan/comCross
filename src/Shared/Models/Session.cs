@@ -21,6 +21,8 @@ public sealed class Session : INotifyPropertyChanged
     private long _rxBytes;
     private long _txBytes;
     private bool _enableDatabaseStorage;
+    private SessionArchiveState _archiveState = SessionArchiveState.Disabled;
+    private string? _archiveError;
     private string? _parentSessionId;
     private bool _canReconnect = true;
     private SessionInitializationState _initializationState = SessionInitializationState.Ready;
@@ -165,6 +167,18 @@ public sealed class Session : INotifyPropertyChanged
         {
             SetField(ref _enableDatabaseStorage, value);
         }
+    }
+
+    public SessionArchiveState ArchiveState
+    {
+        get => _archiveState;
+        set => SetField(ref _archiveState, value);
+    }
+
+    public string? ArchiveError
+    {
+        get => _archiveError;
+        set => SetField(ref _archiveError, string.IsNullOrWhiteSpace(value) ? null : value);
     }
     
     public SessionStatus Status

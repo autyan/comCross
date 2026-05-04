@@ -81,7 +81,10 @@ public sealed class SessionDescriptor
     public string? DisplayTitle { get; set; }
     public string? DisplaySubtitle { get; set; }
     public string? DisplayIcon { get; set; }
+
     public bool EnableDatabaseStorage { get; set; }
+    public SessionArchiveState ArchiveState { get; set; } = SessionArchiveState.Disabled;
+    public string? ArchiveError { get; set; }
     public bool? CanReconnect { get; set; }
     public SessionInitializationState InitializationState { get; set; } = SessionInitializationState.Pending;
     public string? InitializationError { get; set; }

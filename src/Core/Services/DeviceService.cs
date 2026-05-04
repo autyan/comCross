@@ -364,6 +364,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             InitializationState = descriptor.InitializationState,
             InitializationError = descriptor.InitializationError,
             EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
+            ArchiveState = descriptor.ArchiveState,
+            ArchiveError = descriptor.ArchiveError,
             ParentSessionId = descriptor.ParentSessionId,
             ManagedResourceKinds = descriptor.ManagedResourceKinds,
             Status = SessionStatus.Disconnected
@@ -395,6 +397,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.ArchiveState = session.ArchiveState;
+            state.Session.ArchiveError = session.ArchiveError;
             state.Session.ParentSessionId = session.ParentSessionId;
             state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
             if (state.Session.Status != SessionStatus.Connected)
@@ -429,6 +433,8 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
             state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.ArchiveState = session.ArchiveState;
+            state.Session.ArchiveError = session.ArchiveError;
             state.Session.ParentSessionId = session.ParentSessionId;
             state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
         }

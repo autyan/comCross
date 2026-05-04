@@ -368,6 +368,8 @@ public sealed class WorkspaceService
                 InitializationState = s.InitializationState,
                 InitializationError = s.InitializationError,
                 EnableDatabaseStorage = s.EnableDatabaseStorage,
+                ArchiveState = s.ArchiveState,
+                ArchiveError = s.ArchiveError,
                 ParentSessionId = s.ParentSessionId,
                 ManagedResourceKinds = s.ManagedResourceKinds.ToList()
             })

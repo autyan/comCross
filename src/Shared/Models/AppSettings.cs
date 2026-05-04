@@ -5,6 +5,10 @@ public sealed class AppSettings
     public string Language { get; set; } = "en-US";
     public bool FollowSystemLanguage { get; set; } = true;
     public AppLogSettings AppLogs { get; set; } = new();
+
+    /// <summary>
+    /// Session Logs settings. The persisted property name remains Logs during the pre-stable transition.
+    /// </summary>
     public LogSettings Logs { get; set; } = new();
     public CommandSettings Commands { get; set; } = new();
     public NotificationSettings Notifications { get; set; } = new();
@@ -24,19 +28,36 @@ public sealed class AppLogSettings
 
 public sealed class LogSettings
 {
+    public const int SettingsSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = SettingsSchemaVersion;
     public bool AutoSaveEnabled { get; set; } = true;
     public string Directory { get; set; } = string.Empty;
-    public int MaxFileSizeMb { get; set; } = 10;
-    public int MaxTotalSizeMb { get; set; } = 256;
-    public bool AutoDeleteEnabled { get; set; }
-    
+
     /// <summary>
-    /// Enable database persistence for message storage (default: enabled)
+    /// Segment rollover size for the live spool working format.
     /// </summary>
-    public bool DatabasePersistenceEnabled { get; set; } = true;
-    
+    public int MaxFileSizeMb { get; set; } = 10;
+
     /// <summary>
-    /// Database directory (optional, defaults to the ComCross local data directory if not specified)
+    /// Global maximum Session Logs spool size.
+    /// </summary>
+    public int MaxTotalSizeMb { get; set; } = 256;
+
+    /// <summary>
+    /// Per-session maximum Session Logs spool size. A value below 1 lets Core derive a safe default.
+    /// </summary>
+    public int MaxPerSessionSizeMb { get; set; } = 64;
+
+    public bool AutoDeleteEnabled { get; set; }
+
+    /// <summary>
+    /// Legacy global database persistence flag. Archive is session-scoped and must not use this as a default enable switch.
+    /// </summary>
+    public bool DatabasePersistenceEnabled { get; set; }
+
+    /// <summary>
+    /// Legacy database directory. Session Archive storage is per-session and resolved by Core storage services.
     /// </summary>
     public string? DatabaseDirectory { get; set; }
 }
@@ -94,7 +115,18 @@ public sealed class ExportSettings
 {
     public string DefaultFormat { get; set; } = "txt";
     public string DefaultDirectory { get; set; } = string.Empty;
+
+    public SessionLogExportFormat DefaultSessionLogFormat { get; set; } = SessionLogExportFormat.Plain;
+    public PayloadRenderMode DefaultPayloadRenderMode { get; set; } = PayloadRenderMode.String;
+
+    /// <summary>
+    /// Legacy export range option. v0.6 Session Logs export is complete-source only.
+    /// </summary>
     public ExportRangeMode RangeMode { get; set; } = ExportRangeMode.All;
+
+    /// <summary>
+    /// Legacy export count option. v0.6 Session Logs export is complete-source only.
+    /// </summary>
     public int RangeCount { get; set; } = 1000;
 }
 
