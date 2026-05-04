@@ -121,23 +121,19 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
             var frames = _frameStore.ReadAfter(sessionId, cursor, MaxFramesPerSessionPerPump, out var firstAvailable);
             if (frames.Count == 0)
             {
+                if (cursor + 1 < firstAvailable)
+                {
+                    AppendSkippedMessage(sessionId, firstAvailable - (cursor + 1));
+                    cursor = firstAvailable - 1;
+                    _cursors[sessionId] = cursor;
+                }
+
                 return Task.CompletedTask;
             }
 
             if (cursor + 1 < firstAvailable)
             {
-                var skipped = firstAvailable - (cursor + 1);
-                _messageStream.Append(sessionId, new LogMessage
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Timestamp = DateTime.UtcNow,
-                    Content = $"[system] message consumption skipped {skipped} frames (window eviction)",
-                    Level = LogLevel.Warning,
-                    Source = "system",
-                    RawData = Array.Empty<byte>(),
-                    Format = MessageFormat.Text,
-                    Attributes = MessageFrameAttributes.Empty,
-                });
+                AppendSkippedMessage(sessionId, firstAvailable - (cursor + 1));
                 cursor = firstAvailable - 1;
             }
 
@@ -161,6 +157,21 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
                 });
             }
         }
+    }
+
+    private void AppendSkippedMessage(string sessionId, long skipped)
+    {
+        _messageStream.Append(sessionId, new LogMessage
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow,
+            Content = $"[system] message consumption skipped {skipped} frames (window eviction)",
+            Level = LogLevel.Warning,
+            Source = "system",
+            RawData = Array.Empty<byte>(),
+            Format = MessageFormat.Text,
+            Attributes = MessageFrameAttributes.Empty,
+        });
     }
 
     private static string FormatContent(FrameRecord frame)
