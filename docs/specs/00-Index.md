@@ -19,9 +19,10 @@ This directory contains the public technical specifications for ComCross v0.4.0.
 
 - [10-Plugin-Development-Guide.md](10-Plugin-Development-Guide.md) - Guide for developing plugins
 - [11-Packaging-Guide.md](11-Packaging-Guide.md) - Application packaging and distribution guide
+- [13-Session-Logs-And-Archive-Design.md](13-Session-Logs-And-Archive-Design.md) - v0.6 session logs, spool, and archive storage design
 
 ## Compatibility Note
 
 v0.4.0 intentionally does not migrate old v0.3 session state. Users of earlier development builds should recreate sessions after upgrading.
 
-**Last Updated**: 2026-05-02
+**Last Updated**: 2026-05-04
