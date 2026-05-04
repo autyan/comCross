@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ComCross.Shell.Services;
 using ComCross.Shared.Models;
 using ComCross.Shell.ViewModels;
 using System;
@@ -11,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace ComCross.Shell.Views;
 
-public partial class MainWindow : Window
+public partial class MainWindow : BaseWindow
 {
     private bool _autoScreenshotScheduled;
 
@@ -118,6 +119,26 @@ public partial class MainWindow : Window
                 await OpenSessionDetailWhenReadyAsync(vm);
                 break;
         }
+    }
+
+    private async void OnDeleteArchiveDataClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || vm.SessionDetailSession is null)
+        {
+            return;
+        }
+
+        var confirmed = await ShellContext.Dialogs.ShowConfirmAsync(
+            this,
+            vm.L["session.archive.deleteData.title"],
+            string.Format(vm.L["session.archive.deleteData.message"], vm.SessionDetailSession.Name),
+            MessageBoxIcon.Warning);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await vm.DeleteSessionDetailArchiveDataAsync();
     }
 
     private static async Task OpenSessionDetailWhenReadyAsync(MainWindowViewModel vm)

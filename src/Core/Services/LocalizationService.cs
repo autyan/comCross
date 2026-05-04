@@ -431,7 +431,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["session.menu.delete"] = "Delete",
             ["dialog.deleteSession.title"] = "Delete Session",
             ["dialog.deleteSession.message"] = "Delete session '{0}'?",
+            ["dialog.deleteSession.withArchive.message"] = "Delete session '{0}'? Its archive data will also be deleted.",
             ["dialog.deleteSession.listener.message"] = "Delete listener '{0}' and all child connections?",
+            ["dialog.deleteSession.listenerWithArchive.message"] = "Delete listener '{0}' and all child connections? Related archive data will also be deleted.",
             ["dialog.network.clearPending.title"] = "Clear Pending Connections",
             ["dialog.network.clearPending.message"] = "Clear all pending connections for listener '{0}'?",
             ["dialog.renameSession.title"] = "Rename Session",
@@ -527,6 +529,9 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["session.archive.enable.message"] = "Archive is session-level long-term storage. It starts writing only new frames after enablement and does not backfill existing live data.",
             ["session.archive.stop.title"] = "Stop Archive Writing",
             ["session.archive.stop.message"] = "Stop writing new frames to this session archive? Existing archived data is kept.",
+            ["session.archive.deleteData"] = "Delete Archive Data",
+            ["session.archive.deleteData.title"] = "Delete Archive Data",
+            ["session.archive.deleteData.message"] = "Delete archive data for session '{0}'? This does not delete live logs or the session itself.",
             
             // Tool Dock
             ["tool.send"] = "Send",
@@ -703,6 +708,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["notification.storage.calibrationReset"] = "Storage environment changed. Conservative policy is active until calibration completes.",
             ["notification.storage.calibrationFailed"] = "Storage calibration failed. Conservative policy remains active.",
             ["notification.storage.healthChanged"] = "Storage health changed: {0} ({1}).",
+            ["notification.storage.archiveWriteFailed"] = "Session {0} archive write failed: {1}",
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
             ["notification.connection.unknownReason"] = "Unknown reason",
             ["notification.export.completed"] = "Export completed: {0}",

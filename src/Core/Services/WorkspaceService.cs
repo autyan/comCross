@@ -21,6 +21,7 @@ public sealed class WorkspaceService
     private readonly WorkloadService _workloadService;
     private readonly PluginSessionInitializationService _sessionInitializationService;
     private readonly SessionDataCleanupService _sessionDataCleanupService;
+    private readonly ISessionArchiveStore _archiveStore;
     private readonly IEventBus _eventBus;
 
     private bool _sessionsRestored;
@@ -33,6 +34,7 @@ public sealed class WorkspaceService
         WorkloadService workloadService,
         PluginSessionInitializationService sessionInitializationService,
         SessionDataCleanupService sessionDataCleanupService,
+        ISessionArchiveStore archiveStore,
         IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
@@ -42,7 +44,9 @@ public sealed class WorkspaceService
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
         _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
         _sessionDataCleanupService = sessionDataCleanupService ?? throw new ArgumentNullException(nameof(sessionDataCleanupService));
+        _archiveStore = archiveStore ?? throw new ArgumentNullException(nameof(archiveStore));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _eventBus.Subscribe<SessionArchiveWriteFailedCoreEvent>(evt => _ = SetSessionArchiveStateAsync(evt.SessionId, SessionArchiveState.Error, evt.Error));
     }
 
     /// <summary>
@@ -373,6 +377,28 @@ public sealed class WorkspaceService
         }, cancellationToken);
 
         _eventBus.Publish(new SessionUpdatedEvent(session));
+    }
+
+    public bool HasSessionArchiveData(string sessionId)
+        => _archiveStore.HasArchive(sessionId);
+
+    public async Task DeleteSessionArchiveDataAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        _archiveStore.Delete(sessionId);
+        await SetSessionArchiveStateAsync(sessionId, SessionArchiveState.Disabled, cancellationToken: cancellationToken);
     }
 
     /// <summary>

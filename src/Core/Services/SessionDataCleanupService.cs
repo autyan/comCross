@@ -9,21 +9,25 @@ public sealed record SessionDataCleanupResult(
     string SessionId,
     int DeletedLogFiles,
     bool PluginStorageDeleted,
+    bool ArchiveDeleted,
     IReadOnlyList<string> Warnings);
 
 public sealed class SessionDataCleanupService
 {
     private readonly PluginSessionStorageService _pluginSessionStorage;
     private readonly AppDatabase _database;
+    private readonly ISessionArchiveStore _archiveStore;
     private readonly ILogger<SessionDataCleanupService> _logger;
 
     public SessionDataCleanupService(
         PluginSessionStorageService pluginSessionStorage,
         AppDatabase database,
+        ISessionArchiveStore archiveStore,
         ILogger<SessionDataCleanupService> logger)
     {
         _pluginSessionStorage = pluginSessionStorage ?? throw new ArgumentNullException(nameof(pluginSessionStorage));
         _database = database ?? throw new ArgumentNullException(nameof(database));
+        _archiveStore = archiveStore ?? throw new ArgumentNullException(nameof(archiveStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -52,6 +56,7 @@ public sealed class SessionDataCleanupService
         var warnings = new List<string>();
         var deletedLogFiles = 0;
         var pluginStorageDeleted = false;
+        var archiveDeleted = false;
 
         IReadOnlyList<LogFileRecord> logFiles = Array.Empty<LogFileRecord>();
         try
@@ -106,7 +111,16 @@ public sealed class SessionDataCleanupService
             }
         }
 
-        return new SessionDataCleanupResult(target.SessionId, deletedLogFiles, pluginStorageDeleted, warnings);
+        try
+        {
+            archiveDeleted = _archiveStore.Delete(target.SessionId);
+        }
+        catch (Exception ex)
+        {
+            AddWarning(warnings, target.SessionId, $"Failed to delete session archive: {ex.Message}", ex);
+        }
+
+        return new SessionDataCleanupResult(target.SessionId, deletedLogFiles, pluginStorageDeleted, archiveDeleted, warnings);
     }
 
     private void AddWarning(List<string> warnings, string sessionId, string warning, Exception exception)

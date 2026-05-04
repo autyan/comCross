@@ -124,6 +124,10 @@ public sealed class CommandExecutionServiceTests
         public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
             => Task.CompletedTask;
 
+        public bool HasSessionArchiveData(string sessionId) => false;
+
+        public Task DeleteSessionArchiveDataAsync(string sessionId) => Task.CompletedTask;
+
         public Task<PluginCommandResult> SendMessageAsync(
             string sessionId,
             string message,
@@ -158,7 +162,12 @@ public sealed class CommandExecutionServiceTests
         {
         }
 
-        public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null, SessionLogExportFormat? format = null)
+        public Task<string> ExportAsync(
+            Session session,
+            string? searchQuery = null,
+            string? customFilePath = null,
+            SessionLogExportFormat? format = null,
+            MessageFrameDataSource source = MessageFrameDataSource.LiveSpool)
             => Task.FromResult(string.Empty);
     }
 }

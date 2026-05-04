@@ -9,11 +9,19 @@ public sealed class MessageFrameQueryService : IMessageFrameQueryService
     private const int ScanBatchSize = 512;
 
     private readonly IFrameStore _frameStore;
+    private readonly ISessionArchiveStore _archiveStore;
+    private readonly SessionArchiveStateTracker _archiveStateTracker;
     private readonly ILogger<MessageFrameQueryService> _logger;
 
-    public MessageFrameQueryService(IFrameStore frameStore, ILogger<MessageFrameQueryService> logger)
+    public MessageFrameQueryService(
+        IFrameStore frameStore,
+        ISessionArchiveStore archiveStore,
+        SessionArchiveStateTracker archiveStateTracker,
+        ILogger<MessageFrameQueryService> logger)
     {
         _frameStore = frameStore ?? throw new ArgumentNullException(nameof(frameStore));
+        _archiveStore = archiveStore ?? throw new ArgumentNullException(nameof(archiveStore));
+        _archiveStateTracker = archiveStateTracker ?? throw new ArgumentNullException(nameof(archiveStateTracker));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -26,7 +34,7 @@ public sealed class MessageFrameQueryService : IMessageFrameQueryService
 
         if (query.Source == MessageFrameDataSource.Archive)
         {
-            return new MessageFrameQueryResult(MessageFrameQueryStatus.ArchiveDisabled, Array.Empty<MessageFrameRecord>());
+            return QueryArchive(query);
         }
 
         if (query.Source != MessageFrameDataSource.LiveSpool)
@@ -49,6 +57,95 @@ public sealed class MessageFrameQueryService : IMessageFrameQueryService
             _logger.LogWarning(ex, "Message frame query failed: SessionId={SessionId} Source={Source} Kind={Kind}", query.SessionId, query.Source, query.Kind);
             return new MessageFrameQueryResult(MessageFrameQueryStatus.SourceUnavailable, Array.Empty<MessageFrameRecord>(), ErrorCode: "query-failed");
         }
+    }
+
+    private MessageFrameQueryResult QueryArchive(MessageFrameQuery query)
+    {
+        if (!_archiveStateTracker.CanReadArchive(query.SessionId))
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.ArchiveDisabled, Array.Empty<MessageFrameRecord>());
+        }
+
+        try
+        {
+            return query.Kind switch
+            {
+                MessageFrameQueryKind.Latest => QueryArchiveLatest(query),
+                MessageFrameQueryKind.After => QueryArchiveAfter(query),
+                MessageFrameQueryKind.Before => QueryArchiveBefore(query),
+                _ => new MessageFrameQueryResult(MessageFrameQueryStatus.InvalidQuery, Array.Empty<MessageFrameRecord>())
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Archive message frame query failed: SessionId={SessionId} Kind={Kind}", query.SessionId, query.Kind);
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.ArchiveError, Array.Empty<MessageFrameRecord>(), ErrorCode: "archive-query-failed");
+        }
+    }
+
+    private MessageFrameQueryResult QueryArchiveLatest(MessageFrameQuery query)
+    {
+        var info = _archiveStore.GetWindowInfo(query.SessionId);
+        if (info.LastFrameId <= 0)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.NoFrames, Array.Empty<MessageFrameRecord>(), info.FirstAvailableFrameId, info.LastFrameId);
+        }
+
+        var frames = _archiveStore.ReadLatest(query.SessionId, query.Limit);
+        return new MessageFrameQueryResult(
+            frames.Count == 0 ? MessageFrameQueryStatus.NoFrames : MessageFrameQueryStatus.Ok,
+            frames,
+            info.FirstAvailableFrameId,
+            info.LastFrameId);
+    }
+
+    private MessageFrameQueryResult QueryArchiveAfter(MessageFrameQuery query)
+    {
+        var info = _archiveStore.GetWindowInfo(query.SessionId);
+        if (info.LastFrameId <= 0)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.NoFrames, Array.Empty<MessageFrameRecord>(), info.FirstAvailableFrameId, info.LastFrameId);
+        }
+
+        if (query.FrameId >= info.LastFrameId)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.NoMoreAfter, Array.Empty<MessageFrameRecord>(), info.FirstAvailableFrameId, info.LastFrameId);
+        }
+
+        var frames = _archiveStore.ReadAfter(query.SessionId, query.FrameId, query.Limit);
+        var status = query.FrameId + 1 < info.FirstAvailableFrameId
+            ? MessageFrameQueryStatus.DataEvicted
+            : frames.Count == 0
+                ? MessageFrameQueryStatus.NoMoreAfter
+                : MessageFrameQueryStatus.Ok;
+
+        return new MessageFrameQueryResult(status, frames, info.FirstAvailableFrameId, info.LastFrameId);
+    }
+
+    private MessageFrameQueryResult QueryArchiveBefore(MessageFrameQuery query)
+    {
+        if (query.FrameId <= 0)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.InvalidQuery, Array.Empty<MessageFrameRecord>());
+        }
+
+        var info = _archiveStore.GetWindowInfo(query.SessionId);
+        if (info.LastFrameId <= 0)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.NoFrames, Array.Empty<MessageFrameRecord>(), info.FirstAvailableFrameId, info.LastFrameId);
+        }
+
+        if (query.FrameId <= info.FirstAvailableFrameId)
+        {
+            return new MessageFrameQueryResult(MessageFrameQueryStatus.NoMoreBefore, Array.Empty<MessageFrameRecord>(), info.FirstAvailableFrameId, info.LastFrameId);
+        }
+
+        var frames = _archiveStore.ReadBefore(query.SessionId, query.FrameId, query.Limit);
+        return new MessageFrameQueryResult(
+            frames.Count == 0 ? MessageFrameQueryStatus.NoMoreBefore : MessageFrameQueryStatus.Ok,
+            frames,
+            info.FirstAvailableFrameId,
+            info.LastFrameId);
     }
 
     private MessageFrameQueryResult QueryLatest(MessageFrameQuery query)

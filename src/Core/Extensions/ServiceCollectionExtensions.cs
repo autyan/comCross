@@ -98,7 +98,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new SharedMemoryConfig());
         services.AddSingleton<ISharedMemoryMapFactory, SharedMemoryMapFactory>();
         services.AddSingleton<SharedMemoryManager>();
-        services.AddSingleton<IFrameStore, SessionSpoolFrameStore>();
+        services.AddSingleton<SessionSpoolFrameStore>();
+        services.AddSingleton<SessionArchiveStateTracker>();
+        services.AddSingleton<ISessionArchiveStore, SessionArchiveStore>();
+        services.AddSingleton<SessionArchiveWriter>();
+        services.AddSingleton<IFrameStore>(sp => new ArchivingFrameStore(
+            sp.GetRequiredService<SessionSpoolFrameStore>(),
+            sp.GetRequiredService<SessionArchiveWriter>()));
         services.AddSingleton<IMessageFrameQueryService, MessageFrameQueryService>();
         services.AddSingleton<SharedMemoryIngestService>();
         services.AddSingleton<SharedMemorySessionService>();
