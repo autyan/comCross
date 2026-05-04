@@ -108,7 +108,10 @@ public sealed class MessageFrameQueryServiceTests : IDisposable
         settings.Current.Logs.MaxFileSizeMb = 1;
         settings.Current.Logs.MaxPerSessionSizeMb = maxPerSessionSizeMb;
         settings.Current.Logs.MaxTotalSizeMb = 64;
-        return new SessionSpoolFrameStore(paths, settings, NullLogger<SessionSpoolFrameStore>.Instance);
+        var notification = new NotificationService(new AppDatabase(paths), settings);
+        var health = new StorageHealthService(notification, NullLogger<StorageHealthService>.Instance);
+        var policy = new StoragePolicyService(health);
+        return new SessionSpoolFrameStore(paths, settings, policy, health, NullLogger<SessionSpoolFrameStore>.Instance);
     }
 
     private static void AppendFrames(SessionSpoolFrameStore store, string sessionId, int count, int payloadBytes)

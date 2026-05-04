@@ -15,10 +15,9 @@ namespace ComCross.Core.Services;
 public sealed class FrameStoreMessageStreamPumpService : IDisposable
 {
     private const int MaxLogBytes = 4 * 1024;
-    private const int MaxFramesPerSessionPerPump = 256;
-
     private readonly IFrameStore _frameStore;
     private readonly IMessageFrameQueryService _queryService;
+    private readonly IStoragePolicyService _storagePolicy;
     private readonly IMessageStreamService _messageStream;
     private readonly ILogger<FrameStoreMessageStreamPumpService> _logger;
 
@@ -38,11 +37,13 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
     public FrameStoreMessageStreamPumpService(
         IFrameStore frameStore,
         IMessageFrameQueryService queryService,
+        IStoragePolicyService storagePolicy,
         IMessageStreamService messageStream,
         ILogger<FrameStoreMessageStreamPumpService> logger)
     {
         _frameStore = frameStore ?? throw new ArgumentNullException(nameof(frameStore));
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+        _storagePolicy = storagePolicy ?? throw new ArgumentNullException(nameof(storagePolicy));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -126,7 +127,7 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
                 MessageFrameDataSource.LiveSpool,
                 MessageFrameQueryKind.After,
                 cursor,
-                MaxFramesPerSessionPerPump));
+                _storagePolicy.Current.MessagePumpBatchSize));
             var firstAvailable = result.FirstAvailableFrameId ?? 0;
             if (result.Status == MessageFrameQueryStatus.DataEvicted && cursor + 1 < firstAvailable)
             {

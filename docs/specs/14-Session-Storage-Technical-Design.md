@@ -207,6 +207,29 @@ Configurable values:
 Time-based rollover, frame-count rollover, compression, and hot/cold tiering are
 out of scope.
 
+### Segment Preallocation
+
+Storage tier controls spool workload shape, not durability level. Slower tiers
+reduce competing work, metadata churn, and fragmentation risk. They do not
+imply more frequent physical flushes.
+
+MVP preallocation rules:
+
+- `Conservative` and `Limited` may preallocate each new segment to the selected
+  segment size.
+- `Normal` and `HighCapacity` should avoid preallocation by default to keep the
+  fast path simple on SSD/NVMe storage.
+- Readers must use manifest `byteCount` or scan-derived valid length, not the
+  physical file length.
+- Cleanup and user-visible spool size accounting should use allocated bytes
+  when a segment is preallocated, because that is the disk pressure users
+  experience.
+
+The goal is to improve slow-disk behavior under multi-session contention by
+reducing file-growth metadata updates and improving the chance of contiguous
+segment layout. It is not a guarantee of lossless capture or crash-proof
+durability.
+
 ### Manifest
 
 The manifest is operational metadata, not the raw data source.
@@ -230,11 +253,17 @@ Recommended fields:
       "firstFrameId": 1,
       "lastFrameId": 5000,
       "byteCount": 67100000,
+      "allocatedBytes": 67108864,
+      "preallocated": true,
       "sealed": true
     }
   ]
 }
 ```
+
+`byteCount` means the valid written prefix that readers may scan. When a
+segment is preallocated, `allocatedBytes` may be larger than `byteCount`; the
+tail is unused capacity and must not be interpreted as frame data.
 
 Update strategy:
 
@@ -577,13 +606,35 @@ The v0.6.0 storage design must not block the 32-100 MB/s direction, but it also
 must not absorb the complexity of a dedicated packet-capture engine before real
 field demand is validated.
 
+Initial calibration thresholds:
+
+```text
+< 4 MB/s   Conservative
+< 16 MB/s  Limited
+< 48 MB/s  Normal
+>= 48 MB/s HighCapacity
+```
+
+`Conservative`, `Limited`, and `Normal` are hard budget tiers. `HighCapacity`
+is an optimistic tier that may release more hardware potential, but runtime
+health always wins. If pressure rises, ComCross should reduce optional work and
+consumer pressure before allowing silent loss.
+
 The tier maps to fixed parameters such as queue limits, segment size, flush
 interval, warning thresholds, and archive batch size. MVP does not continuously
 retune these parameters.
 
-The MVP may start with conservative constants for all tiers and then widen only
-the safest parameters after calibration. The contract is the tier and health
-surface, not the exact numeric thresholds.
+The MVP starts with fixed policy mappings:
+
+```text
+Conservative: 4 MB segment, preallocate, 64-frame pump batch
+Limited:      8 MB segment, preallocate, 128-frame pump batch
+Normal:       16 MB segment, no preallocation, 256-frame pump batch
+HighCapacity: 32 MB segment, no preallocation, 512-frame pump batch
+```
+
+User-configured segment maximum size remains a cap. The contract is the tier,
+policy shape, and health surface, not exact benchmark scores.
 
 ### Storage Health
 
@@ -664,6 +715,9 @@ analysis
 MVP scheduling:
 
 - spool writes are highest priority;
+- ComCross does not limit how many sessions a user may run;
+- when multiple active sessions make storage exceed safe capacity, Core reports
+  storage pressure instead of silently throttling session creation;
 - archive writes are asynchronous and bounded;
 - export is background and lower priority than ingest;
 - analysis consumers are lower priority than export;

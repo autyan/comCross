@@ -288,6 +288,9 @@ Required behavior:
 - Storage overload and loss must be visible through diagnostics and user
   notifications.
 - Storage pressure must integrate with existing bus pressure handling.
+- ComCross should not prevent users from running multiple sessions only because
+  the storage tier is low. If multi-session capture creates storage pressure,
+  Core should surface a clear pressure or degraded-state message.
 
 The exact calibration workload, threshold values, fingerprint inputs, and policy
 names are MVP implementation details. The fingerprint must avoid raw private

@@ -65,6 +65,34 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
         Assert.Contains(frames, frame => frame.FrameId == 3);
     }
 
+    [Fact]
+    public void ConservativePolicy_PreallocatesSegments()
+    {
+        var store = CreateStore(StorageTier.Conservative);
+
+        store.Append("session-prealloc", DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "rx");
+
+        var segment = Directory.EnumerateFiles(Path.Combine(_root, "data", "session-spool"), "*.csf", SearchOption.AllDirectories)
+            .Single();
+        var length = new FileInfo(segment).Length;
+
+        Assert.Equal(1024 * 1024, length);
+    }
+
+    [Fact]
+    public void HighCapacityPolicy_DoesNotPreallocateSegments()
+    {
+        var store = CreateStore(StorageTier.HighCapacity);
+
+        store.Append("session-no-prealloc", DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "rx");
+
+        var segment = Directory.EnumerateFiles(Path.Combine(_root, "data", "session-spool"), "*.csf", SearchOption.AllDirectories)
+            .Single();
+        var length = new FileInfo(segment).Length;
+
+        Assert.True(length < 1024 * 1024);
+    }
+
     public void Dispose()
     {
         try
@@ -79,7 +107,7 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
         }
     }
 
-    private SessionSpoolFrameStore CreateStore()
+    private SessionSpoolFrameStore CreateStore(StorageTier tier = StorageTier.Conservative)
     {
         var paths = new ComCrossPathService(
             Path.Combine(_root, "install"),
@@ -90,6 +118,10 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
         settings.Current.Logs.MaxFileSizeMb = 1;
         settings.Current.Logs.MaxPerSessionSizeMb = 1;
         settings.Current.Logs.MaxTotalSizeMb = 16;
-        return new SessionSpoolFrameStore(paths, settings, NullLogger<SessionSpoolFrameStore>.Instance);
+        var notification = new NotificationService(new AppDatabase(paths), settings);
+        var health = new StorageHealthService(notification, NullLogger<StorageHealthService>.Instance);
+        var policy = new StoragePolicyService(health);
+        health.ApplyTier(tier);
+        return new SessionSpoolFrameStore(paths, settings, policy, health, NullLogger<SessionSpoolFrameStore>.Instance);
     }
 }

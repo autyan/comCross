@@ -12,12 +12,14 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 {
     private const int SegmentMagic = 0x46534343; // CCSF
     private const int SegmentSchemaVersion = 1;
-    private const int ManifestSchemaVersion = 1;
+    private const int ManifestSchemaVersion = 2;
     private const int CheckpointEveryFrames = 256;
     private const string DefaultWorkspaceId = "default";
 
     private readonly ComCrossPathService _paths;
     private readonly SettingsService _settingsService;
+    private readonly IStoragePolicyService _storagePolicy;
+    private readonly IStorageHealthService _storageHealth;
     private readonly ILogger<SessionSpoolFrameStore> _logger;
     private readonly ConcurrentDictionary<string, SessionSpoolState> _sessions = new(StringComparer.Ordinal);
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
@@ -25,10 +27,14 @@ public sealed class SessionSpoolFrameStore : IFrameStore
     public SessionSpoolFrameStore(
         ComCrossPathService paths,
         SettingsService settingsService,
+        IStoragePolicyService storagePolicy,
+        IStorageHealthService storageHealth,
         ILogger<SessionSpoolFrameStore> logger)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _storagePolicy = storagePolicy ?? throw new ArgumentNullException(nameof(storagePolicy));
+        _storageHealth = storageHealth ?? throw new ArgumentNullException(nameof(storageHealth));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -121,7 +127,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
                          .OrderBy(s => s.SegmentId))
             {
                 var path = Path.Combine(state.Directory, segment.FileName);
-                foreach (var frame in ReadSegment(path))
+                foreach (var frame in ReadSegment(path, segment.ByteCount))
                 {
                     if (frame.FrameId < startFrameId)
                     {
@@ -254,12 +260,14 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 
         foreach (var file in files)
         {
-            var frames = ReadSegment(file).ToList();
+            var frames = ReadSegment(file, null).ToList();
             if (frames.Count == 0)
             {
                 continue;
             }
 
+            var validBytes = ScanValidBytes(file);
+            var allocatedBytes = new FileInfo(file).Length;
             var segmentId = TryParseSegmentId(Path.GetFileNameWithoutExtension(file));
             if (segmentId <= 0)
             {
@@ -272,7 +280,9 @@ public sealed class SessionSpoolFrameStore : IFrameStore
                 FileName = Path.GetFileName(file),
                 FirstFrameId = frames[0].FrameId,
                 LastFrameId = frames[^1].FrameId,
-                ByteCount = new FileInfo(file).Length,
+                ByteCount = validBytes,
+                AllocatedBytes = allocatedBytes,
+                Preallocated = allocatedBytes > validBytes,
                 Sealed = true,
                 CreatedAtUtc = File.GetCreationTimeUtc(file)
             });
@@ -285,7 +295,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             manifest.Segments[^1].Sealed = false;
             manifest.FirstAvailableFrameId = manifest.Segments[0].FirstFrameId;
             manifest.LastFrameId = manifest.Segments[^1].LastFrameId;
-            manifest.TotalSpoolBytes = manifest.Segments.Sum(s => Math.Max(0, s.ByteCount));
+            manifest.TotalSpoolBytes = manifest.Segments.Sum(GetAccountingBytes);
         }
 
         return manifest;
@@ -312,15 +322,16 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             FirstFrameId = 0,
             LastFrameId = 0,
             ByteCount = 0,
+            AllocatedBytes = 0,
+            Preallocated = false,
             Sealed = false,
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        WriteSegmentHeader(Path.Combine(state.Directory, segment.FileName), state.SessionId, segment.SegmentId, segment.CreatedAtUtc);
-        segment.ByteCount = new FileInfo(Path.Combine(state.Directory, segment.FileName)).Length;
+        InitializeSegmentFile(state, segment);
         state.Manifest.Segments.Add(segment);
         state.Manifest.ActiveSegmentId = segment.SegmentId;
-        state.Manifest.TotalSpoolBytes += segment.ByteCount;
+        state.Manifest.TotalSpoolBytes += GetAccountingBytes(segment);
         SaveManifest(state);
     }
 
@@ -339,21 +350,24 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         }
 
         var path = Path.Combine(state.Directory, active.FileName);
-        using (var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read, 64 * 1024, FileOptions.WriteThrough))
+        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read, 64 * 1024))
         {
+            stream.Position = active.ByteCount;
             using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
             writer.Write(recordBytes.Length);
             writer.Write(recordBytes);
             writer.Flush();
-            stream.Flush(flushToDisk: true);
+            stream.Flush();
         }
 
         var bytesWritten = recordBytes.Length + sizeof(int);
+        var previousAccountingBytes = GetAccountingBytes(active);
         active.FirstFrameId = active.FirstFrameId == 0 ? record.FrameId : active.FirstFrameId;
         active.LastFrameId = record.FrameId;
         active.ByteCount += bytesWritten;
+        active.AllocatedBytes = Math.Max(active.AllocatedBytes, active.ByteCount);
         state.Manifest.LastFrameId = record.FrameId;
-        state.Manifest.TotalSpoolBytes += bytesWritten;
+        state.Manifest.TotalSpoolBytes += GetAccountingBytes(active) - previousAccountingBytes;
         if (state.Manifest.FirstAvailableFrameId <= 0)
         {
             state.Manifest.FirstAvailableFrameId = record.FrameId;
@@ -389,15 +403,16 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             FirstFrameId = 0,
             LastFrameId = 0,
             ByteCount = 0,
+            AllocatedBytes = 0,
+            Preallocated = false,
             Sealed = false,
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        WriteSegmentHeader(Path.Combine(state.Directory, segment.FileName), state.SessionId, segment.SegmentId, segment.CreatedAtUtc);
-        segment.ByteCount = new FileInfo(Path.Combine(state.Directory, segment.FileName)).Length;
+        InitializeSegmentFile(state, segment);
         state.Manifest.Segments.Add(segment);
         state.Manifest.ActiveSegmentId = segment.SegmentId;
-        state.Manifest.TotalSpoolBytes += segment.ByteCount;
+        state.Manifest.TotalSpoolBytes += GetAccountingBytes(segment);
         SaveManifest(state);
     }
 
@@ -418,10 +433,32 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         return segmentId;
     }
 
-    private static void WriteSegmentHeader(string path, string sessionId, long segmentId, DateTime createdAtUtc)
+    private void InitializeSegmentFile(SessionSpoolState state, SpoolSegmentManifest segment)
+    {
+        var path = Path.Combine(state.Directory, segment.FileName);
+        var headerBytes = WriteSegmentHeader(path, state.SessionId, segment.SegmentId, segment.CreatedAtUtc);
+        segment.ByteCount = headerBytes;
+
+        var policy = _storagePolicy.Current;
+        var segmentMaxBytes = GetSegmentMaxBytes(policy);
+        if (policy.PreallocateSegments)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read, 4096);
+            stream.SetLength(segmentMaxBytes);
+            segment.AllocatedBytes = segmentMaxBytes;
+            segment.Preallocated = true;
+        }
+        else
+        {
+            segment.AllocatedBytes = headerBytes;
+            segment.Preallocated = false;
+        }
+    }
+
+    private static long WriteSegmentHeader(string path, string sessionId, long segmentId, DateTime createdAtUtc)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough);
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 4096);
         using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
         writer.Write(SegmentMagic);
         writer.Write(SegmentSchemaVersion);
@@ -429,7 +466,8 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         writer.Write(createdAtUtc.Ticks);
         WriteString(writer, sessionId);
         writer.Flush();
-        stream.Flush(flushToDisk: true);
+        stream.Flush();
+        return stream.Position;
     }
 
     private static byte[] EncodeRecord(MessageFrameRecord record)
@@ -453,7 +491,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         return memory.ToArray();
     }
 
-    private static IEnumerable<MessageFrameRecord> ReadSegment(string path)
+    private static IEnumerable<MessageFrameRecord> ReadSegment(string path, long? validBytes)
     {
         if (!File.Exists(path))
         {
@@ -468,10 +506,14 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             yield break;
         }
 
-        while (stream.Position + sizeof(int) <= stream.Length)
+        var readLimit = validBytes is > 0
+            ? Math.Min(validBytes.Value, stream.Length)
+            : stream.Length;
+
+        while (stream.Position + sizeof(int) <= readLimit)
         {
             var recordLength = reader.ReadInt32();
-            if (recordLength <= 0 || stream.Position + recordLength > stream.Length)
+            if (recordLength <= 0 || stream.Position + recordLength > readLimit)
             {
                 yield break;
             }
@@ -482,6 +524,47 @@ public sealed class SessionSpoolFrameStore : IFrameStore
                 yield return record;
             }
         }
+    }
+
+    private static long ScanValidBytes(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return 0;
+        }
+
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+        if (!TryReadSegmentHeader(reader))
+        {
+            return 0;
+        }
+
+        var validBytes = stream.Position;
+        while (stream.Position + sizeof(int) <= stream.Length)
+        {
+            var lengthPosition = stream.Position;
+            var recordLength = reader.ReadInt32();
+            if (recordLength <= 0 || stream.Position + recordLength > stream.Length)
+            {
+                return validBytes;
+            }
+
+            var bytes = reader.ReadBytes(recordLength);
+            if (bytes.Length != recordLength || !TryDecodeRecord(bytes, out _))
+            {
+                return validBytes;
+            }
+
+            validBytes = stream.Position;
+
+            if (stream.Position == lengthPosition)
+            {
+                return validBytes;
+            }
+        }
+
+        return validBytes;
     }
 
     private static bool TryReadSegmentHeader(BinaryReader reader)
@@ -603,6 +686,11 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 
             DeleteSegment(state, victim);
         }
+
+        if (state.Manifest.TotalSpoolBytes > maxBytes)
+        {
+            ReportStoragePressure("session-spool-limit-active-segment");
+        }
     }
 
     private void CleanupGlobalIfNeeded()
@@ -672,7 +760,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
                         continue;
                     }
 
-                    var removedBytes = Math.Max(0, item.Segment.ByteCount);
+                    var removedBytes = GetAccountingBytes(item.Segment);
                     DeleteSegment(item.State, item.Segment);
                     total -= removedBytes;
                 }
@@ -691,7 +779,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             }
 
             var filePath = Path.Combine(directory, item.Segment.FileName);
-            var byteCount = Math.Max(0, item.Segment.ByteCount);
+            var byteCount = GetAccountingBytes(item.Segment);
             TryDeleteFile(filePath);
             item.Manifest.Segments.Remove(item.Segment);
             item.Manifest.TotalSpoolBytes -= byteCount;
@@ -702,13 +790,23 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             File.WriteAllText(item.ManifestPath, JsonSerializer.Serialize(item.Manifest, _jsonOptions));
             total -= byteCount;
         }
+
+        if (total > maxBytes)
+        {
+            ReportStoragePressure("global-spool-limit-active-segments");
+        }
+    }
+
+    private void ReportStoragePressure(string reason)
+    {
+        _ = _storageHealth.ReportAsync(StorageHealth.Degraded, reason);
     }
 
     private void DeleteSegment(SessionSpoolState state, SpoolSegmentManifest segment)
     {
         TryDeleteFile(Path.Combine(state.Directory, segment.FileName));
         state.Manifest.Segments.Remove(segment);
-        state.Manifest.TotalSpoolBytes -= Math.Max(0, segment.ByteCount);
+        state.Manifest.TotalSpoolBytes -= GetAccountingBytes(segment);
         state.Manifest.DroppedFrames += Math.Max(0, segment.LastFrameId - segment.FirstFrameId + 1);
         state.Manifest.FirstAvailableFrameId = state.Manifest.Segments.Count == 0
             ? state.Manifest.LastFrameId + 1
@@ -731,7 +829,17 @@ public sealed class SessionSpoolFrameStore : IFrameStore
     }
 
     private long GetSegmentMaxBytes()
-        => Math.Max(1, _settingsService.Current.Logs.MaxFileSizeMb) * 1024L * 1024L;
+        => GetSegmentMaxBytes(_storagePolicy.Current);
+
+    private long GetSegmentMaxBytes(StoragePolicy policy)
+    {
+        var configured = Math.Max(1, _settingsService.Current.Logs.MaxFileSizeMb);
+        var policySize = Math.Max(1, policy.SegmentSizeMb);
+        return Math.Min(configured, policySize) * 1024L * 1024L;
+    }
+
+    private static long GetAccountingBytes(SpoolSegmentManifest segment)
+        => Math.Max(0, segment.Preallocated ? segment.AllocatedBytes : segment.ByteCount);
 
     private static string GetManifestPath(SessionSpoolState state)
         => Path.Combine(state.Directory, "manifest.json");
@@ -789,6 +897,8 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         public long FirstFrameId { get; set; }
         public long LastFrameId { get; set; }
         public long ByteCount { get; set; }
+        public long AllocatedBytes { get; set; }
+        public bool Preallocated { get; set; }
         public bool Sealed { get; set; }
         public DateTime CreatedAtUtc { get; set; }
     }

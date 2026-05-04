@@ -177,7 +177,7 @@ public sealed class StorageCalibrationService : IStorageCalibrationService
         {
             < 4 => StorageTier.Conservative,
             < 16 => StorageTier.Limited,
-            < 96 => StorageTier.Normal,
+            < 48 => StorageTier.Normal,
             _ => StorageTier.HighCapacity
         };
 

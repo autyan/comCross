@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
         services.AddSingleton<IStorageHealthService, StorageHealthService>();
+        services.AddSingleton<IStoragePolicyService, StoragePolicyService>();
         services.AddSingleton<IStorageCalibrationService, StorageCalibrationService>();
         services.AddSingleton<AppLogService>();
         services.AddSingleton<LogStorageService>();

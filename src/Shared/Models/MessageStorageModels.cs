@@ -106,3 +106,9 @@ public sealed record StorageHealthSnapshot(
     StorageTier Tier,
     DateTime UpdatedAtUtc,
     string? Reason = null);
+
+public sealed record StoragePolicy(
+    StorageTier Tier,
+    int SegmentSizeMb,
+    bool PreallocateSegments,
+    int MessagePumpBatchSize);
