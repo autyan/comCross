@@ -65,6 +65,7 @@
       "stream.source.live": "实时",
       "stream.source.history": "历史",
       "stream.source.label": "来源",
+      "stream.window.returnToLatest": "最新",
       "stream.density.plain": "Plain",
       "stream.density.slim": "Slim",
       "stream.density.detailed": "Detailed",

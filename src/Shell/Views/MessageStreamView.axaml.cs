@@ -142,7 +142,10 @@ public partial class MessageStreamView : BaseUserControl
             return;
         }
 
-        if (!vm.Display.AutoScrollEnabled || vm.MessageItems.Count == 0 || vm.HasSearchQuery)
+        if (!vm.Display.AutoScrollEnabled
+            || vm.MessageItems.Count == 0
+            || vm.HasSearchQuery
+            || vm.IsReturnToLatestVisible)
         {
             return;
         }
@@ -161,6 +164,7 @@ public partial class MessageStreamView : BaseUserControl
             || !ReferenceEquals(DataContext, vm)
             || !vm.Display.AutoScrollEnabled
             || vm.HasSearchQuery
+            || vm.IsReturnToLatestVisible
             || vm.MessageItems.Count == 0)
         {
             return;
@@ -277,6 +281,14 @@ public partial class MessageStreamView : BaseUserControl
         if (DataContext is MessageStreamViewModel vm)
         {
             vm.GoToNextSearchMatch();
+        }
+    }
+
+    private void OnReturnToLatestClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ReturnToLatest();
         }
     }
 

@@ -517,6 +517,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["stream.source.live"] = "Live",
             ["stream.source.history"] = "History",
             ["stream.source.label"] = "Source",
+            ["stream.window.returnToLatest"] = "Latest",
             ["stream.density.plain"] = "Plain",
             ["stream.density.slim"] = "Slim",
             ["stream.density.detailed"] = "Detailed",

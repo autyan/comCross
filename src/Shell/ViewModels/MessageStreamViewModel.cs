@@ -19,6 +19,12 @@ public sealed record MessageDataSourceOption(MessageFrameDataSource Source, stri
 
 public sealed class MessageStreamViewModel : BaseViewModel
 {
+    private sealed record MessageWindowSnapshot(
+        MessageFrameDataSource Source,
+        long FirstFrameId,
+        long LastFrameId,
+        int Limit);
+
     private readonly IMessageStreamService _messageStream;
     private readonly IMessageFrameQueryService _messageFrameQuery;
     private readonly IMessageFrameSearchService _messageFrameSearch;
@@ -39,6 +45,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _searchDebounceCts;
     private readonly Dictionary<long, (int Start, int Length)> _aggregateFrameRanges = new();
+    private MessageWindowSnapshot? _currentWindowSnapshot;
+    private MessageWindowSnapshot? _preSearchWindowSnapshot;
     private int _selectedSearchMatchIndex = -1;
     private int _aggregateSelectionStart;
     private int _aggregateSelectionLength;
@@ -47,6 +55,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private bool _applyingSessionDisplayOptions;
     private bool _isMetricsBarVisible;
     private bool _isSearchRunning;
+    private bool _isReturnToLatestVisible;
     private string _searchStatus = string.Empty;
     private string _aggregateMessageText = string.Empty;
     private LogMessageListItemViewModel? _selectedMessageItem;
@@ -111,15 +120,30 @@ public sealed class MessageStreamViewModel : BaseViewModel
         get => _searchQuery;
         set
         {
+            var hadSearch = !string.IsNullOrWhiteSpace(_searchQuery);
             if (!SetProperty(ref _searchQuery, value))
             {
                 return;
             }
 
+            if (!hadSearch && !string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                _preSearchWindowSnapshot = CaptureCurrentWindowSnapshot();
+                IsReturnToLatestVisible = false;
+            }
+
             ResetSearchState();
             if (string.IsNullOrWhiteSpace(_searchQuery))
             {
-                LoadMessages();
+                if (hadSearch)
+                {
+                    RestorePreSearchWindow();
+                }
+                else
+                {
+                    LoadMessages();
+                }
+
                 return;
             }
 
@@ -195,6 +219,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
                 OnPropertyChanged(nameof(SelectedDataSourceOption));
                 OnPropertyChanged(nameof(IsArchiveHistoryMode));
                 OnPropertyChanged(nameof(CanOpenLiveData));
+                _preSearchWindowSnapshot = null;
+                IsReturnToLatestVisible = false;
                 ResetSearchState();
                 LoadMessages();
             }
@@ -270,6 +296,12 @@ public sealed class MessageStreamViewModel : BaseViewModel
     public bool IsMessageStatusBarVisible => IsMetricsBarVisible || HasSearchStatus;
 
     public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
+
+    public bool IsReturnToLatestVisible
+    {
+        get => _isReturnToLatestVisible;
+        private set => SetProperty(ref _isReturnToLatestVisible, value);
+    }
 
     public string AggregateMessageText
     {
@@ -401,6 +433,13 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     public void ClearSearch()
         => SearchQuery = string.Empty;
+
+    public void ReturnToLatest()
+    {
+        IsReturnToLatestVisible = false;
+        _preSearchWindowSnapshot = null;
+        LoadMessages();
+    }
 
     public async Task StartSearchAsync()
     {
@@ -542,6 +581,9 @@ public sealed class MessageStreamViewModel : BaseViewModel
         ActiveSession = session;
         ApplySessionDisplayOptions(session);
         RaiseSessionContextChanged();
+        _currentWindowSnapshot = null;
+        _preSearchWindowSnapshot = null;
+        IsReturnToLatestVisible = false;
 
         _messageSubscription?.Dispose();
         _messageSubscription = null;
@@ -566,7 +608,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
                 }
 
                 if (DataSource == MessageFrameDataSource.LiveSpool
-                    && string.IsNullOrWhiteSpace(SearchQuery))
+                    && string.IsNullOrWhiteSpace(SearchQuery)
+                    && !IsReturnToLatestVisible)
                 {
                     LoadMessages();
                 }
@@ -577,6 +620,9 @@ public sealed class MessageStreamViewModel : BaseViewModel
     public void ClearView()
     {
         MessageItems.Clear();
+        _currentWindowSnapshot = null;
+        _preSearchWindowSnapshot = null;
+        IsReturnToLatestVisible = false;
         RebuildAggregateText();
     }
 
@@ -587,6 +633,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
         if (_activeSession?.Id is not { Length: > 0 })
         {
+            _currentWindowSnapshot = null;
             RebuildAggregateText();
             return;
         }
@@ -609,6 +656,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
             MessageItems.Add(CreateItemContext(frame));
         }
 
+        UpdateCurrentWindowSnapshot();
         RebuildAggregateText();
     }
 
@@ -651,10 +699,96 @@ public sealed class MessageStreamViewModel : BaseViewModel
             }
         }
 
+        UpdateCurrentWindowSnapshot();
         RebuildAggregateText();
         SelectAggregateFrame(frameId);
         UpdateDetailedSearchMatchState();
     }
+
+    private void RestorePreSearchWindow()
+    {
+        var snapshot = _preSearchWindowSnapshot;
+        _preSearchWindowSnapshot = null;
+
+        if (snapshot is null || _activeSession?.Id is not { Length: > 0 })
+        {
+            LoadMessages();
+            return;
+        }
+
+        var shouldSuspendFollowLatest = DataSource == MessageFrameDataSource.LiveSpool;
+        IsReturnToLatestVisible = shouldSuspendFollowLatest;
+        var restored = RestoreWindow(snapshot);
+        IsReturnToLatestVisible = restored && shouldSuspendFollowLatest;
+    }
+
+    private bool RestoreWindow(MessageWindowSnapshot snapshot)
+    {
+        if (_activeSession?.Id is not { Length: > 0 } || snapshot.Source != DataSource)
+        {
+            LoadMessages();
+            return false;
+        }
+
+        MessageItems.Clear();
+        SelectedMessageItem = null;
+
+        var result = _messageFrameQuery.Query(new MessageFrameQuery(
+            _activeSession.Id,
+            snapshot.Source,
+            MessageFrameQueryKind.After,
+            Math.Max(0, snapshot.FirstFrameId - 1),
+            Math.Max(1, snapshot.Limit)));
+
+        foreach (var frame in result.Frames)
+        {
+            if (frame.FrameId <= snapshot.LastFrameId)
+            {
+                MessageItems.Add(CreateItemContext(frame));
+            }
+        }
+
+        if (MessageItems.Count == 0)
+        {
+            LoadMessages();
+            return false;
+        }
+
+        UpdateCurrentWindowSnapshot();
+        RebuildAggregateText();
+        return true;
+    }
+
+    private MessageWindowSnapshot? CaptureCurrentWindowSnapshot()
+    {
+        var first = GetFrameId(MessageItems.FirstOrDefault());
+        var last = GetFrameId(MessageItems.LastOrDefault());
+        if (first <= 0 || last <= 0)
+        {
+            return _currentWindowSnapshot;
+        }
+
+        return new MessageWindowSnapshot(
+            DataSource,
+            first,
+            last,
+            Math.Max(1, MessageItems.Count));
+    }
+
+    private void UpdateCurrentWindowSnapshot()
+    {
+        var first = GetFrameId(MessageItems.FirstOrDefault());
+        var last = GetFrameId(MessageItems.LastOrDefault());
+        _currentWindowSnapshot = first > 0 && last > 0
+            ? new MessageWindowSnapshot(DataSource, first, last, Math.Max(1, MessageItems.Count))
+            : null;
+    }
+
+    private static long GetFrameId(LogMessageListItemViewModel? item)
+        => item is not null
+           && long.TryParse(item.Message.Id, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var frameId)
+            ? frameId
+            : 0;
 
     private void OnActiveSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
