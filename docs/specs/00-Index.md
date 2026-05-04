@@ -12,6 +12,7 @@ This directory contains the public technical specifications for ComCross v0.4.0.
 - [12-Startup-Identity-Signing-Design.md](12-Startup-Identity-Signing-Design.md) - Planned startup, instance identity, signing, and plugin trust design
 - [13-Session-Logs-And-Archive-Design.md](13-Session-Logs-And-Archive-Design.md) - v0.6 session logs, spool, and archive storage design
 - [14-Session-Storage-Technical-Design.md](14-Session-Storage-Technical-Design.md) - v0.6 session storage MVP technical design
+- [15-Session-Storage-UI-Design.md](15-Session-Storage-UI-Design.md) - v0.6 session storage UI shape and interaction design
 
 ## User Experience
 

@@ -480,7 +480,7 @@ Header:
 
 ```text
 CCLOG/1
-format: plain|lite|detailed-jsonl
+format: plain|slim|detailed-jsonl
 source: LiveSpool|Archive
 exportedAtUtc: 2026-05-04T12:00:00.000Z
 app: ComCross
@@ -491,7 +491,7 @@ contentVersion: 1
 Body:
 
 - `plain`: one rendered raw-data line per frame.
-- `lite`: one `RX|TX` plus rendered raw-data line per frame.
+- `slim`: one `RX|TX` plus rendered raw-data line per frame.
 - `detailed-jsonl`: one JSON object per frame.
 
 Detailed JSONL frame:

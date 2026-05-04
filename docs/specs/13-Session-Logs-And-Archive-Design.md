@@ -82,7 +82,7 @@ The MVP should include stable entry points for the target product flow:
 - Per-session Archive management.
 - Archive enable, disable, and delete actions.
 - Live and History data source switching in the message viewer.
-- Plain, Lite, and Detailed message display modes.
+- Plain, Slim, and Detailed message display modes.
 - Storage calibration, pressure, loss, cleanup, and archive-failure messages.
 - Basic export for complete available data from the selected message data
   source.
@@ -118,10 +118,10 @@ Data sources:
 Display modes:
 
 - `Plain`: raw data only.
-- `Lite`: RX/TX marker plus raw data.
+- `Slim`: RX/TX marker plus raw data.
 - `Detailed`: metadata, attributes, actions, and future decode entry points.
 
-Plain and Lite modes should visually behave like plain text:
+Plain and Slim modes should visually behave like plain text:
 
 - no card frame per message;
 - no extra vertical spacing between frames;
@@ -146,7 +146,7 @@ spool segment files as user-facing artifacts.
 Export modes mirror the message viewer display modes:
 
 - `Plain`: raw data only.
-- `Lite`: RX/TX marker plus raw data.
+- `Slim`: RX/TX marker plus raw data.
 - `Detailed`: frame metadata plus raw data. Detailed export must include frame
   ID, timestamp, direction, source, and attributes so buses such as UDP can
   preserve necessary endpoint/source facts.
