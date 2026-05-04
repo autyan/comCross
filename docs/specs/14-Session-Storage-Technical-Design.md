@@ -551,6 +551,32 @@ Meanings:
 - `Normal`: storage path supports default targets.
 - `HighCapacity`: storage path has clear safe headroom.
 
+The MVP uses tiers as operational budgets, not as public benchmark scores.
+Initial sustained-throughput targets are:
+
+```text
+Conservative: <= 1-2 MB/s sustained
+Limited:      <= 4-8 MB/s sustained
+Normal:       <= 16-32 MB/s sustained
+HighCapacity: > 32 MB/s sustained
+```
+
+These are communication-data targets after allowing headroom for frame
+metadata, manifest work, cleanup, query, export, and UI pressure. They are not
+raw disk benchmark numbers.
+
+The broader product boundary is:
+
+```text
+v1.0 core target:          <= 32 MB/s sustained, usable browsing/export
+v1.x professional target:  32-100 MB/s sustained, landing-first degradation
+future capture engine:     > 100 MB/s sustained or true line-rate capture
+```
+
+The v0.6.0 storage design must not block the 32-100 MB/s direction, but it also
+must not absorb the complexity of a dedicated packet-capture engine before real
+field demand is validated.
+
 The tier maps to fixed parameters such as queue limits, segment size, flush
 interval, warning thresholds, and archive batch size. MVP does not continuously
 retune these parameters.

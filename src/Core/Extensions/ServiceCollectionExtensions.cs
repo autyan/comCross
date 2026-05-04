@@ -44,6 +44,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
+        services.AddSingleton<IStorageHealthService, StorageHealthService>();
+        services.AddSingleton<IStorageCalibrationService, StorageCalibrationService>();
         services.AddSingleton<AppLogService>();
         services.AddSingleton<LogStorageService>();
         

@@ -75,6 +75,22 @@ public enum StorageTier
     HighCapacity
 }
 
+public enum StorageCalibrationPhase
+{
+    Conservative,
+    Calibrating,
+    Completed,
+    Failed
+}
+
+public sealed record StorageCalibrationSnapshot(
+    StorageCalibrationPhase Phase,
+    StorageTier Tier,
+    string? FingerprintHash,
+    DateTime? LastCalibratedAtUtc,
+    string StorageRoot,
+    string? Reason = null);
+
 public enum StorageHealth
 {
     Healthy,
@@ -84,3 +100,9 @@ public enum StorageHealth
     ArchiveError,
     Unavailable
 }
+
+public sealed record StorageHealthSnapshot(
+    StorageHealth Health,
+    StorageTier Tier,
+    DateTime UpdatedAtUtc,
+    string? Reason = null);

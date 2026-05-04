@@ -86,6 +86,26 @@ Storage settings copy should make the business model explicit:
 - Session Logs may be cleaned when limits are reached.
 - Long-term history requires enabling Archive for a specific session.
 
+The UI should also prepare a clear user-facing entry for high-volume capture
+expectations. The MVP does not need a benchmark report or tuning console, but
+users should be able to understand:
+
+- the active calibration phase and storage policy;
+- whether ComCross is using conservative, limited, normal, or high-capacity
+  behavior;
+- that ComCross is optimized for storage-first communication capture and may
+  degrade viewer, archive, export, or analysis work before compromising live
+  spool append;
+- that v1.0 does not promise general-purpose line-rate packet capture or logic
+  analyzer style sampling;
+- where to find Session Logs data and how to export complete available landed
+  data.
+
+This entry may start as compact Settings copy and storage status. It should
+remain compatible with a future first-run or help-panel explanation if product
+validation shows that high-volume capture positioning needs a more explicit
+surface.
+
 ### Session Detail Drawer
 
 The session detail drawer is the primary Archive management entry point because
@@ -372,4 +392,3 @@ product contract:
   spool file or SQLite implementation details.
 - Export and viewer display share concepts but have different guarantees:
   viewer truncation is allowed, export truncation is not.
-

@@ -91,6 +91,31 @@ The MVP should include stable entry points for the target product flow:
 These entry points may expose limited MVP behavior, but their product meaning
 should not be temporary.
 
+### High-Volume Capture Boundary
+
+ComCross treats high-volume capture as a storage-first communication workflow,
+not as a v1.0 promise to replace every packet-capture or signal-sampling tool.
+
+The product should be able to describe its boundary clearly to users:
+
+- Session Logs are optimized for long-running device communication, embedded
+  logs, industrial and automotive buses, multi-source communication capture,
+  and high-throughput application data streams.
+- The storage-first model is meant to keep landed data browseable,
+  exportable, and analyzable even when memory-first or UI-first workflows would
+  become unstable.
+- Under pressure, ComCross may reduce viewer refresh, archive writes, export,
+  analysis, or detailed rendering before compromising the spool append path.
+- Data loss, cleanup loss, and storage overload must be visible and
+  explainable.
+- v1.0 does not claim general-purpose line-rate packet capture, kernel-level
+  capture integration, full pcap/pcapng ecosystem replacement, or logic
+  analyzer style signal sampling.
+
+The long-term product direction may expand toward a dedicated high-speed
+capture engine after field validation. That should be treated as a separate
+capability line, not as a hidden requirement of the v0.6.0 spool/archive scope.
+
 ### Non-Negotiable Boundaries
 
 - Enabling archive must not change spool file structure, spool cleanup, or spool
