@@ -33,6 +33,12 @@ At least one diagnostic surface must make the migration observable:
 - Logging.
 - Test coverage.
 
+## Session Descriptor Display State
+
+- Message viewer display preferences that are part of a session context must be persisted on `SessionDescriptor`, not only in global settings. This includes payload render mode and message display mode.
+- The compatible-read migration strategy for missing display fields is: default payload render mode to `String` and default message display mode to `Detailed`.
+- Changing display mode must not change message viewer data loading semantics. The persisted display fields control Shell rendering only; `LiveSpool` / `Archive` window loading and search paths remain shared.
+
 ## Compatibility
 
 - During the current pre-stable stage, compatibility reads and migrations are not required by default for directory, configuration, database, plugin layout, or install layout changes.

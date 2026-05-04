@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,6 +16,7 @@ namespace ComCross.Shell.Views;
 public partial class MessageStreamView : BaseUserControl
 {
     private INotifyCollectionChanged? _currentMessages;
+    private MessageStreamViewModel? _currentViewModel;
     private int _messageSubscriptionVersion;
     private bool _isDetached;
 
@@ -54,6 +56,8 @@ public partial class MessageStreamView : BaseUserControl
 
         if (DataContext is MessageStreamViewModel vm)
         {
+            _currentViewModel = vm;
+            _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
             _currentMessages = vm.MessageItems;
             _currentMessages.CollectionChanged += OnMessagesChanged;
             unchecked
@@ -74,6 +78,40 @@ public partial class MessageStreamView : BaseUserControl
                 _messageSubscriptionVersion++;
             }
         }
+
+        if (_currentViewModel is not null)
+        {
+            _currentViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _currentViewModel = null;
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(MessageStreamViewModel.AggregateSelectionVersion), StringComparison.Ordinal)
+            && sender is MessageStreamViewModel aggregateVm)
+        {
+            SelectAggregateSearchMatch(aggregateVm);
+            return;
+        }
+
+        if (!string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageItem), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (sender is not MessageStreamViewModel vm || vm.SelectedMessageItem is null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isDetached && ReferenceEquals(DataContext, vm) && vm.SelectedMessageItem is not null)
+            {
+                MessageList.ScrollIntoView(vm.SelectedMessageItem);
+            }
+        });
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -165,6 +203,46 @@ public partial class MessageStreamView : BaseUserControl
         {
             vm.ToggleMetricsBar();
         }
+    }
+
+    private void OnClearSearchClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ClearSearch();
+        }
+    }
+
+    private void OnPreviousSearchResultClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.GoToPreviousSearchMatch();
+        }
+    }
+
+    private void OnNextSearchResultClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.GoToNextSearchMatch();
+        }
+    }
+
+    private void SelectAggregateSearchMatch(MessageStreamViewModel vm)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+            {
+                return;
+            }
+
+            var start = Math.Clamp(vm.AggregateSelectionStart, 0, AggregateMessageTextBox.Text?.Length ?? 0);
+            var end = Math.Clamp(start + vm.AggregateSelectionLength, start, AggregateMessageTextBox.Text?.Length ?? start);
+            AggregateMessageTextBox.SelectionStart = start;
+            AggregateMessageTextBox.SelectionEnd = end;
+        });
     }
 
     private void OnExportMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

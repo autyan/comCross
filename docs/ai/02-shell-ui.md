@@ -39,3 +39,11 @@
 - Related icon actions in the same toolbar/row must use the same component structure, sizing, tooltip pattern, and disabled-state expression. Compact icon buttons should use at least a 28px hit area unless an existing component style defines a larger one.
 - Composite input controls must have one visual frame. If an outer container owns the background, border, radius, hover, or focus state, the inner `TextBox` must be transparent and borderless, including focused state, so Avalonia's default input chrome does not create a nested box.
 - Popup-backed pickers must treat the popup as a separate interaction layer. Do not decide whether a popup click is "inside" by walking ancestors from the parent control, because `Popup` content lives under a separate popup root. Prefer `Popup.IsLightDismissEnabled` for outside-click dismissal, handle item actions inside the popup explicitly, and synchronize the ViewModel search/open state from the popup close event.
+
+## Message Viewer
+
+- Message viewer data loading must be independent of display mode. `LiveSpool` and `Archive` both use the same streaming/window query path; display mode may rebuild rendering only, not change paging, search semantics, or the current data window.
+- Message viewer search is viewer state. Search input changes should trigger debounced search, clearing the input exits search mode, and search navigation controls belong inside the message viewer surface rather than inside the search input row.
+- Structured search syntax should stay compact for v0.6 scope: support direction and attributes without adding separate toolbar controls for each condition. Do not add regex, hex search, decoded-field search, indexing, or cross-session search unless a later scope explicitly asks for it.
+- `Detailed` display mode uses the structured per-frame item renderer. It does not need mouse text selection in the current scope.
+- `Plain` and `Slim` display modes use an aggregate text renderer so users can select text across messages. `Plain` renders a continuous plain text stream. `Slim` renders plain text payloads too, but inserts frame boundaries at `TX` / `RX` message boundaries so each frame remains distinguishable.

@@ -502,6 +502,18 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             
             // Message Stream
             ["stream.search.placeholder"] = "Search messages...",
+            ["stream.search.action"] = "Search",
+            ["stream.search.cancel"] = "Cancel",
+            ["stream.search.running"] = "Searching...",
+            ["stream.search.cancelled"] = "Cancelled",
+            ["stream.search.noResults"] = "No results",
+            ["stream.search.results"] = "{0} results",
+            ["stream.search.resultPosition"] = "{0} / {1}",
+            ["stream.search.status"] = "Search:",
+            ["stream.search.direction.label"] = "Direction",
+            ["stream.search.direction.all"] = "All",
+            ["stream.search.direction.rx"] = "RX",
+            ["stream.search.direction.tx"] = "TX",
             ["stream.source.live"] = "Live",
             ["stream.source.history"] = "History",
             ["stream.source.label"] = "Source",

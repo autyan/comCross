@@ -116,6 +116,8 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
                 InitializationError = s.InitializationError,
                 ArchiveState = s.ArchiveState,
                 ArchiveError = s.ArchiveError,
+                PayloadRenderMode = s.PayloadRenderMode,
+                DisplayDensity = s.DisplayDensity,
                 ParentSessionId = s.ParentSessionId,
                 ManagedResourceKinds = s.ManagedResourceKinds.ToList()
             })
