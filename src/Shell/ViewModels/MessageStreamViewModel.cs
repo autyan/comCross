@@ -43,6 +43,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private int _aggregateSelectionStart;
     private int _aggregateSelectionLength;
     private int _aggregateSelectionVersion;
+    private int _selectedMessageNavigationVersion;
     private bool _applyingSessionDisplayOptions;
     private bool _isMetricsBarVisible;
     private bool _isSearchRunning;
@@ -286,11 +287,15 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     public int AggregateSelectionVersion => _aggregateSelectionVersion;
 
+    public int SelectedMessageNavigationVersion => _selectedMessageNavigationVersion;
+
     public int SearchMatchCount => _searchMatches.Count;
 
     public int CurrentSearchMatchOrdinal => _selectedSearchMatchIndex >= 0 ? _selectedSearchMatchIndex + 1 : 0;
 
     public bool HasSearchMatches => _searchMatches.Count > 0;
+
+    public string SearchNavigationStatus => HasSearchMatches ? FormatSearchPosition() : string.Empty;
 
     public bool CanStartSearch => !IsSearchRunning
                                   && _activeSession is not null
@@ -442,6 +447,10 @@ public sealed class MessageStreamViewModel : BaseViewModel
             if (_selectedSearchMatchIndex >= 0)
             {
                 LoadAroundFrame(_searchMatches[_selectedSearchMatchIndex].FrameId);
+            }
+            else
+            {
+                UpdateDetailedSearchMatchState();
             }
         }
         catch (OperationCanceledException)
@@ -637,11 +646,14 @@ public sealed class MessageStreamViewModel : BaseViewModel
             if (frame.FrameId == frameId)
             {
                 SelectedMessageItem = item;
+                _selectedMessageNavigationVersion++;
+                OnPropertyChanged(nameof(SelectedMessageNavigationVersion));
             }
         }
 
         RebuildAggregateText();
         SelectAggregateFrame(frameId);
+        UpdateDetailedSearchMatchState();
     }
 
     private void OnActiveSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -732,6 +744,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         _selectedSearchMatchIndex = -1;
         SearchStatus = string.Empty;
         ClearAggregateSelection();
+        UpdateDetailedSearchMatchState();
         RaiseSearchStateChanged();
     }
 
@@ -740,6 +753,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         OnPropertyChanged(nameof(SearchMatchCount));
         OnPropertyChanged(nameof(CurrentSearchMatchOrdinal));
         OnPropertyChanged(nameof(HasSearchMatches));
+        OnPropertyChanged(nameof(SearchNavigationStatus));
         OnPropertyChanged(nameof(CanStartSearch));
         OnPropertyChanged(nameof(CanCancelSearch));
         OnPropertyChanged(nameof(CanNavigateSearch));
@@ -881,6 +895,24 @@ public sealed class MessageStreamViewModel : BaseViewModel
         OnPropertyChanged(nameof(AggregateSelectionStart));
         OnPropertyChanged(nameof(AggregateSelectionLength));
         OnPropertyChanged(nameof(AggregateSelectionVersion));
+    }
+
+    private void UpdateDetailedSearchMatchState()
+    {
+        var matchedFrameIds = _searchMatches
+            .Select(match => match.FrameId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .ToHashSet(StringComparer.Ordinal);
+        var currentFrameId = _selectedSearchMatchIndex >= 0 && _selectedSearchMatchIndex < _searchMatches.Count
+            ? _searchMatches[_selectedSearchMatchIndex].FrameId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
+
+        foreach (var item in MessageItems)
+        {
+            var frameId = item.Message.Id;
+            item.UpdateSearchMatchState(
+                matchedFrameIds.Contains(frameId),
+                string.Equals(frameId, currentFrameId, StringComparison.Ordinal));
+        }
     }
 
     private string RenderAggregatePayload(LogMessage message)

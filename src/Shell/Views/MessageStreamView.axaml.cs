@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -95,7 +96,8 @@ public partial class MessageStreamView : BaseUserControl
             return;
         }
 
-        if (!string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageItem), StringComparison.Ordinal))
+        if (!string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageItem), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageNavigationVersion), StringComparison.Ordinal))
         {
             return;
         }
@@ -109,9 +111,9 @@ public partial class MessageStreamView : BaseUserControl
         {
             if (!_isDetached && ReferenceEquals(DataContext, vm) && vm.SelectedMessageItem is not null)
             {
-                MessageList.ScrollIntoView(vm.SelectedMessageItem);
+                ScrollToSelectedMessage(vm);
             }
-        });
+        }, DispatcherPriority.Loaded);
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -140,7 +142,7 @@ public partial class MessageStreamView : BaseUserControl
             return;
         }
 
-        if (!vm.Display.AutoScrollEnabled || vm.MessageItems.Count == 0)
+        if (!vm.Display.AutoScrollEnabled || vm.MessageItems.Count == 0 || vm.HasSearchQuery)
         {
             return;
         }
@@ -158,6 +160,7 @@ public partial class MessageStreamView : BaseUserControl
             || !ReferenceEquals(sender, _currentMessages)
             || !ReferenceEquals(DataContext, vm)
             || !vm.Display.AutoScrollEnabled
+            || vm.HasSearchQuery
             || vm.MessageItems.Count == 0)
         {
             return;
@@ -168,6 +171,54 @@ public partial class MessageStreamView : BaseUserControl
         {
             MessageList.ScrollIntoView(latest);
         }
+    }
+
+    private void ScrollToSelectedMessage(MessageStreamViewModel vm)
+    {
+        if (_isDetached || !ReferenceEquals(DataContext, vm) || vm.SelectedMessageItem is null)
+        {
+            return;
+        }
+
+        MessageList.UpdateLayout();
+        MessageList.ScrollIntoView(vm.SelectedMessageItem);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || vm.SelectedMessageItem is null)
+            {
+                return;
+            }
+
+            MessageList.UpdateLayout();
+            MessageList.ScrollIntoView(vm.SelectedMessageItem);
+            CenterSelectedMessageContainer(vm);
+        }, DispatcherPriority.Render);
+    }
+
+    private void CenterSelectedMessageContainer(MessageStreamViewModel vm)
+    {
+        var selectedItem = vm.SelectedMessageItem;
+        if (selectedItem is null || MessageList.ContainerFromItem(selectedItem) is not Control container)
+        {
+            return;
+        }
+
+        var scrollViewer = MessageList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var bounds = container.TranslatePoint(new Point(0, container.Bounds.Height / 2), scrollViewer);
+        if (bounds is not { } center)
+        {
+            return;
+        }
+
+        var targetY = scrollViewer.Offset.Y + center.Y - scrollViewer.Viewport.Height / 2;
+        targetY = Math.Clamp(targetY, 0, Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height));
+        scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetY);
     }
 
     private void OnDisplayModeToggleRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

@@ -9,6 +9,7 @@
     <StreamGeometry x:Key="RotateCwIcon">M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6</StreamGeometry>
     <StreamGeometry x:Key="PlusIcon">M12 5v14M5 12h14</StreamGeometry>
     <StreamGeometry x:Key="ChevronRightIcon">M9 6l6 6l-6 6</StreamGeometry>
+    <StreamGeometry x:Key="ChevronUpIcon">M18 15l-6-6l-6 6</StreamGeometry>
     <StreamGeometry x:Key="ChevronDownIcon">M6 9l6 6l6-6</StreamGeometry>
     <StreamGeometry x:Key="DownloadIcon">M12 4v10M8 10l4 4l4-4M5 19h14</StreamGeometry>
     <StreamGeometry x:Key="Maximize2Icon">M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5M4 9l6-6M20 9l-6-6M4 15l6 6M20 15l-6 6</StreamGeometry>
