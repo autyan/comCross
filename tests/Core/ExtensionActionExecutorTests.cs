@@ -132,6 +132,8 @@ public sealed class ExtensionActionExecutorTests
             string? resourceId = null) => throw new NotSupportedException();
         public Task RenameSessionAsync(string sessionId, string name) => Task.CompletedTask;
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
+        public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
+            => Task.CompletedTask;
         public Task<PluginCommandResult> SendMessageAsync(
             string sessionId,
             string message,

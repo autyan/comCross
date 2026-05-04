@@ -343,6 +343,41 @@ public sealed class WorkspaceStateFlowTests
         Assert.Empty(snapshot.Values);
     }
 
+    [Fact]
+    public async Task SetSessionArchiveStateAsync_PersistsSessionArchiveState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+
+        deviceService.RestoreSession(CreateDescriptor("session-archive"));
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "session-archive");
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        await workspaceService.SetSessionArchiveStateAsync("session-archive", SessionArchiveState.Enabled);
+
+        var session = deviceService.GetSession("session-archive");
+        Assert.NotNull(session);
+        Assert.Equal(SessionArchiveState.Enabled, session!.ArchiveState);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        var descriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == "session-archive");
+        Assert.Equal(SessionArchiveState.Enabled, descriptor.ArchiveState);
+
+        await workspaceService.SetSessionArchiveStateAsync("session-archive", SessionArchiveState.Stopped);
+
+        persistedState = await configService.LoadWorkspaceStateAsync();
+        descriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == "session-archive");
+        Assert.Equal(SessionArchiveState.Stopped, descriptor.ArchiveState);
+        Assert.Null(descriptor.ArchiveError);
+    }
+
     private static SessionDescriptor CreateDescriptor(
         string sessionId,
         string? parentSessionId = null,

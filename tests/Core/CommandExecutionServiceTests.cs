@@ -121,6 +121,9 @@ public sealed class CommandExecutionServiceTests
 
         public Task DeleteSessionAsync(string sessionId) => Task.CompletedTask;
 
+        public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
+            => Task.CompletedTask;
+
         public Task<PluginCommandResult> SendMessageAsync(
             string sessionId,
             string message,

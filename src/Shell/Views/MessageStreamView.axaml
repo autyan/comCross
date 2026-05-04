@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
+             xmlns:controls="using:ComCross.Shell.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
              x:DataType="vm:MessageStreamViewModel">
@@ -10,8 +11,8 @@
     <Grid RowDefinitions="Auto,Auto,Auto,*">
         <!-- Current Session Context -->
         <Border Grid.Row="0" Background="{StaticResource Bg0Brush}" Padding="16,10" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
-                <StackPanel Grid.Column="0" Spacing="4">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                <StackPanel Grid.Column="0" Spacing="4" MinWidth="300" MaxWidth="420">
                     <TextBlock Text="{Binding CurrentSessionLabel}"
                                FontSize="10"
                                FontWeight="Bold"
@@ -39,21 +40,46 @@
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
-                <Button Grid.Column="1"
+                <Grid Grid.Column="2"
+                      ColumnDefinitions="Auto,6,Auto"
+                      Margin="12,0,0,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center">
+                    <controls:OptionDropDown ItemsSource="{Binding DataSourceOptions}"
+                                             SelectedItem="{Binding SelectedDataSourceOption}"
+                                             ToolTipText="{Binding L[stream.source.label]}"
+                                             Width="84"
+                                             Height="28" />
+                    <controls:SwitchCheckBox Grid.Column="2"
+                                             Label="{Binding L[session.archive.label]}"
+                                             IsChecked="{Binding IsArchiveWriting}"
+                                             IsEnabled="{Binding CanToggleArchiveWriting}"
+                                             ToolTip.Tip="{Binding ArchiveStatusTooltip}"
+                                             ToggleRequested="OnArchiveSwitchToggleRequested" />
+                </Grid>
+
+                <Border Grid.Column="3"
+                        Width="1"
+                        Height="28"
+                        Margin="10,0,2,0"
+                        Background="{StaticResource BorderSubtleBrush}"
+                        VerticalAlignment="Center" />
+
+                <Button Grid.Column="4"
                         Height="28"
                         Padding="10,0"
-                        Margin="8,0,0,0"
+                        Margin="6,0,0,0"
                         Click="OnToggleMetricsClick">
                     <TextBlock Text="{Binding L[stream.metrics.toggle]}"
                                FontSize="11"
                                Foreground="{StaticResource Text1Brush}"
                                VerticalAlignment="Center" />
                 </Button>
-                <Button Grid.Column="2"
+                <Button Grid.Column="5"
                         Width="28"
                         Height="28"
                         Padding="0"
-                        Margin="8,0,0,0"
+                        Margin="6,0,0,0"
                         Click="OnToggleRightDockClick">
                     <Path Data="{StaticResource Maximize2Icon}"
                           Width="14"
@@ -65,11 +91,11 @@
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center" />
                 </Button>
-                <Button Grid.Column="3"
+                <Button Grid.Column="6"
                         Width="28"
                         Height="28"
                         Padding="0"
-                        Margin="8,0,0,0"
+                        Margin="6,0,0,0"
                         Click="OnExportMessagesClick">
                     <Button.ContextMenu>
                         <ContextMenu>
@@ -88,11 +114,11 @@
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center" />
                 </Button>
-                <Button Grid.Column="4"
+                <Button Grid.Column="7"
                         Width="28"
                         Height="28"
                         Padding="0"
-                        Margin="8,0,0,0"
+                        Margin="6,0,0,0"
                         Click="OnClearMessagesClick">
                     <Path Data="{StaticResource Trash2Icon}"
                           Width="14"
@@ -109,7 +135,7 @@
 
         <!-- Search Bar -->
         <Border Grid.Row="1" Background="{StaticResource Bg1Brush}" Padding="16,12" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,74,70,126,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto">
                 <Border Grid.Column="0"
                         HorizontalAlignment="Stretch"
                         Classes="prototype-search-shell">
@@ -128,75 +154,23 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Column="1"
-                        Margin="12,0,0,0"
-                        CornerRadius="{StaticResource RadiusSm}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        Background="{StaticResource Bg0Brush}"
-                        Width="66"
-                        Height="40"
-                        Padding="0">
-                    <TextBlock Text="{Binding DataSourceLabel}"
-                               FontSize="11"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource Text1Brush}" />
-                </Border>
+                <controls:SwitchCheckBox Grid.Column="1"
+                                         Label="{Binding DisplayModeLabel}"
+                                         IsChecked="{Binding IsPayloadHexMode}"
+                                         ToolTip.Tip="{Binding DisplayModeLabel}"
+                                         ToggleRequested="OnDisplayModeToggleRequested"
+                                         Margin="12,0,0,0"
+                                         Height="40"
+                                         HorizontalAlignment="Left"
+                                         VerticalAlignment="Center" />
 
-                <Border Grid.Column="2"
-                        Margin="12,0,0,0"
-                        CornerRadius="{StaticResource RadiusSm}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        Background="{StaticResource Bg0Brush}"
-                        Width="58"
-                        Height="40"
-                        Padding="0"
-                        Cursor="Hand"
-                        PointerPressed="OnToggleDisplayMode">
-                    <TextBlock Text="{Binding DisplayModeLabel}"
-                               FontSize="11"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource Text0Brush}" />
-                </Border>
-
-                <ComboBox Grid.Column="3"
-                          ItemsSource="{Binding DisplayDensityOptions}"
-                          SelectedItem="{Binding SelectedDisplayDensityOption}"
-                          DisplayMemberBinding="{Binding Label}"
-                          Margin="8,0,0,0"
-                          Width="118"
-                          Height="40"
-                          HorizontalContentAlignment="Center"
-                          VerticalContentAlignment="Center" />
-
-                <StackPanel Grid.Column="4"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Margin="12,0,0,0"
-                            VerticalAlignment="Center">
-                    <CheckBox IsChecked="{Binding ActiveSession.EnableDatabaseStorage}"
-                              Content="{Binding L[session.database.enable]}"
-                              FontSize="11"
-                              VerticalAlignment="Center" />
-                    <Border Background="{StaticResource WarnBrush}"
-                            CornerRadius="8"
-                            Width="16"
-                            Height="16"
-                            VerticalAlignment="Center"
-                            ToolTip.Tip="{Binding L[session.database.tooltip]}">
-                        <TextBlock Text="?"
-                                   FontSize="11"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="{StaticResource Bg1Brush}" />
-                    </Border>
-                </StackPanel>
+                <controls:OptionDropDown Grid.Column="2"
+                                         ItemsSource="{Binding DisplayDensityOptions}"
+                                         SelectedItem="{Binding SelectedDisplayDensityOption}"
+                                         ToolTipText="{Binding DisplayDensityLabel}"
+                                         Margin="8,0,0,0"
+                                         Width="102"
+                                         Height="40" />
             </Grid>
         </Border>
 

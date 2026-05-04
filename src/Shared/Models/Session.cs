@@ -20,7 +20,6 @@ public sealed class Session : INotifyPropertyChanged
     private DateTime? _startTime;
     private long _rxBytes;
     private long _txBytes;
-    private bool _enableDatabaseStorage;
     private SessionArchiveState _archiveState = SessionArchiveState.Disabled;
     private string? _archiveError;
     private string? _parentSessionId;
@@ -153,19 +152,6 @@ public sealed class Session : INotifyPropertyChanged
         get
         {
             return string.IsNullOrWhiteSpace(_displaySubtitle) ? string.Empty : _displaySubtitle;
-        }
-    }
-
-    /// <summary>
-    /// Enable database storage for this session (overrides global default)
-    /// Note: Historical data will not be converted. Switching may result in data loss.
-    /// </summary>
-    public bool EnableDatabaseStorage
-    {
-        get => _enableDatabaseStorage;
-        set
-        {
-            SetField(ref _enableDatabaseStorage, value);
         }
     }
 

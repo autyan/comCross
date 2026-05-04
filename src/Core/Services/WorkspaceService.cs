@@ -339,6 +339,42 @@ public sealed class WorkspaceService
         _eventBus.Publish(new SessionRenamedEvent(sessionId, trimmedName));
     }
 
+    public async Task SetSessionArchiveStateAsync(
+        string sessionId,
+        SessionArchiveState archiveState,
+        string? archiveError = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        session.ArchiveState = archiveState;
+        session.ArchiveError = archiveState == SessionArchiveState.Error ? archiveError : null;
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var descriptor = state.SessionDescriptors.FirstOrDefault(d => string.Equals(d.Id, sessionId, StringComparison.Ordinal));
+            if (descriptor is null)
+            {
+                return;
+            }
+
+            descriptor.ArchiveState = session.ArchiveState;
+            descriptor.ArchiveError = session.ArchiveError;
+            descriptor.EnableDatabaseStorage = false;
+        }, cancellationToken);
+
+        _eventBus.Publish(new SessionUpdatedEvent(session));
+    }
+
     /// <summary>
     /// Build workspace state from current sessions and workloads.
     /// In v0.4+, includes Workload information with session associations.
@@ -361,7 +397,6 @@ public sealed class WorkspaceService
                 CanReconnect = s.CanReconnect,
                 InitializationState = s.InitializationState,
                 InitializationError = s.InitializationError,
-                EnableDatabaseStorage = s.EnableDatabaseStorage,
                 ArchiveState = s.ArchiveState,
                 ArchiveError = s.ArchiveError,
                 ParentSessionId = s.ParentSessionId,

@@ -98,6 +98,82 @@
         <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
     </Style>
 
+    <Style Selector="Button.option-dropdown-button">
+        <Setter Property="Background" Value="{StaticResource ModeButtonBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ModeBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Height" Value="{Binding Bounds.Height, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.option-dropdown-button:pointerover">
+        <Setter Property="Background" Value="{StaticResource ModeButtonHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ModeBorderHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.option-dropdown-button:pressed">
+        <Setter Property="BorderBrush" Value="{StaticResource ModeBorderActiveBrush}" />
+    </Style>
+
+    <Style Selector="Border.option-dropdown-popup">
+        <Setter Property="Background" Value="{StaticResource BgHighlightEndBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ModeBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <Style Selector="ListBox.option-dropdown-list">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.option-dropdown-list ListBoxItem">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="ListBox.option-dropdown-list ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource ModeButtonHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ModeBorderHoverBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    </Style>
+
+    <Style Selector="ListBox.option-dropdown-list ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Border.switch-checkbox-frame:pointerover">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    </Style>
+
     <Style Selector="Border.prototype-panel">
         <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />

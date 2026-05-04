@@ -44,6 +44,7 @@ public enum SessionArchiveState
 {
     Disabled,
     Enabled,
+    Stopped,
     Error
 }
 

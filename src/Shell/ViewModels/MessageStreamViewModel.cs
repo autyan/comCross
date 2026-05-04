@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ComCross.Core.Services;
 using ComCross.Shared.Interfaces;
@@ -12,10 +13,13 @@ namespace ComCross.Shell.ViewModels;
 
 public sealed record MessageDisplayDensityOption(MessageDisplayDensity Density, string Label);
 
+public sealed record MessageDataSourceOption(MessageFrameDataSource Source, string Label);
+
 public sealed class MessageStreamViewModel : BaseViewModel
 {
     private readonly IMessageStreamService _messageStream;
     private readonly IMessageFrameQueryService _messageFrameQuery;
+    private readonly IWorkspaceCoordinator _workspaceCoordinator;
     private readonly SettingsService _settingsService;
     private readonly IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> _itemFactory;
 
@@ -34,6 +38,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
         ILocalizationService localization,
         IMessageStreamService messageStream,
         IMessageFrameQueryService messageFrameQuery,
+        IWorkspaceCoordinator workspaceCoordinator,
         SettingsService settingsService,
         DisplaySettingsViewModel display,
         IItemVmFactory<LogMessageListItemViewModel, LogMessageListItemContext> itemFactory)
@@ -41,6 +46,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     {
         _messageStream = messageStream;
         _messageFrameQuery = messageFrameQuery;
+        _workspaceCoordinator = workspaceCoordinator;
         _settingsService = settingsService;
         Display = display;
         _itemFactory = itemFactory;
@@ -64,6 +70,18 @@ public sealed class MessageStreamViewModel : BaseViewModel
     public ItemVmCollection<LogMessageListItemViewModel, LogMessageListItemContext> MessageItems { get; }
 
     public IReadOnlyList<MessageDisplayDensityOption> DisplayDensityOptions { get; }
+
+    public IReadOnlyList<MessageDataSourceOption> DataSourceOptions =>
+        CanOpenArchiveHistory
+            ?
+            [
+                new(MessageFrameDataSource.LiveSpool, L["stream.source.live"]),
+                new(MessageFrameDataSource.Archive, L["stream.source.history"])
+            ]
+            :
+            [
+                new(MessageFrameDataSource.LiveSpool, L["stream.source.live"])
+            ];
 
     public Session? ActiveSession
     {
@@ -93,9 +111,16 @@ public sealed class MessageStreamViewModel : BaseViewModel
             if (SetProperty(ref _payloadRenderMode, value))
             {
                 OnPropertyChanged(nameof(DisplayModeLabel));
+                OnPropertyChanged(nameof(IsPayloadHexMode));
                 RefreshPayloadRenderMode();
             }
         }
+    }
+
+    public bool IsPayloadHexMode
+    {
+        get => PayloadRenderMode == PayloadRenderMode.Hex;
+        set => PayloadRenderMode = value ? PayloadRenderMode.Hex : PayloadRenderMode.String;
     }
 
     public MessageDisplayDensity DisplayDensity
@@ -137,8 +162,31 @@ public sealed class MessageStreamViewModel : BaseViewModel
             if (SetProperty(ref _dataSource, value))
             {
                 OnPropertyChanged(nameof(DataSourceLabel));
+                OnPropertyChanged(nameof(SelectedDataSourceOption));
+                OnPropertyChanged(nameof(IsArchiveHistoryMode));
+                OnPropertyChanged(nameof(CanOpenLiveData));
                 LoadMessages();
             }
+        }
+    }
+
+    public MessageDataSourceOption? SelectedDataSourceOption
+    {
+        get => DataSourceOptions.FirstOrDefault(x => x.Source == DataSource);
+        set
+        {
+            if (value is null || value.Source == DataSource)
+            {
+                return;
+            }
+
+            if (value.Source == MessageFrameDataSource.Archive && !CanOpenArchiveHistory)
+            {
+                OnPropertyChanged();
+                return;
+            }
+
+            DataSource = value.Source;
         }
     }
 
@@ -162,6 +210,33 @@ public sealed class MessageStreamViewModel : BaseViewModel
         MessageFrameDataSource.Archive => L["stream.source.history"],
         _ => L["stream.source.live"]
     };
+
+    public string ArchiveStatusLabel => _activeSession?.ArchiveState switch
+    {
+        SessionArchiveState.Enabled => L["session.archive.status.enabled"],
+        SessionArchiveState.Stopped => L["session.archive.status.stopped"],
+        SessionArchiveState.Error => L["session.archive.status.error"],
+        _ => L["session.archive.status.disabled"]
+    };
+
+    public string ArchiveStatusTooltip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        L["session.archive.tooltip"],
+        ArchiveStatusLabel);
+
+    public bool CanEnableArchive => _activeSession is { ArchiveState: SessionArchiveState.Disabled };
+
+    public bool CanStopArchive => _activeSession is { ArchiveState: SessionArchiveState.Enabled };
+
+    public bool CanOpenArchiveHistory => _activeSession?.ArchiveState is SessionArchiveState.Enabled or SessionArchiveState.Stopped or SessionArchiveState.Error;
+
+    public bool IsArchiveHistoryMode => DataSource == MessageFrameDataSource.Archive;
+
+    public bool CanOpenLiveData => IsArchiveHistoryMode;
+
+    public bool IsArchiveWriting => _activeSession?.ArchiveState == SessionArchiveState.Enabled;
+
+    public bool CanToggleArchiveWriting => _activeSession is not null;
 
     public bool HasActiveSession => _activeSession is not null;
 
@@ -214,6 +289,29 @@ public sealed class MessageStreamViewModel : BaseViewModel
             : PayloadRenderMode.Hex;
 
     public void ToggleMetricsBar() => IsMetricsBarVisible = !IsMetricsBarVisible;
+
+    public async Task EnableArchiveAsync()
+    {
+        if (_activeSession?.Id is not { Length: > 0 } sessionId)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.SetSessionArchiveStateAsync(sessionId, SessionArchiveState.Enabled);
+    }
+
+    public async Task StopArchiveAsync()
+    {
+        if (_activeSession?.Id is not { Length: > 0 } sessionId)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.SetSessionArchiveStateAsync(sessionId, SessionArchiveState.Stopped);
+    }
+
+    public Task SetArchiveWritingAsync(bool enabled)
+        => enabled ? EnableArchiveAsync() : StopArchiveAsync();
 
     public void SetActiveSession(Session? session)
     {
@@ -321,6 +419,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
             or nameof(Session.PluginId)
             or nameof(Session.CapabilityId)
             or nameof(Session.ParentSessionId)
+            or nameof(Session.ArchiveState)
+            or nameof(Session.ArchiveError)
             or null
             or "")
         {
@@ -336,6 +436,17 @@ public sealed class MessageStreamViewModel : BaseViewModel
         OnPropertyChanged(nameof(ActiveSessionStatusLabel));
         OnPropertyChanged(nameof(ActiveSessionDetailText));
         OnPropertyChanged(nameof(ActiveSessionTypeLabel));
+        OnPropertyChanged(nameof(ArchiveStatusLabel));
+        OnPropertyChanged(nameof(ArchiveStatusTooltip));
+        OnPropertyChanged(nameof(DataSourceOptions));
+        OnPropertyChanged(nameof(SelectedDataSourceOption));
+        OnPropertyChanged(nameof(CanEnableArchive));
+        OnPropertyChanged(nameof(CanStopArchive));
+        OnPropertyChanged(nameof(CanOpenArchiveHistory));
+        OnPropertyChanged(nameof(IsArchiveHistoryMode));
+        OnPropertyChanged(nameof(CanOpenLiveData));
+        OnPropertyChanged(nameof(IsArchiveWriting));
+        OnPropertyChanged(nameof(CanToggleArchiveWriting));
     }
 
     private void RefreshPayloadRenderMode()

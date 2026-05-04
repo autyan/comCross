@@ -363,8 +363,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             CanReconnect = descriptor.CanReconnect ?? true,
             InitializationState = descriptor.InitializationState,
             InitializationError = descriptor.InitializationError,
-            EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
-            ArchiveState = descriptor.ArchiveState,
+            ArchiveState = ResolveArchiveState(descriptor),
             ArchiveError = descriptor.ArchiveError,
             ParentSessionId = descriptor.ParentSessionId,
             ManagedResourceKinds = descriptor.ManagedResourceKinds,
@@ -396,7 +395,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.CanReconnect = session.CanReconnect;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
-            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
             state.Session.ArchiveState = session.ArchiveState;
             state.Session.ArchiveError = session.ArchiveError;
             state.Session.ParentSessionId = session.ParentSessionId;
@@ -432,7 +430,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.CanReconnect = session.CanReconnect;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
-            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
             state.Session.ArchiveState = session.ArchiveState;
             state.Session.ArchiveError = session.ArchiveError;
             state.Session.ParentSessionId = session.ParentSessionId;
@@ -441,6 +438,11 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
 
         _eventBus.Publish(new SessionUpdatedEvent(state.Session));
     }
+
+    private static SessionArchiveState ResolveArchiveState(SessionDescriptor descriptor)
+        => descriptor.ArchiveState == SessionArchiveState.Disabled && descriptor.EnableDatabaseStorage
+            ? SessionArchiveState.Enabled
+            : descriptor.ArchiveState;
 
     public bool RemoveSession(string sessionId)
     {

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using ComCross.Shared.Models;
+using ComCross.Shell.Services;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -131,7 +132,7 @@ public partial class MessageStreamView : BaseUserControl
         }
     }
 
-    private void OnToggleDisplayMode(object? sender, PointerPressedEventArgs e)
+    private void OnDisplayModeToggleRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (DataContext is MessageStreamViewModel vm)
         {
@@ -190,6 +191,35 @@ public partial class MessageStreamView : BaseUserControl
         {
             _ = vm.ExportAsync(format: format);
         }
+    }
+
+    private async void OnArchiveSwitchToggleRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not MessageStreamViewModel vm)
+        {
+            return;
+        }
+
+        var owner = ShellContext.GetOwner(this);
+        if (owner is null)
+        {
+            return;
+        }
+
+        var enable = !vm.IsArchiveWriting;
+        var confirmed = await ShellContext.Dialogs.ShowConfirmAsync(
+            owner,
+            enable ? vm.L["session.archive.enable.title"] : vm.L["session.archive.stop.title"],
+            enable ? vm.L["session.archive.enable.message"] : vm.L["session.archive.stop.message"],
+            MessageBoxIcon.Warning);
+        if (!confirmed)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        await vm.SetArchiveWritingAsync(enable);
+        e.Handled = true;
     }
 
     private void OnClearMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
