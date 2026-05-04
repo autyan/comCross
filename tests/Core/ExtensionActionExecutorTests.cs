@@ -161,7 +161,12 @@ public sealed class ExtensionActionExecutorTests
         {
         }
 
-        public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null, SessionLogExportFormat? format = null)
+        public Task<string> ExportAsync(
+            Session session,
+            string? searchQuery = null,
+            string? customFilePath = null,
+            SessionLogExportFormat? format = null,
+            MessageFrameDataSource source = MessageFrameDataSource.LiveSpool)
             => Task.FromResult(string.Empty);
     }
 }

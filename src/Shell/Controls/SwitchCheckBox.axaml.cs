@@ -17,6 +17,9 @@ public partial class SwitchCheckBox : UserControl
     public static readonly StyledProperty<string> LabelProperty =
         AvaloniaProperty.Register<SwitchCheckBox, string>(nameof(Label), string.Empty);
 
+    public static readonly StyledProperty<bool> AutoToggleProperty =
+        AvaloniaProperty.Register<SwitchCheckBox, bool>(nameof(AutoToggle), true);
+
     public static readonly RoutedEvent<RoutedEventArgs> ToggleRequestedEvent =
         RoutedEvent.Register<SwitchCheckBox, RoutedEventArgs>(
             nameof(ToggleRequested),
@@ -25,7 +28,6 @@ public partial class SwitchCheckBox : UserControl
     public SwitchCheckBox()
     {
         InitializeComponent();
-        AddHandler(ToggleRequestedEvent, OnDefaultToggleRequested);
     }
 
     public bool IsChecked
@@ -38,6 +40,12 @@ public partial class SwitchCheckBox : UserControl
     {
         get => GetValue(LabelProperty);
         set => SetValue(LabelProperty, value);
+    }
+
+    public bool AutoToggle
+    {
+        get => GetValue(AutoToggleProperty);
+        set => SetValue(AutoToggleProperty, value);
     }
 
     public event EventHandler<RoutedEventArgs> ToggleRequested
@@ -56,17 +64,10 @@ public partial class SwitchCheckBox : UserControl
         }
 
         RaiseEvent(new RoutedEventArgs(ToggleRequestedEvent));
-        e.Handled = true;
-    }
-
-    private void OnDefaultToggleRequested(object? sender, RoutedEventArgs e)
-    {
-        if (e.Handled || !IsEnabled)
+        if (AutoToggle)
         {
-            return;
+            IsChecked = !IsChecked;
         }
-
-        IsChecked = !IsChecked;
         e.Handled = true;
     }
 }

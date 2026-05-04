@@ -276,6 +276,7 @@
       "notification.storage.calibrationReset": "存储环境已变化。在校准完成前将使用保守策略。",
       "notification.storage.calibrationFailed": "存储校准失败。继续使用保守策略。",
       "notification.storage.healthChanged": "存储健康状态变化：{0}（{1}）。",
+      "notification.storage.archiveWriteFailed": "会话 {0} 归档写入失败：{1}",
       "notification.connection.disconnected": "会话 {0} 断开（{1}）。",
       "notification.connection.unknownReason": "未知",
       "notification.export.completed": "导出完成：{0}",

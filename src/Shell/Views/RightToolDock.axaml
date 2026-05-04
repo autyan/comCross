@@ -80,6 +80,7 @@
                                         Background="Transparent">
                                     <controls:SwitchCheckBox Label="{Binding SendModeLabel}"
                                                              IsChecked="{Binding IsSendHexMode}"
+                                                             AutoToggle="False"
                                                              ToolTip.Tip="{Binding SendModeLabel}"
                                                              ToggleRequested="OnSendModeToggleRequested"
                                                              HorizontalAlignment="Left" />

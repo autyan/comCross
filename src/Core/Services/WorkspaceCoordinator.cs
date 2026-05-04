@@ -53,7 +53,12 @@ public interface IWorkspaceCoordinator
     void SubscribeToMessages(string sessionId, Action<LogMessage> callback);
     
     // Export Operations
-    Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null, SessionLogExportFormat? format = null);
+    Task<string> ExportAsync(
+        Session session,
+        string? searchQuery = null,
+        string? customFilePath = null,
+        SessionLogExportFormat? format = null,
+        MessageFrameDataSource source = MessageFrameDataSource.LiveSpool);
 
     // Statistics aggregated by coordinator
     long TotalRxBytes { get; }
@@ -211,6 +216,11 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
     public void SubscribeToMessages(string sessionId, Action<LogMessage> callback)
         => _workspaceService.SubscribeToMessages(sessionId, callback);
 
-    public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null, SessionLogExportFormat? format = null)
-        => _exportService.ExportAsync(session, searchQuery, customFilePath, format);
+    public Task<string> ExportAsync(
+        Session session,
+        string? searchQuery = null,
+        string? customFilePath = null,
+        SessionLogExportFormat? format = null,
+        MessageFrameDataSource source = MessageFrameDataSource.LiveSpool)
+        => _exportService.ExportAsync(session, searchQuery, customFilePath, format, source);
 }

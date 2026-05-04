@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ComCross.Core.Services;
+using ComCross.Shared.Events;
 using ComCross.Shared.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -78,6 +79,25 @@ public sealed class SessionLogExportServiceTests : IDisposable
         Assert.Equal("udp", root.GetProperty("attributes").GetProperty("transport").GetString());
     }
 
+    [Fact]
+    public async Task ExportAsync_WritesArchiveSourceWhenRequested()
+    {
+        var services = await CreateServicesAsync();
+        services.Settings.Current.Export.DefaultPayloadRenderMode = PayloadRenderMode.Hex;
+        var session = new Session { Id = "session-archive-export", Name = "Archive Export Session", ArchiveState = SessionArchiveState.Enabled };
+        services.EventBus.Publish(new SessionCreatedEvent(session));
+        services.ArchiveStore.Append(new MessageFrameRecord(4, session.Id, DateTime.UtcNow, FrameDirection.Rx, [0xCA, 0xFE], MessageFormat.Hex, "archive"));
+
+        var path = await services.Export.ExportAsync(session, source: MessageFrameDataSource.Archive);
+        var text = await File.ReadAllTextAsync(path);
+
+        Assert.Contains("source: Archive", text);
+        Assert.Contains("firstFrameId: 4", text);
+        Assert.Contains("lastFrameId: 4", text);
+        Assert.Contains("exportedFrames: 1", text);
+        Assert.Contains("CA FE", text);
+    }
+
     public void Dispose()
     {
         try
@@ -111,13 +131,21 @@ public sealed class SessionLogExportServiceTests : IDisposable
         var health = new StorageHealthService(notification, NullLogger<StorageHealthService>.Instance);
         var policy = new StoragePolicyService(health);
         var store = new SessionSpoolFrameStore(paths, settings, policy, health, NullLogger<SessionSpoolFrameStore>.Instance);
-        var query = new MessageFrameQueryService(store, NullLogger<MessageFrameQueryService>.Instance);
+        var eventBus = new EventBus();
+        var archiveStore = new SessionArchiveStore(paths, NullLogger<SessionArchiveStore>.Instance);
+        var query = new MessageFrameQueryService(
+            store,
+            archiveStore,
+            new SessionArchiveStateTracker(eventBus),
+            NullLogger<MessageFrameQueryService>.Instance);
         var export = new ExportService(query, notification, settings, paths);
-        return new TestServices(settings, store, export);
+        return new TestServices(settings, store, archiveStore, eventBus, export);
     }
 
     private sealed record TestServices(
         SettingsService Settings,
         SessionSpoolFrameStore Store,
+        SessionArchiveStore ArchiveStore,
+        EventBus EventBus,
         ExportService Export);
 }

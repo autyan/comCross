@@ -703,6 +703,7 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["notification.storage.calibrationReset"] = "Storage environment changed. Conservative policy is active until calibration completes.",
             ["notification.storage.calibrationFailed"] = "Storage calibration failed. Conservative policy remains active.",
             ["notification.storage.healthChanged"] = "Storage health changed: {0} ({1}).",
+            ["notification.storage.archiveWriteFailed"] = "Session {0} archive write failed: {1}",
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
             ["notification.connection.unknownReason"] = "Unknown reason",
             ["notification.export.completed"] = "Export completed: {0}",

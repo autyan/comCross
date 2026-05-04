@@ -397,7 +397,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
         try
         {
-            await _workspaceCoordinator.ExportAsync(ActiveSession, _messageStream.SearchQuery, filePath, format);
+            await _workspaceCoordinator.ExportAsync(ActiveSession, _messageStream.SearchQuery, filePath, format, _messageStream.DataSource);
         }
         catch (Exception ex)
         {

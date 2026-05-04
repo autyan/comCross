@@ -37,6 +37,7 @@ public sealed class ExportService
         string? searchQuery = null,
         string? customFilePath = null,
         SessionLogExportFormat? formatOverride = null,
+        MessageFrameDataSource source = MessageFrameDataSource.LiveSpool,
         CancellationToken cancellationToken = default)
     {
         if (session == null)
@@ -51,7 +52,7 @@ public sealed class ExportService
                 ? BuildDefaultFilePath(session, directory)
                 : customFilePath;
 
-            var result = await ExportLiveSpoolAsync(session, targetPath, formatOverride, cancellationToken);
+            var result = await ExportFramesAsync(session, targetPath, formatOverride, source, cancellationToken);
             var notificationKey = result.Partial
                 ? "notification.export.partial"
                 : "notification.export.completed";
@@ -110,17 +111,18 @@ public sealed class ExportService
         return Path.Combine(directory, $"{safeName}_{timestamp}.cclog");
     }
 
-    private async Task<SessionLogExportResult> ExportLiveSpoolAsync(
+    private async Task<SessionLogExportResult> ExportFramesAsync(
         Session session,
         string targetPath,
         SessionLogExportFormat? formatOverride,
+        MessageFrameDataSource source,
         CancellationToken cancellationToken)
     {
         var format = formatOverride ?? _settingsService.Current.Export.DefaultSessionLogFormat;
         var payloadMode = _settingsService.Current.Export.DefaultPayloadRenderMode;
         var capture = _messageFrameQuery.Query(new MessageFrameQuery(
             session.Id,
-            MessageFrameDataSource.LiveSpool,
+            source,
             MessageFrameQueryKind.Latest,
             0,
             1));
@@ -143,7 +145,7 @@ public sealed class ExportService
 
                     var page = _messageFrameQuery.Query(new MessageFrameQuery(
                         session.Id,
-                        MessageFrameDataSource.LiveSpool,
+                        source,
                         MessageFrameQueryKind.After,
                         cursor,
                         ExportBatchSize));
@@ -186,7 +188,7 @@ public sealed class ExportService
             await using (var output = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.Read, 64 * 1024))
             await using (var writer = new StreamWriter(output, new UTF8Encoding(false)))
             {
-                await WriteHeaderAsync(writer, format, partial, firstAvailable, lastCaptured, exportedFrames);
+                await WriteHeaderAsync(writer, format, source, partial, firstAvailable, lastCaptured, exportedFrames);
                 await writer.FlushAsync();
                 await using var body = new FileStream(bodyPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024);
                 await body.CopyToAsync(output, cancellationToken);
@@ -203,6 +205,7 @@ public sealed class ExportService
     private static async Task WriteHeaderAsync(
         TextWriter writer,
         SessionLogExportFormat format,
+        MessageFrameDataSource source,
         bool partial,
         long firstFrameId,
         long lastFrameId,
@@ -210,7 +213,7 @@ public sealed class ExportService
     {
         await writer.WriteLineAsync("CCLOG/1");
         await writer.WriteLineAsync($"format: {FormatName(format)}");
-        await writer.WriteLineAsync("source: LiveSpool");
+        await writer.WriteLineAsync($"source: {source}");
         await writer.WriteLineAsync($"exportedAtUtc: {DateTime.UtcNow:O}");
         await writer.WriteLineAsync("app: ComCross");
         await writer.WriteLineAsync("contentVersion: 1");

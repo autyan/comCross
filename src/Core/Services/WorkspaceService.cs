@@ -43,6 +43,7 @@ public sealed class WorkspaceService
         _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
         _sessionDataCleanupService = sessionDataCleanupService ?? throw new ArgumentNullException(nameof(sessionDataCleanupService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _eventBus.Subscribe<SessionArchiveWriteFailedCoreEvent>(evt => _ = SetSessionArchiveStateAsync(evt.SessionId, SessionArchiveState.Error, evt.Error));
     }
 
     /// <summary>

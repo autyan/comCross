@@ -54,6 +54,7 @@
                                              Label="{Binding L[session.archive.label]}"
                                              IsChecked="{Binding IsArchiveWriting}"
                                              IsEnabled="{Binding CanToggleArchiveWriting}"
+                                             AutoToggle="False"
                                              ToolTip.Tip="{Binding ArchiveStatusTooltip}"
                                              ToggleRequested="OnArchiveSwitchToggleRequested" />
                 </Grid>
@@ -157,6 +158,7 @@
                 <controls:SwitchCheckBox Grid.Column="1"
                                          Label="{Binding DisplayModeLabel}"
                                          IsChecked="{Binding IsPayloadHexMode}"
+                                         AutoToggle="False"
                                          ToolTip.Tip="{Binding DisplayModeLabel}"
                                          ToggleRequested="OnDisplayModeToggleRequested"
                                          Margin="12,0,0,0"
