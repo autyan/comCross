@@ -95,6 +95,24 @@ public sealed class SessionSpoolFrameStoreTests : IDisposable
         Assert.True(segment.GetProperty("AllocatedBytes").GetInt64() < 1024 * 1024);
     }
 
+    [Fact]
+    public void ReadAfter_RestoresFramesWrittenAfterLastManifestCheckpoint()
+    {
+        var sessionId = "session-restart";
+        var timestamp = new DateTime(2026, 5, 4, 12, 0, 0, DateTimeKind.Utc);
+        var store = CreateStore(StorageTier.HighCapacity);
+        store.Append(sessionId, timestamp, FrameDirection.Tx, [0x41], MessageFormat.Text, "test");
+
+        var reloaded = CreateStore(StorageTier.HighCapacity);
+        var frames = reloaded.ReadAfter(sessionId, 0, 10, out var firstAvailable);
+
+        Assert.Equal(1, firstAvailable);
+        var frame = Assert.Single(frames);
+        Assert.Equal(1, frame.FrameId);
+        Assert.Equal(timestamp, frame.TimestampUtc);
+        Assert.Equal(new byte[] { 0x41 }, frame.RawData);
+    }
+
     public void Dispose()
     {
         try

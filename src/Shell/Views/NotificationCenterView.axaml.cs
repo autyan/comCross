@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using ComCross.Shell.ViewModels;
 
@@ -32,6 +33,15 @@ public partial class NotificationCenterView : BaseUserControl
         if (DataContext is NotificationCenterViewModel vm && sender is Button button && button.CommandParameter is string id)
         {
             await vm.DeleteAsync(id);
+        }
+    }
+
+    private async void OnNotificationMessagePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: NotificationItemViewModel vm } && vm.CanOpenTargetDirectory)
+        {
+            await vm.OpenTargetDirectoryAsync();
+            e.Handled = true;
         }
     }
 }

@@ -254,6 +254,8 @@
       "notification.connection.disconnected": "会话 {0} 断开（{1}）。",
       "notification.connection.unknownReason": "未知",
       "notification.export.completed": "导出完成：{0}",
+      "notification.export.partial": "导出完成，但源数据存在缺失：{0}",
+      "notification.export.failed": "导出失败：{0}",
       "notification.permission.denied": "没有访问串口 {0} 的权限。",
       "notification.permission.clickToFix": "点击请求权限或查看手动操作说明。",
       "notification.permission.temporaryGranted": "已临时授予 {0} 的访问权限。设备重新连接后权限将重置。",

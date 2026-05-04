@@ -2,6 +2,8 @@ using ComCross.Core.Application;
 using ComCross.Core.Extensions;
 using ComCross.Core.Models;
 using ComCross.Core.Services;
+using ComCross.Shared.Interfaces;
+using ComCross.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -25,6 +27,27 @@ public sealed class AppHostLifecycleTests
 
         Assert.Empty(deviceService.GetAllSessions());
         Assert.Null(deviceService.GetSession("shutdown-session"));
+    }
+
+    [Fact]
+    public async Task ShutdownAsync_PreservesSessionSpoolFrames()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var appHost = harness.Services.GetRequiredService<IAppHost>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var frameStore = harness.Services.GetRequiredService<IFrameStore>();
+        const string sessionId = "shutdown-spool-session";
+
+        deviceService.RestoreSession(CreateDescriptor(sessionId));
+        frameStore.Append(sessionId, DateTime.UtcNow, FrameDirection.Rx, [0x31], MessageFormat.Text, "test");
+
+        await appHost.ShutdownAsync();
+
+        Assert.Empty(deviceService.GetAllSessions());
+        var frames = frameStore.ReadAfter(sessionId, 0, 10, out var firstAvailable);
+        Assert.Equal(1, firstAvailable);
+        Assert.Single(frames);
     }
 
     private static SessionDescriptor CreateDescriptor(string sessionId)

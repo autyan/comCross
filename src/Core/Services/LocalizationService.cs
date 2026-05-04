@@ -687,6 +687,8 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["notification.connection.disconnected"] = "Session {0} disconnected ({1}).",
             ["notification.connection.unknownReason"] = "Unknown reason",
             ["notification.export.completed"] = "Export completed: {0}",
+            ["notification.export.partial"] = "Export completed with missing source data: {0}",
+            ["notification.export.failed"] = "Export failed: {0}",
             ["command.defaults.groupName"] = "Default Quick Commands",
             ["command.pinned.limit"] = "Quick commands support up to {0} pinned items."
         };

@@ -222,7 +222,9 @@ public sealed class SessionSpoolFrameStore : IFrameStore
         Directory.CreateDirectory(state.Directory);
 
         var manifestPath = GetManifestPath(state);
-        state.Manifest = TryLoadManifest(manifestPath) ?? RebuildManifest(state);
+        state.Manifest = TryLoadManifest(manifestPath) is { } manifest
+            ? ReconcileManifestWithSegments(state, manifest)
+            : RebuildManifest(state);
         state.Manifest.SessionId = state.SessionId;
         state.Manifest.WorkspaceId = DefaultWorkspaceId;
         state.Manifest.SchemaVersion = ManifestSchemaVersion;
@@ -254,6 +256,25 @@ public sealed class SessionSpoolFrameStore : IFrameStore
     private SpoolManifest RebuildManifest(SessionSpoolState state)
     {
         var manifest = CreateEmptyManifest(state.SessionId);
+        RebuildManifestFromSegmentFiles(state, manifest);
+        return manifest;
+    }
+
+    private SpoolManifest ReconcileManifestWithSegments(SessionSpoolState state, SpoolManifest manifest)
+    {
+        var droppedFrames = Math.Max(0, manifest.DroppedFrames);
+        manifest.Segments.Clear();
+        manifest.ActiveSegmentId = 0;
+        manifest.FirstAvailableFrameId = 1;
+        manifest.LastFrameId = 0;
+        manifest.TotalSpoolBytes = 0;
+        manifest.DroppedFrames = droppedFrames;
+        RebuildManifestFromSegmentFiles(state, manifest);
+        return manifest;
+    }
+
+    private void RebuildManifestFromSegmentFiles(SessionSpoolState state, SpoolManifest manifest)
+    {
         var files = Directory.Exists(state.Directory)
             ? Directory.EnumerateFiles(state.Directory, "*.csf").Order(StringComparer.Ordinal).ToArray()
             : Array.Empty<string>();
@@ -297,8 +318,6 @@ public sealed class SessionSpoolFrameStore : IFrameStore
             manifest.LastFrameId = manifest.Segments[^1].LastFrameId;
             manifest.TotalSpoolBytes = manifest.Segments.Sum(GetAccountingBytes);
         }
-
-        return manifest;
     }
 
     private static long TryParseSegmentId(string value)

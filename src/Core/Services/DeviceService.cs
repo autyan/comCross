@@ -466,11 +466,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             return;
         }
 
-        foreach (var sessionId in _sessions.Keys)
-        {
-            _frameStore.Clear(sessionId);
-        }
-
         _sessions.Clear();
         lock (_sessionOrderGate)
         {
@@ -504,7 +499,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
                 // best-effort during shutdown
             }
 
-            _frameStore.Clear(sessionId);
         }
 
         _sessions.Clear();
