@@ -105,9 +105,9 @@ public sealed class MessageFrameQueryServiceTests : IDisposable
             Path.Combine(_root, "data"),
             Path.Combine(_root, "cache"));
         var settings = new SettingsService(new ConfigService(paths), new AppDatabase(paths), paths);
-        settings.Current.Logs.MaxFileSizeMb = 1;
-        settings.Current.Logs.MaxPerSessionSizeMb = maxPerSessionSizeMb;
-        settings.Current.Logs.MaxTotalSizeMb = 64;
+        settings.Current.SessionStorage.SegmentSizeLimitMb = 1;
+        settings.Current.SessionStorage.PerSessionSizeLimitMb = maxPerSessionSizeMb;
+        settings.Current.SessionStorage.GlobalSizeLimitMb = 64;
         var notification = new NotificationService(new AppDatabase(paths), settings);
         var health = new StorageHealthService(notification, NullLogger<StorageHealthService>.Instance);
         var policy = new StoragePolicyService(health);

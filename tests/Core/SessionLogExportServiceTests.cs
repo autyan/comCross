@@ -101,9 +101,9 @@ public sealed class SessionLogExportServiceTests : IDisposable
             Path.Combine(_root, "cache"));
         var settings = new SettingsService(new ConfigService(paths), new AppDatabase(paths), paths);
         await settings.InitializeAsync();
-        settings.Current.Logs.MaxFileSizeMb = 1;
-        settings.Current.Logs.MaxPerSessionSizeMb = 16;
-        settings.Current.Logs.MaxTotalSizeMb = 64;
+        settings.Current.SessionStorage.SegmentSizeLimitMb = 1;
+        settings.Current.SessionStorage.PerSessionSizeLimitMb = 16;
+        settings.Current.SessionStorage.GlobalSizeLimitMb = 64;
         settings.Current.Export.DefaultDirectory = paths.ExportDirectory;
         var database = new AppDatabase(paths);
         await database.InitializeAsync();

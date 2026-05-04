@@ -155,7 +155,7 @@ public sealed class CommandExecutionServiceTests
         {
         }
 
-        public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null)
+        public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null, SessionLogExportFormat? format = null)
             => Task.FromResult(string.Empty);
     }
 }

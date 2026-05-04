@@ -36,6 +36,7 @@ public sealed class ExportService
         Session session,
         string? searchQuery = null,
         string? customFilePath = null,
+        SessionLogExportFormat? formatOverride = null,
         CancellationToken cancellationToken = default)
     {
         if (session == null)
@@ -50,7 +51,7 @@ public sealed class ExportService
                 ? BuildDefaultFilePath(session, directory)
                 : customFilePath;
 
-            var result = await ExportLiveSpoolAsync(session, targetPath, cancellationToken);
+            var result = await ExportLiveSpoolAsync(session, targetPath, formatOverride, cancellationToken);
             var notificationKey = result.Partial
                 ? "notification.export.partial"
                 : "notification.export.completed";
@@ -112,9 +113,10 @@ public sealed class ExportService
     private async Task<SessionLogExportResult> ExportLiveSpoolAsync(
         Session session,
         string targetPath,
+        SessionLogExportFormat? formatOverride,
         CancellationToken cancellationToken)
     {
-        var format = _settingsService.Current.Export.DefaultSessionLogFormat;
+        var format = formatOverride ?? _settingsService.Current.Export.DefaultSessionLogFormat;
         var payloadMode = _settingsService.Current.Export.DefaultPayloadRenderMode;
         var capture = _messageFrameQuery.Query(new MessageFrameQuery(
             session.Id,

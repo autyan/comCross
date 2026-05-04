@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using ComCross.Shared.Models;
 using ComCross.Shell.ViewModels;
 
 namespace ComCross.Shell.Views;
@@ -167,10 +168,27 @@ public partial class MessageStreamView : BaseUserControl
 
     private void OnExportMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        if (sender is Button button)
+        {
+            button.ContextMenu?.Open(button);
+        }
+    }
+
+    private void OnExportPlainClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ExportMessages(SessionLogExportFormat.Plain);
+
+    private void OnExportSlimClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ExportMessages(SessionLogExportFormat.Slim);
+
+    private void OnExportDetailedClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ExportMessages(SessionLogExportFormat.DetailedJsonLines);
+
+    private void ExportMessages(SessionLogExportFormat format)
+    {
         var window = this.FindAncestorOfType<Window>();
         if (window?.DataContext is MainWindowViewModel vm)
         {
-            _ = vm.ExportAsync();
+            _ = vm.ExportAsync(format: format);
         }
     }
 

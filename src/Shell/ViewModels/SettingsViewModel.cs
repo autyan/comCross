@@ -1,5 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
@@ -11,6 +14,7 @@ using Avalonia;
 using Avalonia.Threading;
 using ComCross.Platform;
 using ComCross.Core.Services;
+using ComCross.Shared.Interfaces;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
 using ComCross.PluginSdk.UI;
@@ -25,6 +29,9 @@ public sealed class SettingsViewModel : BaseViewModel
     private readonly PluginUiRenderer _uiRenderer;
     private readonly PluginUiStateManager _pluginUiStateManager;
     private readonly PluginUiConfigService _pluginUiConfigService;
+    private readonly ComCrossPathService _paths;
+    private readonly IStorageHealthService _storageHealth;
+    private readonly IStorageCalibrationService _storageCalibration;
     private readonly List<LocaleCultureInfo> _availableLanguages;
     private readonly List<string> _logFormats = new() { "txt", "json" };
     private readonly List<string> _logLevels = new() { "Trace", "Debug", "Info", "Warn", "Error", "Fatal" };
@@ -61,7 +68,10 @@ public sealed class SettingsViewModel : BaseViewModel
         PluginManagerViewModel pluginManager,
         PluginUiRenderer uiRenderer,
         PluginUiStateManager pluginUiStateManager,
-        PluginUiConfigService pluginUiConfigService)
+        PluginUiConfigService pluginUiConfigService,
+        ComCrossPathService paths,
+        IStorageHealthService storageHealth,
+        IStorageCalibrationService storageCalibration)
         : base(localization)
     {
         _settingsService = settingsService;
@@ -69,6 +79,9 @@ public sealed class SettingsViewModel : BaseViewModel
         _uiRenderer = uiRenderer;
         _pluginUiStateManager = pluginUiStateManager;
         _pluginUiConfigService = pluginUiConfigService;
+        _paths = paths;
+        _storageHealth = storageHealth;
+        _storageCalibration = storageCalibration;
         _availableLanguages = localization.AvailableCultures.ToList();
         _selectedLanguage = ResolveLanguage(settingsService.Current.Language);
         _followSystemLanguage = settingsService.Current.FollowSystemLanguage;
@@ -88,6 +101,7 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(NavigationEntries));
             OnPropertyChanged(nameof(SelectedNavigationEntry));
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
+            OnPropertyChanged(nameof(IsStorageSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
             OnPropertyChanged(nameof(IsPluginManagerSelected));
 
@@ -103,6 +117,7 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(SelectedNavigationEntry));
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
             OnPropertyChanged(nameof(IsPluginManagerSelected));
+            OnPropertyChanged(nameof(IsStorageSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
 
             // Rebuild plugin settings panels via the same lazy warm-up pipeline.
@@ -190,6 +205,7 @@ public sealed class SettingsViewModel : BaseViewModel
             _selectedNavigationEntry = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsSystemSettingsSelected));
+            OnPropertyChanged(nameof(IsStorageSettingsSelected));
             OnPropertyChanged(nameof(IsPluginSettingsSelected));
             OnPropertyChanged(nameof(IsPluginManagerSelected));
 
@@ -205,10 +221,16 @@ public sealed class SettingsViewModel : BaseViewModel
             {
                 SelectedPluginSettingsPage = null;
             }
+
+            if (_selectedNavigationEntry?.Kind == SettingsNavKind.Storage)
+            {
+                RefreshStorageSummary();
+            }
         }
     }
 
     public bool IsSystemSettingsSelected => _selectedNavigationEntry is null || _selectedNavigationEntry.Kind == SettingsNavKind.System;
+    public bool IsStorageSettingsSelected => _selectedNavigationEntry?.Kind == SettingsNavKind.Storage;
     public bool IsPluginManagerSelected => _selectedNavigationEntry?.Kind == SettingsNavKind.PluginManager;
     public bool IsPluginSettingsSelected => _selectedNavigationEntry?.Kind == SettingsNavKind.PluginPage;
 
@@ -293,6 +315,7 @@ public sealed class SettingsViewModel : BaseViewModel
             var entries = new List<SettingsNavEntry>();
             entries.Add(SettingsNavEntry.Header(L["settings.nav.system"]));
             entries.Add(SettingsNavEntry.SystemPage(L["settings.nav.system.page"]));
+            entries.Add(SettingsNavEntry.StoragePage(L["settings.nav.storage.page"]));
             entries.Add(SettingsNavEntry.PluginManagerPage(L["settings.nav.plugins.page"]));
 
             foreach (var runtime in _pluginManager.GetAllRuntimes())
@@ -373,6 +396,7 @@ public sealed class SettingsViewModel : BaseViewModel
             _selectedNavigationEntry = previousSelection?.Kind switch
             {
                 SettingsNavKind.System => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.System && e.IsSelectable),
+                SettingsNavKind.Storage => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.Storage && e.IsSelectable),
                 SettingsNavKind.PluginManager => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.PluginManager && e.IsSelectable),
                 SettingsNavKind.PluginPage => entries.FirstOrDefault(e => e.Kind == SettingsNavKind.PluginPage
                     && e.IsSelectable
@@ -464,7 +488,8 @@ public sealed class SettingsViewModel : BaseViewModel
                 OnPropertyChanged(nameof(PluginSettingsPages));
                 OnPropertyChanged(nameof(NavigationEntries));
                 OnPropertyChanged(nameof(SelectedNavigationEntry));
-                OnPropertyChanged(nameof(IsPluginSettingsSelected));
+            OnPropertyChanged(nameof(IsPluginSettingsSelected));
+            OnPropertyChanged(nameof(IsStorageSettingsSelected));
             }
 
             // Snapshot pages to render.
@@ -618,6 +643,7 @@ public sealed class SettingsViewModel : BaseViewModel
     public enum SettingsNavKind
     {
         System,
+        Storage,
         PluginManager,
         PluginPage
     }
@@ -635,6 +661,7 @@ public sealed class SettingsViewModel : BaseViewModel
 
         public static SettingsNavEntry Header(string title) => new(SettingsNavKind.System, title, IsSelectable: false);
         public static SettingsNavEntry SystemPage(string title) => new(SettingsNavKind.System, title, IsSelectable: true);
+        public static SettingsNavEntry StoragePage(string title) => new(SettingsNavKind.Storage, title, IsSelectable: true);
         public static SettingsNavEntry PluginManagerPage(string title) => new(SettingsNavKind.PluginManager, title, IsSelectable: true);
 
         public static SettingsNavEntry PluginPage(string pluginId, string pageId, string title, string uiSchemaJson)
@@ -649,6 +676,81 @@ public sealed class SettingsViewModel : BaseViewModel
     public IReadOnlyList<LocaleCultureInfo> AvailableLanguages => _availableLanguages;
     public IReadOnlyList<string> AppLogFormats => _logFormats;
     public IReadOnlyList<string> AppLogLevels => _logLevels;
+
+    public string StorageDataDirectory => _paths.LocalDataDirectory;
+    public string StorageSpoolDirectory => _paths.SessionSpoolDirectory;
+    // i18n-ignore (data format)
+    public string StorageCalibrationStatus => $"{_storageCalibration.Current.Phase} / {_storageCalibration.Current.Tier}";
+    // i18n-ignore (data format)
+    public string StorageHealthStatus => $"{_storageHealth.Current.Health} / {_storageHealth.Current.Tier}";
+    public string StorageSpoolUsage => FormatBytes(GetDirectorySize(_paths.SessionSpoolDirectory));
+
+    public int StorageGlobalLimitMb
+    {
+        get => _settingsService.Current.SessionStorage.GlobalSizeLimitMb;
+        set
+        {
+            var normalized = Math.Max(1, value);
+            if (_settingsService.Current.SessionStorage.GlobalSizeLimitMb == normalized)
+            {
+                return;
+            }
+
+            _settingsService.Current.SessionStorage.GlobalSizeLimitMb = normalized;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int StoragePerSessionLimitMb
+    {
+        get => _settingsService.Current.SessionStorage.PerSessionSizeLimitMb;
+        set
+        {
+            var normalized = Math.Max(1, value);
+            if (_settingsService.Current.SessionStorage.PerSessionSizeLimitMb == normalized)
+            {
+                return;
+            }
+
+            _settingsService.Current.SessionStorage.PerSessionSizeLimitMb = normalized;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int StorageSegmentLimitMb
+    {
+        get => _settingsService.Current.SessionStorage.SegmentSizeLimitMb;
+        set
+        {
+            var normalized = Math.Max(1, value);
+            if (_settingsService.Current.SessionStorage.SegmentSizeLimitMb == normalized)
+            {
+                return;
+            }
+
+            _settingsService.Current.SessionStorage.SegmentSizeLimitMb = normalized;
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public void RefreshStorageSummary()
+    {
+        OnPropertyChanged(nameof(StorageDataDirectory));
+        OnPropertyChanged(nameof(StorageSpoolDirectory));
+        OnPropertyChanged(nameof(StorageCalibrationStatus));
+        OnPropertyChanged(nameof(StorageHealthStatus));
+        OnPropertyChanged(nameof(StorageSpoolUsage));
+        OnPropertyChanged(nameof(StorageGlobalLimitMb));
+        OnPropertyChanged(nameof(StoragePerSessionLimitMb));
+        OnPropertyChanged(nameof(StorageSegmentLimitMb));
+    }
+
+    public void OpenDataDirectory() => OpenDirectory(_paths.LocalDataDirectory);
+
+    public void OpenSessionSpoolDirectory() => OpenDirectory(_paths.SessionSpoolDirectory);
 
     public LocaleCultureInfo SelectedLanguage
     {
@@ -691,22 +793,6 @@ public sealed class SettingsViewModel : BaseViewModel
                 ApplySystemLanguage();
             }
 
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool LogAutoSaveEnabled
-    {
-        get => _settingsService.Current.Logs.AutoSaveEnabled;
-        set
-        {
-            if (_settingsService.Current.Logs.AutoSaveEnabled == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.AutoSaveEnabled = value;
             ScheduleSave();
             OnPropertyChanged();
         }
@@ -775,105 +861,6 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged();
         }
     }
-
-    public string LogDirectory
-    {
-        get => _settingsService.Current.Logs.Directory;
-        set
-        {
-            if (_settingsService.Current.Logs.Directory == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.Directory = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public int LogMaxFileSizeMb
-    {
-        get => _settingsService.Current.Logs.MaxFileSizeMb;
-        set
-        {
-            if (_settingsService.Current.Logs.MaxFileSizeMb == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.MaxFileSizeMb = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public int LogMaxTotalSizeMb
-    {
-        get => _settingsService.Current.Logs.MaxTotalSizeMb;
-        set
-        {
-            if (_settingsService.Current.Logs.MaxTotalSizeMb == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.MaxTotalSizeMb = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool LogAutoDeleteEnabled
-    {
-        get => _settingsService.Current.Logs.AutoDeleteEnabled;
-        set
-        {
-            if (_settingsService.Current.Logs.AutoDeleteEnabled == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.AutoDeleteEnabled = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool LogDatabasePersistenceEnabled
-    {
-        get => _settingsService.Current.Logs.DatabasePersistenceEnabled;
-        set
-        {
-            if (_settingsService.Current.Logs.DatabasePersistenceEnabled == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.DatabasePersistenceEnabled = value;
-            ScheduleSave();
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsDatabaseDirectoryEnabled));
-        }
-    }
-
-    public string? LogDatabaseDirectory
-    {
-        get => _settingsService.Current.Logs.DatabaseDirectory;
-        set
-        {
-            if (_settingsService.Current.Logs.DatabaseDirectory == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Logs.DatabaseDirectory = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool IsDatabaseDirectoryEnabled => LogDatabasePersistenceEnabled;
 
     public bool NotificationsStorageAlertsEnabled
     {
@@ -1099,70 +1086,6 @@ public sealed class SettingsViewModel : BaseViewModel
         }
     }
 
-    public string ExportDefaultFormat
-    {
-        get => _settingsService.Current.Export.DefaultFormat;
-        set
-        {
-            if (_settingsService.Current.Export.DefaultFormat == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Export.DefaultFormat = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public string ExportDefaultDirectory
-    {
-        get => _settingsService.Current.Export.DefaultDirectory;
-        set
-        {
-            if (_settingsService.Current.Export.DefaultDirectory == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Export.DefaultDirectory = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public SettingOption<ExportRangeMode>? SelectedExportRangeMode
-    {
-        get => ExportRangeModeOptions.FirstOrDefault(o => o.Value == _settingsService.Current.Export.RangeMode);
-        set
-        {
-            if (value == null || _settingsService.Current.Export.RangeMode == value.Value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Export.RangeMode = value.Value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public int ExportRangeCount
-    {
-        get => _settingsService.Current.Export.RangeCount;
-        set
-        {
-            if (_settingsService.Current.Export.RangeCount == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Export.RangeCount = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
     public event EventHandler<string>? LanguageChanged;
 
     public void ReloadFromSettings()
@@ -1239,17 +1162,85 @@ public sealed class SettingsViewModel : BaseViewModel
             new SettingOption<ConnectionBehavior>(ConnectionBehavior.PromptUser, L["settings.connection.behavior.promptUser"])
         };
 
-    public IReadOnlyList<SettingOption<ExportRangeMode>> ExportRangeModeOptions =>
-        new[]
-        {
-            new SettingOption<ExportRangeMode>(ExportRangeMode.All, L["settings.export.range.all"]),
-            new SettingOption<ExportRangeMode>(ExportRangeMode.Latest, L["settings.export.range.latest"])
-        };
-
     private LocaleCultureInfo ResolveLanguage(string cultureCode)
     {
         var match = _availableLanguages.FirstOrDefault(l => l.Code == cultureCode);
         return match ?? _availableLanguages.First();
+    }
+
+    private static long GetDirectorySize(string directory)
+    {
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                return 0;
+            }
+
+            return Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                .Select(path =>
+                {
+                    try
+                    {
+                        return new FileInfo(path).Length;
+                    }
+                    catch
+                    {
+                        return 0;
+                    }
+                })
+                .Sum();
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = Math.Max(0, bytes);
+        var unit = 0;
+        var display = (double)value;
+        while (display >= 1024 && unit < units.Length - 1)
+        {
+            display /= 1024;
+            unit++;
+        }
+
+        if (unit == 0)
+        {
+            // i18n-ignore (data format)
+            return $"{value} {units[unit]}";
+        }
+
+        // i18n-ignore (data format)
+        return $"{display:0.##} {units[unit]}";
+    }
+
+    private static void OpenDirectory(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var fileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? "explorer.exe"
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? "open"
+                    : "xdg-open";
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            startInfo.ArgumentList.Add(directory);
+            using var _ = Process.Start(startInfo);
+        }
+        catch
+        {
+        }
     }
 
     private void ScheduleSave()

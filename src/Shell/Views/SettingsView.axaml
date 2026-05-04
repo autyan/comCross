@@ -62,54 +62,6 @@
                 </WrapPanel>
             </StackPanel>
 
-            <!-- Logs -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding L[settings.section.logs]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
-                <CheckBox Content="{Binding L[settings.logs.autosave]}" IsChecked="{Binding LogAutoSaveEnabled}" Margin="0,0,0,4" />
-                <WrapPanel Orientation="Horizontal">
-                    <StackPanel Width="400" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.logs.directory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding LogDirectory}" Watermark="{Binding L[settings.logs.directory.defaultWatermark]}" />
-                    </StackPanel>
-                    <StackPanel Width="160" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.logs.maxFileSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="1" Maximum="1024" Value="{Binding LogMaxFileSizeMb}" HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                    <StackPanel Width="160" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.logs.maxTotalSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="10" Maximum="4096" Value="{Binding LogMaxTotalSizeMb}" HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                    <StackPanel Width="280" Margin="0,0,12,8">
-                        <TextBlock Height="16" Margin="0,0,0,4" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <CheckBox IsChecked="{Binding LogAutoDeleteEnabled}" />
-                            <TextBlock Text="{Binding L[settings.logs.autoDelete]}" VerticalAlignment="Center" />
-                            <Border Background="#F5A524" CornerRadius="8" Width="16" Height="16" VerticalAlignment="Center"
-                                    ToolTip.Tip="{Binding L[settings.logs.autoDeleteRuleTip]}">
-                                <TextBlock Text="!" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#141B1F" />
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
-                </WrapPanel>
-                
-                <!-- Database Persistence -->
-                <Border Background="#1B242A" BorderBrush="#25303A" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,8,0,0">
-                    <StackPanel Spacing="8">
-                        <CheckBox Content="{Binding L[settings.logs.enableDatabase]}" 
-                                  IsChecked="{Binding LogDatabasePersistenceEnabled}" />
-                        <TextBlock Text="{Binding L[settings.logs.databaseWarning]}" 
-                                   FontSize="11" 
-                                   Foreground="#87909B" 
-                                   TextWrapping="Wrap" 
-                                   Margin="24,0,0,0" />
-                        <StackPanel Width="400" HorizontalAlignment="Left" Margin="24,4,0,0" IsEnabled="{Binding IsDatabaseDirectoryEnabled}">
-                            <TextBlock Text="{Binding L[settings.logs.databaseDirectory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                            <TextBox Text="{Binding LogDatabaseDirectory}" Watermark="{Binding L[settings.logs.databaseDirectory.defaultWatermark]}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-
             <!-- App Logs -->
             <StackPanel Spacing="8">
                 <TextBlock Text="{Binding L[settings.section.appLogs]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
@@ -208,35 +160,78 @@
                 </WrapPanel>
             </StackPanel>
 
-            <!-- Export -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{Binding L[settings.section.export]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
-                <WrapPanel Orientation="Horizontal">
-                    <StackPanel Width="160" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.export.defaultFormat]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding ExportDefaultFormat}" />
-                    </StackPanel>
-                    <StackPanel Width="400" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.export.defaultDirectory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding ExportDefaultDirectory}" />
-                    </StackPanel>
-                    <StackPanel Width="180" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.export.range]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <ComboBox ItemsSource="{Binding ExportRangeModeOptions}" SelectedItem="{Binding SelectedExportRangeMode}" HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Label}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Width="160" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.export.range.count]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="1" Maximum="1000000" Value="{Binding ExportRangeCount}" HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                </WrapPanel>
-            </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
 
+            <!-- Storage settings page -->
+            <ScrollViewer IsVisible="{Binding IsStorageSettingsSelected}">
+                <StackPanel Spacing="16" Margin="20">
+                    <TextBlock Text="{Binding L[settings.storage.title]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
+
+                    <Border Background="#1B242A" BorderBrush="#25303A" BorderThickness="1" CornerRadius="4" Padding="12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{Binding L[settings.storage.behavior.title]}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+                            <TextBlock Text="{Binding L[settings.storage.behavior.description]}"
+                                       FontSize="11"
+                                       Foreground="#B7C1CC"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding L[settings.storage.status.title]}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+                        <WrapPanel Orientation="Horizontal">
+                            <StackPanel Width="220" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.calibration]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding StorageCalibrationStatus}" FontSize="12" Foreground="#E6EDF3" />
+                            </StackPanel>
+                            <StackPanel Width="220" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.health]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding StorageHealthStatus}" FontSize="12" Foreground="#E6EDF3" />
+                            </StackPanel>
+                            <StackPanel Width="160" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.usage]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding StorageSpoolUsage}" FontSize="12" Foreground="#E6EDF3" />
+                            </StackPanel>
+                        </WrapPanel>
+                        <Button Content="{Binding L[settings.storage.refresh]}" Width="120" Click="OnRefreshStorageClick" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding L[settings.storage.limits.title]}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+                        <TextBlock Text="{Binding L[settings.storage.limits.description]}"
+                                   FontSize="11"
+                                   Foreground="#B7C1CC"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Orientation="Horizontal">
+                            <StackPanel Width="220" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.limit.global]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <NumericUpDown Minimum="1" Maximum="1048576" Value="{Binding StorageGlobalLimitMb}" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Width="220" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.limit.session]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <NumericUpDown Minimum="1" Maximum="1048576" Value="{Binding StoragePerSessionLimitMb}" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Width="220" Margin="0,0,12,8">
+                                <TextBlock Text="{Binding L[settings.storage.limit.segment]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                                <NumericUpDown Minimum="1" Maximum="1048576" Value="{Binding StorageSegmentLimitMb}" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding L[settings.storage.paths.title]}" FontSize="12" FontWeight="SemiBold" Foreground="#E6EDF3" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding L[settings.storage.path.data]}" FontSize="11" Foreground="#B7C1CC" />
+                            <TextBox Text="{Binding StorageDataDirectory}" IsReadOnly="True" />
+                            <Button Content="{Binding L[settings.storage.openDataDirectory]}" Width="180" Click="OnOpenDataDirectoryClick" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding L[settings.storage.path.spool]}" FontSize="11" Foreground="#B7C1CC" />
+                            <TextBox Text="{Binding StorageSpoolDirectory}" IsReadOnly="True" />
+                            <Button Content="{Binding L[settings.storage.openSpoolDirectory]}" Width="180" Click="OnOpenSpoolDirectoryClick" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
 

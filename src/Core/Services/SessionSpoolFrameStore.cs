@@ -739,7 +739,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 
     private void CleanupSessionIfNeeded(SessionSpoolState state)
     {
-        var maxBytes = Math.Max(1, _settingsService.Current.Logs.MaxPerSessionSizeMb) * 1024L * 1024L;
+        var maxBytes = Math.Max(1, _settingsService.Current.SessionStorage.PerSessionSizeLimitMb) * 1024L * 1024L;
         while (state.Manifest.TotalSpoolBytes > maxBytes)
         {
             var victim = state.Manifest.Segments
@@ -762,7 +762,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 
     private void CleanupGlobalIfNeeded()
     {
-        var maxBytes = Math.Max(1, _settingsService.Current.Logs.MaxTotalSizeMb) * 1024L * 1024L;
+        var maxBytes = Math.Max(1, _settingsService.Current.SessionStorage.GlobalSizeLimitMb) * 1024L * 1024L;
         var root = Path.Combine(_paths.SessionSpoolDirectory, DefaultWorkspaceId);
         if (!Directory.Exists(root))
         {
@@ -900,7 +900,7 @@ public sealed class SessionSpoolFrameStore : IFrameStore
 
     private long GetSegmentMaxBytes(StoragePolicy policy)
     {
-        var configured = Math.Max(1, _settingsService.Current.Logs.MaxFileSizeMb);
+        var configured = Math.Max(1, _settingsService.Current.SessionStorage.SegmentSizeLimitMb);
         var policySize = Math.Max(1, policy.SegmentSizeMb);
         return Math.Min(configured, policySize) * 1024L * 1024L;
     }

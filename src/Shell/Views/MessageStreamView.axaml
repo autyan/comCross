@@ -71,6 +71,13 @@
                         Padding="0"
                         Margin="8,0,0,0"
                         Click="OnExportMessagesClick">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{Binding L[stream.export.plain]}" Click="OnExportPlainClick" />
+                            <MenuItem Header="{Binding L[stream.export.slim]}" Click="OnExportSlimClick" />
+                            <MenuItem Header="{Binding L[stream.export.detailed]}" Click="OnExportDetailedClick" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
                     <Path Data="{StaticResource DownloadIcon}"
                           Width="14"
                           Height="14"

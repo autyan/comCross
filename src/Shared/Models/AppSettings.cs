@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ComCross.Shared.Models;
 
 public sealed class AppSettings
@@ -6,10 +8,11 @@ public sealed class AppSettings
     public bool FollowSystemLanguage { get; set; } = true;
     public AppLogSettings AppLogs { get; set; } = new();
 
-    /// <summary>
-    /// Session Logs settings. The persisted property name remains Logs during the pre-stable transition.
-    /// </summary>
-    public LogSettings Logs { get; set; } = new();
+    public SessionStorageSettings SessionStorage { get; set; } = new();
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LegacyLogSettings? Logs { get; set; }
+
     public CommandSettings Commands { get; set; } = new();
     public NotificationSettings Notifications { get; set; } = new();
     public ConnectionSettings Connection { get; set; } = new();
@@ -26,39 +29,38 @@ public sealed class AppLogSettings
     public string MinLevel { get; set; } = "Info";
 }
 
-public sealed class LogSettings
+public sealed class SessionStorageSettings
 {
     public const int SettingsSchemaVersion = 1;
 
     public int SchemaVersion { get; set; } = SettingsSchemaVersion;
+
+    /// <summary>
+    /// Segment rollover size for the live session landing buffer working format.
+    /// </summary>
+    public int SegmentSizeLimitMb { get; set; } = 10;
+
+    /// <summary>
+    /// Global maximum live session landing buffer size.
+    /// </summary>
+    public int GlobalSizeLimitMb { get; set; } = 256;
+
+    /// <summary>
+    /// Per-session maximum live session landing buffer size.
+    /// </summary>
+    public int PerSessionSizeLimitMb { get; set; } = 64;
+}
+
+public sealed class LegacyLogSettings
+{
+    public int SchemaVersion { get; set; }
     public bool AutoSaveEnabled { get; set; } = true;
     public string Directory { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Segment rollover size for the live spool working format.
-    /// </summary>
     public int MaxFileSizeMb { get; set; } = 10;
-
-    /// <summary>
-    /// Global maximum Session Logs spool size.
-    /// </summary>
     public int MaxTotalSizeMb { get; set; } = 256;
-
-    /// <summary>
-    /// Per-session maximum Session Logs spool size. A value below 1 lets Core derive a safe default.
-    /// </summary>
     public int MaxPerSessionSizeMb { get; set; } = 64;
-
     public bool AutoDeleteEnabled { get; set; }
-
-    /// <summary>
-    /// Legacy global database persistence flag. Archive is session-scoped and must not use this as a default enable switch.
-    /// </summary>
     public bool DatabasePersistenceEnabled { get; set; }
-
-    /// <summary>
-    /// Legacy database directory. Session Archive storage is per-session and resolved by Core storage services.
-    /// </summary>
     public string? DatabaseDirectory { get; set; }
 }
 

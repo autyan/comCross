@@ -35,6 +35,7 @@ public sealed class SettingsService
             _current = settings;
         }
 
+        MigrateLegacySettings();
         EnsureDefaults();
     }
 
@@ -47,11 +48,6 @@ public sealed class SettingsService
 
     private void EnsureDefaults()
     {
-        if (string.IsNullOrWhiteSpace(_current.Logs.Directory))
-        {
-            _current.Logs.Directory = _paths.LogDirectory;
-        }
-
         if (string.IsNullOrWhiteSpace(_current.AppLogs.Directory))
         {
             _current.AppLogs.Directory = _paths.AppLogDirectory;
@@ -62,8 +58,24 @@ public sealed class SettingsService
             _current.Export.DefaultDirectory = _paths.ExportDirectory;
         }
 
-        Directory.CreateDirectory(_current.Logs.Directory);
         Directory.CreateDirectory(_current.AppLogs.Directory);
         Directory.CreateDirectory(_current.Export.DefaultDirectory);
     }
+
+    private void MigrateLegacySettings()
+    {
+        var legacyLogs = _current.Logs;
+        if (legacyLogs is null)
+        {
+            return;
+        }
+
+        _current.SessionStorage.GlobalSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxTotalSizeMb, _current.SessionStorage.GlobalSizeLimitMb);
+        _current.SessionStorage.PerSessionSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxPerSessionSizeMb, _current.SessionStorage.PerSessionSizeLimitMb);
+        _current.SessionStorage.SegmentSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxFileSizeMb, _current.SessionStorage.SegmentSizeLimitMb);
+        _current.Logs = null;
+    }
+
+    private static int NormalizeMegabytes(int value, int fallback)
+        => value > 0 ? value : Math.Max(1, fallback);
 }

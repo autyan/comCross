@@ -388,7 +388,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         _messageStream.ClearView();
     }
 
-    public async Task ExportAsync(string? filePath = null)
+    public async Task ExportAsync(string? filePath = null, SessionLogExportFormat? format = null)
     {
         if (ActiveSession == null)
         {
@@ -397,7 +397,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
         try
         {
-            await _workspaceCoordinator.ExportAsync(ActiveSession, _messageStream.SearchQuery, filePath);
+            await _workspaceCoordinator.ExportAsync(ActiveSession, _messageStream.SearchQuery, filePath, format);
         }
         catch (Exception ex)
         {

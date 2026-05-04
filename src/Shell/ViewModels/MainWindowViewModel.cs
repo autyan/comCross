@@ -421,7 +421,7 @@ public class MainWindowViewModel : BaseViewModel
 
     public void ClearMessages() => RightToolDock.ClearMessages();
 
-    public Task ExportAsync(string? filePath = null) => RightToolDock.ExportAsync(filePath);
+    public Task ExportAsync(string? filePath = null, SessionLogExportFormat? format = null) => RightToolDock.ExportAsync(filePath, format);
 
     public void ToggleSettings()
     {

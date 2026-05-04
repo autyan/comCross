@@ -16,7 +16,6 @@ public sealed class WorkspaceService
 {
     private readonly DeviceService _deviceService;
     private readonly IMessageStreamService _messageStream;
-    private readonly LogStorageService _logStorageService;
     private readonly NotificationService _notificationService;
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
@@ -29,7 +28,6 @@ public sealed class WorkspaceService
     public WorkspaceService(
         DeviceService deviceService,
         IMessageStreamService messageStream,
-        LogStorageService logStorageService,
         NotificationService notificationService,
         WorkspaceStateStore workspaceStateStore,
         WorkloadService workloadService,
@@ -39,7 +37,6 @@ public sealed class WorkspaceService
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
-        _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
@@ -88,7 +85,6 @@ public sealed class WorkspaceService
                 resourceId,
                 cancellationToken);
             await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
-            _logStorageService.StartSession(session);
 
             // DeviceService publishes SessionCreatedEvent before workspace membership is updated.
             // Publish a second upsert after membership so filtered session lists can include it immediately.
@@ -109,7 +105,6 @@ public sealed class WorkspaceService
         try
         {
             await _deviceService.DisconnectAsync(sessionId);
-            await _logStorageService.StopSessionAsync(sessionId);
         }
         catch (Exception)
         {
@@ -283,7 +278,6 @@ public sealed class WorkspaceService
                 await DisconnectAsync(deleteId, cancellationToken);
             }
 
-            await _logStorageService.StopSessionAsync(deleteId);
             _deviceService.RemoveSession(deleteId);
             ClearMessages(deleteId);
             await _workloadService.RemoveSessionFromAllWorkloadsAsync(deleteId);

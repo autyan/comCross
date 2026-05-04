@@ -48,7 +48,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStoragePolicyService, StoragePolicyService>();
         services.AddSingleton<IStorageCalibrationService, StorageCalibrationService>();
         services.AddSingleton<AppLogService>();
-        services.AddSingleton<LogStorageService>();
         
         services.AddSingleton<MessageStreamService>();
         services.AddSingleton<IMessageStreamService>(sp => sp.GetRequiredService<MessageStreamService>());

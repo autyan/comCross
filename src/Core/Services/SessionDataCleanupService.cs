@@ -13,18 +13,15 @@ public sealed record SessionDataCleanupResult(
 
 public sealed class SessionDataCleanupService
 {
-    private readonly LogStorageService _logStorageService;
     private readonly PluginSessionStorageService _pluginSessionStorage;
     private readonly AppDatabase _database;
     private readonly ILogger<SessionDataCleanupService> _logger;
 
     public SessionDataCleanupService(
-        LogStorageService logStorageService,
         PluginSessionStorageService pluginSessionStorage,
         AppDatabase database,
         ILogger<SessionDataCleanupService> logger)
     {
-        _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _pluginSessionStorage = pluginSessionStorage ?? throw new ArgumentNullException(nameof(pluginSessionStorage));
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,15 +52,6 @@ public sealed class SessionDataCleanupService
         var warnings = new List<string>();
         var deletedLogFiles = 0;
         var pluginStorageDeleted = false;
-
-        try
-        {
-            await _logStorageService.StopSessionAsync(target.SessionId);
-        }
-        catch (Exception ex)
-        {
-            AddWarning(warnings, target.SessionId, $"Failed to stop session log writer: {ex.Message}", ex);
-        }
 
         IReadOnlyList<LogFileRecord> logFiles = Array.Empty<LogFileRecord>();
         try
