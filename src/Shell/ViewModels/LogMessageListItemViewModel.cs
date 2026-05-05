@@ -28,6 +28,8 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
     private IReadOnlyList<MessageAttributeListItemViewModel> _attributes;
     private PayloadRenderMode _payloadRenderMode;
     private MessageDisplayDensity _displayDensity;
+    private bool _isSearchMatch;
+    private bool _isCurrentSearchMatch;
     private bool _isInitialized;
 
     public LogMessageListItemViewModel()
@@ -93,6 +95,40 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
 
     public bool HasVisibleAttributes => _displayDensity == MessageDisplayDensity.Detailed && _attributes.Count > 0;
 
+    public bool IsSearchMatch
+    {
+        get => _isSearchMatch;
+        private set
+        {
+            if (_isSearchMatch == value)
+            {
+                return;
+            }
+
+            _isSearchMatch = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowSearchMatchBackground));
+        }
+    }
+
+    public bool IsCurrentSearchMatch
+    {
+        get => _isCurrentSearchMatch;
+        private set
+        {
+            if (_isCurrentSearchMatch == value)
+            {
+                return;
+            }
+
+            _isCurrentSearchMatch = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowSearchMatchBackground));
+        }
+    }
+
+    public bool ShowSearchMatchBackground => IsSearchMatch || IsCurrentSearchMatch;
+
     public Thickness RowPadding => _displayDensity == MessageDisplayDensity.Detailed
         ? new Thickness(8, 4)
         : new Thickness(8, 1);
@@ -147,6 +183,12 @@ public sealed class LogMessageListItemViewModel : INotifyPropertyChanged, IIniti
         OnPropertyChanged(nameof(HasVisibleAttributes));
         OnPropertyChanged(nameof(RowPadding));
         OnPropertyChanged(nameof(RowBorderThickness));
+    }
+
+    public void UpdateSearchMatchState(bool isSearchMatch, bool isCurrentSearchMatch)
+    {
+        IsSearchMatch = isSearchMatch;
+        IsCurrentSearchMatch = isCurrentSearchMatch;
     }
 
     private static string FormatDisplayContent(LogMessage message, PayloadRenderMode payloadRenderMode)

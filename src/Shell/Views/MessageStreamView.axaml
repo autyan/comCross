@@ -7,6 +7,73 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
              x:DataType="vm:MessageStreamViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Button.latest-floating-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.latest-floating-button:pointerover">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.latest-floating-button:pressed">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:pointerover">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:focus">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:focus-within">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text /template/ Border">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:pointerover /template/ Border">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:focus /template/ Border">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.aggregate-message-text:focus-within /template/ Border">
+            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Border.latest-floating-button-frame">
+            <Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrightBrush}" />
+            <Setter Property="BoxShadow" Value="0 8 18 0 #66000000" />
+        </Style>
+        <Style Selector="Button.latest-floating-button:pointerover Border.latest-floating-button-frame">
+            <Setter Property="BorderBrush" Value="{StaticResource WhiteBrush}" />
+            <Setter Property="BoxShadow" Value="0 10 24 0 #80000000" />
+        </Style>
+    </UserControl.Styles>
     
     <Grid RowDefinitions="Auto,Auto,Auto,*">
         <!-- Current Session Context -->
@@ -140,7 +207,7 @@
                 <Border Grid.Column="0"
                         HorizontalAlignment="Stretch"
                         Classes="prototype-search-shell">
-                    <Grid ColumnDefinitions="16,*" VerticalAlignment="Center">
+                    <Grid ColumnDefinitions="16,*,Auto" VerticalAlignment="Center">
                         <Path Classes="prototype-icon"
                               Data="{StaticResource SearchIcon}"
                               Width="14"
@@ -152,6 +219,20 @@
                                  Classes="prototype-search-input prototype-embedded-input"
                                  Margin="10,0,0,0"
                                  Watermark="{Binding L[stream.search.placeholder]}" />
+                        <Button Grid.Column="2"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                IsVisible="{Binding HasSearchQuery}"
+                                Click="OnClearSearchClick">
+                            <Path Data="{StaticResource XIcon}"
+                                  Width="12"
+                                  Height="12"
+                                  Stretch="Uniform"
+                                  Stroke="{StaticResource Text2Brush}"
+                                  StrokeThickness="1.8"
+                                  StrokeLineCap="Round" />
+                        </Button>
                     </Grid>
                 </Border>
 
@@ -178,117 +259,271 @@
 
         <!-- Metrics Bar -->
         <Border Grid.Row="2"
-                IsVisible="{Binding IsMetricsBarVisible}"
+                IsVisible="{Binding IsMessageStatusBarVisible}"
                 Background="{StaticResource Bg1Brush}"
                 Padding="16,8"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMetricsBarVisible}">
                         <TextBlock Text="{Binding L[stream.metrics.rx]}" FontSize="10" Foreground="{StaticResource Text2Brush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding ActiveSession.RxBytes}" FontSize="12" Foreground="{StaticResource AccentCyanBrush}" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMetricsBarVisible}">
                         <TextBlock Text="{Binding L[stream.metrics.tx]}" FontSize="10" Foreground="{StaticResource Text2Brush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding ActiveSession.TxBytes}" FontSize="12" Foreground="{StaticResource AccentBlueBrush}" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMetricsBarVisible}">
                         <TextBlock Text="{Binding L[stream.metrics.lines]}" FontSize="10" Foreground="{StaticResource Text2Brush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding MessageItems.Count}" FontSize="12" Foreground="{StaticResource Text0Brush}" FontWeight="Bold" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasSearchStatus}">
+                        <TextBlock Text="{Binding L[stream.search.status]}" FontSize="10" Foreground="{StaticResource Text2Brush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SearchStatus}" FontSize="12" Foreground="{StaticResource Text0Brush}" FontWeight="Bold" VerticalAlignment="Center" />
                     </StackPanel>
 
             </StackPanel>
         </Border>
 
-        <!-- Message List -->
-        <ListBox Grid.Row="3"
-                 x:Name="MessageList"
-                 ItemsSource="{Binding MessageItems}" 
-                 Background="{StaticResource Bg0Brush}" 
-                 BorderThickness="0"
-                 SelectionMode="Single"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 FontFamily="{Binding Display.MessageFontFamily}"
-                FontSize="{Binding Display.MessageFontSize}">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:LogMessageListItemViewModel">
-                    <Border Padding="{Binding RowPadding}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
-                            BorderThickness="{Binding RowBorderThickness}">
-                        <Grid ColumnDefinitions="Auto,*">
-                            <!-- Direction Indicator (TX/RX) -->
-                            <Border Grid.Column="0"
-                                    IsVisible="{Binding ShowDirectionMarker}"
-                                    Width="2"
-                                    Background="{Binding Source, Converter={StaticResource DirectionColorConverter}}"
-                                    Margin="0,0,8,0"
-                                    CornerRadius="1"
-                                    VerticalAlignment="Stretch" />
+        <!-- Message Viewer -->
+        <Grid Grid.Row="3" Background="{StaticResource Bg0Brush}">
+            <ListBox x:Name="MessageList"
+                     IsVisible="{Binding IsDetailedDisplayMode}"
+                     ItemsSource="{Binding MessageItems}"
+                     Background="{StaticResource Bg0Brush}"
+                     BorderThickness="0"
+                     SelectionMode="Single"
+                     SelectedItem="{Binding SelectedMessageItem, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     FontFamily="{Binding Display.MessageFontFamily}"
+                     FontSize="{Binding Display.MessageFontSize}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LogMessageListItemViewModel">
+                        <Border Padding="{Binding RowPadding}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="{Binding RowBorderThickness}">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Border Grid.ColumnSpan="2"
+                                        Background="{StaticResource BgHighlightBrush}"
+                                        Opacity="0.34"
+                                        CornerRadius="4"
+                                        IsVisible="{Binding ShowSearchMatchBackground}" />
+                                <Border Grid.ColumnSpan="2"
+                                        Background="{StaticResource AccentBlueBrush}"
+                                        Opacity="0.16"
+                                        CornerRadius="4"
+                                        IsVisible="{Binding IsCurrentSearchMatch}" />
+                                <Border Grid.Column="0"
+                                        IsVisible="{Binding ShowDirectionMarker}"
+                                        Width="3"
+                                        Background="{Binding Source, Converter={StaticResource DirectionColorConverter}}"
+                                        Margin="0,0,8,0"
+                                        CornerRadius="1"
+                                        VerticalAlignment="Stretch" />
+                                <Border Grid.Column="0"
+                                        IsVisible="{Binding IsCurrentSearchMatch}"
+                                        Width="3"
+                                        Background="{StaticResource AccentBlueBrightBrush}"
+                                        Margin="0,0,8,0"
+                                        CornerRadius="1"
+                                        VerticalAlignment="Stretch" />
 
-                            <Grid Grid.Column="1" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,*">
-                                <!-- Timestamp -->
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="0"
-                                           IsVisible="{Binding ShowTimestamp}"
-                                           Text="{Binding TimestampText}"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           Margin="0,0,8,0"
-                                           VerticalAlignment="Center" />
+                                <Grid Grid.Column="1" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,*">
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="0"
+                                               IsVisible="{Binding ShowTimestamp}"
+                                               Text="{Binding TimestampText}"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               Margin="0,0,8,0"
+                                               VerticalAlignment="Center" />
 
-                                <!-- Direction (TX/RX) -->
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="1"
-                                           IsVisible="{Binding ShowSource}"
-                                           Text="{Binding Source}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{Binding Source, Converter={StaticResource DirectionColorConverter}}"
-                                           Margin="0,0,8,0"
-                                           Width="24"
-                                           VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="1"
+                                               IsVisible="{Binding ShowSource}"
+                                               Text="{Binding Source}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding Source, Converter={StaticResource DirectionColorConverter}}"
+                                               Margin="0,0,8,0"
+                                               Width="24"
+                                               VerticalAlignment="Center" />
 
-                                <!-- Content -->
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="2"
-                                           Text="{Binding Content}"
-                                           Foreground="{StaticResource Text0Brush}"
-                                           TextWrapping="NoWrap"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="0"
+                                               Grid.Column="2"
+                                               Text="{Binding Content}"
+                                               Foreground="{StaticResource Text0Brush}"
+                                               TextWrapping="NoWrap"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
 
-                                <ItemsControl Grid.Row="1"
-                                              Grid.Column="2"
-                                              IsVisible="{Binding HasVisibleAttributes}"
-                                              ItemsSource="{Binding Attributes}"
-                                              Margin="0,3,0,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:MessageAttributeListItemViewModel">
-                                            <Border Background="{StaticResource Bg2Brush}"
-                                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="5,1"
-                                                    Margin="0,0,4,3"
-                                                    ToolTip.Tip="{Binding DisplayText}">
-                                                <TextBlock Text="{Binding DisplayText}"
-                                                           FontSize="10"
-                                                           Foreground="{StaticResource Text2Brush}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           MaxWidth="180" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    <ItemsControl Grid.Row="1"
+                                                  Grid.Column="2"
+                                                  IsVisible="{Binding HasVisibleAttributes}"
+                                                  ItemsSource="{Binding Attributes}"
+                                                  Margin="0,3,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MessageAttributeListItemViewModel">
+                                                <Border Background="{StaticResource Bg2Brush}"
+                                                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="5,1"
+                                                        Margin="0,0,4,3"
+                                                        ToolTip.Tip="{Binding DisplayText}">
+                                                    <TextBlock Text="{Binding DisplayText}"
+                                                               FontSize="10"
+                                                               Foreground="{StaticResource Text2Brush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="180" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
                             </Grid>
-                        </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBox x:Name="AggregateMessageTextBox"
+                     Classes="aggregate-message-text"
+                     IsVisible="{Binding IsAggregateTextMode}"
+                     Text="{Binding AggregateMessageText}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     BorderThickness="0"
+                     Background="{StaticResource Bg0Brush}"
+                     Foreground="{StaticResource Text0Brush}"
+                     Padding="18,12"
+                     TextWrapping="NoWrap"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     FontFamily="{Binding Display.MessageFontFamily}"
+                     FontSize="{Binding Display.MessageFontSize}" />
+
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,10,18,0"
+                    Width="62"
+                    Background="{StaticResource Bg1Brush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="5"
+                    IsVisible="{Binding HasSearchMatches}">
+                <Grid RowDefinitions="30,24,30">
+                    <Button Grid.Row="0"
+                            Width="40"
+                            Height="30"
+                            Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            HorizontalAlignment="Center"
+                            IsEnabled="{Binding CanNavigateSearch}"
+                            Click="OnPreviousSearchResultClick">
+                        <Viewbox Width="14"
+                                 Height="14"
+                                 Stretch="Uniform"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center">
+                            <Path Data="{StaticResource ChevronUpIcon}"
+                                  Width="24"
+                                  Height="24"
+                                  Stretch="Uniform"
+                                  Stroke="{StaticResource Text1Brush}"
+                                  StrokeThickness="2"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round" />
+                        </Viewbox>
+                    </Button>
+                    <Border Grid.Row="1"
+                            Width="52"
+                            Height="24"
+                            Background="Transparent"
+                            Padding="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SearchNavigationStatus}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource Text1Brush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
                     </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                    <Button Grid.Row="2"
+                            Width="40"
+                            Height="30"
+                            Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            HorizontalAlignment="Center"
+                            IsEnabled="{Binding CanNavigateSearch}"
+                            Click="OnNextSearchResultClick">
+                        <Viewbox Width="14"
+                                 Height="14"
+                                 Stretch="Uniform"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center">
+                            <Path Data="{StaticResource ChevronDownIcon}"
+                                  Width="24"
+                                  Height="24"
+                                  Stretch="Uniform"
+                                  Stroke="{StaticResource Text1Brush}"
+                                  StrokeThickness="2"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round" />
+                        </Viewbox>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Button Classes="latest-floating-button"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,16"
+                    MinWidth="118"
+                    Height="34"
+                    IsVisible="{Binding IsReturnToLatestVisible}"
+                    Click="OnReturnToLatestClick">
+                <Border Classes="latest-floating-button-frame"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14,0">
+                    <Grid ColumnDefinitions="18,8,Auto"
+                          Height="18"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                        <Grid Width="18"
+                              Height="18"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center">
+                            <Path Data="M4,7 L9,12 L14,7"
+                                  Width="18"
+                                  Height="18"
+                                  Stretch="None"
+                                  Stroke="{StaticResource WhiteBrush}"
+                                  StrokeThickness="2.4"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="{Binding L[stream.window.returnToLatest]}"
+                                   Grid.Column="2"
+                                   Height="18"
+                                   FontSize="12"
+                                   LineHeight="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource WhiteBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </Button>
+        </Grid>
     </Grid>
 </UserControl>

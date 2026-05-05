@@ -219,6 +219,8 @@ public sealed class WorkspaceStateFlowTests
         descriptor.DisplayTitle = "TCP Client";
         descriptor.DisplaySubtitle = "127.0.0.1:58004 -> 127.0.0.1:5020";
         descriptor.CanReconnect = false;
+        descriptor.PayloadRenderMode = PayloadRenderMode.Hex;
+        descriptor.DisplayDensity = MessageDisplayDensity.Slim;
 
         deviceService.RestoreSession(descriptor);
         await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("display-session"));
@@ -228,6 +230,46 @@ public sealed class WorkspaceStateFlowTests
         Assert.Equal("TCP Client", persisted.DisplayTitle);
         Assert.Equal("127.0.0.1:58004 -> 127.0.0.1:5020", persisted.DisplaySubtitle);
         Assert.False(persisted.CanReconnect);
+        Assert.Equal(PayloadRenderMode.Hex, persisted.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Slim, persisted.DisplayDensity);
+    }
+
+    [Fact]
+    public async Task SetSessionDisplayOptionsAsync_PersistsSessionDisplayState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+
+        await workspaceService.LoadStateAsync();
+
+        var descriptor = CreateDescriptor("session-display-options");
+        deviceService.RestoreSession(descriptor);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("session-display-options"));
+
+        await workspaceService.SetSessionDisplayOptionsAsync(
+            "session-display-options",
+            PayloadRenderMode.Hex,
+            MessageDisplayDensity.Plain);
+
+        var session = deviceService.GetSession("session-display-options");
+        Assert.Equal(PayloadRenderMode.Hex, session!.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Plain, session.DisplayDensity);
+
+        var state = await workspaceService.LoadStateAsync();
+        var persisted = Assert.Single(state.SessionDescriptors, d => d.Id == "session-display-options");
+        Assert.Equal(PayloadRenderMode.Hex, persisted.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Plain, persisted.DisplayDensity);
+    }
+
+    [Fact]
+    public void SessionDescriptor_DisplayStateDefaults_AreCompatibleReadFallback()
+    {
+        var descriptor = new SessionDescriptor();
+
+        Assert.Equal(PayloadRenderMode.String, descriptor.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Detailed, descriptor.DisplayDensity);
     }
 
     [Fact]

@@ -5,9 +5,11 @@
     <StreamGeometry x:Key="SlidersHorizontalIcon">M21 6h-7M10 6H3M14 6a2 2 0 1 1-4 0a2 2 0 0 1 4 0M21 12h-9M8 12H3M12 12a2 2 0 1 1-4 0a2 2 0 0 1 4 0M21 18h-5M12 18H3M16 18a2 2 0 1 1-4 0a2 2 0 0 1 4 0</StreamGeometry>
     <StreamGeometry x:Key="BellIcon">M8 9a4 4 0 1 1 8 0c0 1.9.42 3.55.9 4.82c.35.91.76 1.62 1.1 2.18H5.99c.35-.56.76-1.27 1.11-2.18C7.58 12.55 8 10.9 8 9M10.5 19a1.5 1.5 0 0 0 3 0</StreamGeometry>
     <StreamGeometry x:Key="SearchIcon">M11 4a7 7 0 1 0 4.47 12.39l4.07 4.07l1.41-1.41l-4.07-4.07A7 7 0 0 0 11 4m0 2a5 5 0 1 1 0 10a5 5 0 0 1 0-10</StreamGeometry>
+    <StreamGeometry x:Key="XIcon">M18 6L6 18M6 6l12 12</StreamGeometry>
     <StreamGeometry x:Key="RotateCwIcon">M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6</StreamGeometry>
     <StreamGeometry x:Key="PlusIcon">M12 5v14M5 12h14</StreamGeometry>
     <StreamGeometry x:Key="ChevronRightIcon">M9 6l6 6l-6 6</StreamGeometry>
+    <StreamGeometry x:Key="ChevronUpIcon">M18 15l-6-6l-6 6</StreamGeometry>
     <StreamGeometry x:Key="ChevronDownIcon">M6 9l6 6l6-6</StreamGeometry>
     <StreamGeometry x:Key="DownloadIcon">M12 4v10M8 10l4 4l4-4M5 19h14</StreamGeometry>
     <StreamGeometry x:Key="Maximize2Icon">M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5M4 9l6-6M20 9l-6-6M4 15l6 6M20 15l-6 6</StreamGeometry>

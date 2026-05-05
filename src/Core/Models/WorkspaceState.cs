@@ -87,6 +87,8 @@ public sealed class SessionDescriptor
     public bool EnableDatabaseStorage { get; set; }
     public SessionArchiveState ArchiveState { get; set; } = SessionArchiveState.Disabled;
     public string? ArchiveError { get; set; }
+    public PayloadRenderMode PayloadRenderMode { get; set; } = PayloadRenderMode.String;
+    public MessageDisplayDensity DisplayDensity { get; set; } = MessageDisplayDensity.Detailed;
     public bool? CanReconnect { get; set; }
     public SessionInitializationState InitializationState { get; set; } = SessionInitializationState.Pending;
     public string? InitializationError { get; set; }

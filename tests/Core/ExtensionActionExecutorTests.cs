@@ -135,6 +135,9 @@ public sealed class ExtensionActionExecutorTests
         public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
             => Task.CompletedTask;
 
+        public Task SetSessionDisplayOptionsAsync(string sessionId, PayloadRenderMode payloadRenderMode, MessageDisplayDensity displayDensity)
+            => Task.CompletedTask;
+
         public bool HasSessionArchiveData(string sessionId) => false;
 
         public Task DeleteSessionArchiveDataAsync(string sessionId) => Task.CompletedTask;

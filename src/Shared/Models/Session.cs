@@ -22,6 +22,8 @@ public sealed class Session : INotifyPropertyChanged
     private long _txBytes;
     private SessionArchiveState _archiveState = SessionArchiveState.Disabled;
     private string? _archiveError;
+    private PayloadRenderMode _payloadRenderMode = PayloadRenderMode.String;
+    private MessageDisplayDensity _displayDensity = MessageDisplayDensity.Detailed;
     private string? _parentSessionId;
     private bool _canReconnect = true;
     private SessionInitializationState _initializationState = SessionInitializationState.Ready;
@@ -165,6 +167,18 @@ public sealed class Session : INotifyPropertyChanged
     {
         get => _archiveError;
         set => SetField(ref _archiveError, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+
+    public PayloadRenderMode PayloadRenderMode
+    {
+        get => _payloadRenderMode;
+        set => SetField(ref _payloadRenderMode, value);
+    }
+
+    public MessageDisplayDensity DisplayDensity
+    {
+        get => _displayDensity;
+        set => SetField(ref _displayDensity, value);
     }
     
     public SessionStatus Status

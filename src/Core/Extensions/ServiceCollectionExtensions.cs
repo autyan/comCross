@@ -106,6 +106,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SessionSpoolFrameStore>(),
             sp.GetRequiredService<SessionArchiveWriter>()));
         services.AddSingleton<IMessageFrameQueryService, MessageFrameQueryService>();
+        services.AddSingleton<IMessageFrameSearchService, MessageFrameSearchService>();
         services.AddSingleton<SharedMemoryIngestService>();
         services.AddSingleton<SharedMemorySessionService>();
         services.AddSingleton<FrameStoreMessageStreamPumpService>();

@@ -338,268 +338,160 @@
                                         </ListBox.Styles>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate x:DataType="vm:SessionListItemViewModel">
-                                                <Grid Margin="0,2,0,4">
-                                                    <Grid IsVisible="{Binding IsGroupSession}"
+                                                <Grid Margin="0,2,0,4"
+                                                      ColumnDefinitions="30,*"
+                                                      HorizontalAlignment="Stretch">
+                                                    <Grid Grid.Column="0"
+                                                          Width="30"
+                                                          MinHeight="42"
                                                           HorizontalAlignment="Stretch">
-                                                        <Grid ColumnDefinitions="28,*"
-                                                              HorizontalAlignment="Stretch">
-                                                            <Button Grid.Column="0"
-                                                                    Classes="prototype-plain"
-                                                                    Width="28"
+                                                        <Button Classes="prototype-plain"
+                                                                Width="28"
+                                                                Height="40"
+                                                                HorizontalAlignment="Center"
+                                                                VerticalAlignment="Center"
+                                                                IsVisible="{Binding ShowChevron}"
+                                                                Click="OnToggleParentCollapseClick">
+                                                            <Border Width="28"
                                                                     Height="40"
-                                                                    IsVisible="{Binding ShowChevron}"
-                                                                    Click="OnToggleParentCollapseClick">
-                                                                <Border Width="28"
-                                                                        Height="40"
-                                                                        Background="Transparent"
-                                                                        CornerRadius="6">
-                                                                    <Panel>
-                                                                        <Path Classes="prototype-icon"
-                                                                                  Data="{StaticResource ChevronRightIcon}"
-                                                                                  Width="13"
-                                                                                  Height="13"
-                                                                                  Stroke="{StaticResource Text2Brush}"
-                                                                                  HorizontalAlignment="Center"
-                                                                                  VerticalAlignment="Center"
-                                                                                  IsVisible="{Binding IsCollapsed}" />
-                                                                        <Path Classes="prototype-icon"
-                                                                                  Data="{StaticResource ChevronDownIcon}"
-                                                                                  Width="13"
-                                                                                  Height="13"
-                                                                                  Stroke="{StaticResource Text2Brush}"
-                                                                                  HorizontalAlignment="Center"
-                                                                                  VerticalAlignment="Center"
-                                                                                  IsVisible="{Binding !IsCollapsed}" />
-                                                                    </Panel>
-                                                                </Border>
-                                                            </Button>
-
-                                                            <Border Grid.Column="1"
-                                                                    MinHeight="42"
-                                                                    HorizontalAlignment="Stretch"
-                                                                    Padding="10,6"
-                                                                    Classes="prototype-interactive-surface interactive"
-                                                                    Classes.selected="{Binding $parent[ListBoxItem].IsSelected}">
-
-                                                                <Grid ColumnDefinitions="16,*,Auto,Auto,Auto"
-                                                                      VerticalAlignment="Center">
+                                                                    Background="Transparent"
+                                                                    CornerRadius="6">
+                                                                <Panel>
                                                                     <Path Classes="prototype-icon"
-                                                                          Data="{Binding IconGeometry}"
-                                                                          Width="16"
-                                                                          Height="16"
-                                                                          Stroke="{StaticResource AccentCyanBrush}"
+                                                                          Data="{StaticResource ChevronRightIcon}"
+                                                                          Width="13"
+                                                                          Height="13"
+                                                                          Stroke="{StaticResource Text2Brush}"
                                                                           HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-
-                                                                    <StackPanel Grid.Column="1"
-                                                                                Margin="8,0,0,0"
-                                                                                Spacing="2"
-                                                                                VerticalAlignment="Center">
-                                                                        <TextBlock Text="{Binding DisplayName}"
-                                                                                   FontFamily="JetBrains Mono, Consolas, monospace"
-                                                                                   FontSize="11"
-                                                                                   Foreground="{StaticResource Text0Brush}"
-                                                                                   TextTrimming="CharacterEllipsis" />
-                                                                        <TextBlock Text="{Binding Subtitle}"
-                                                                                   FontFamily="JetBrains Mono, Consolas, monospace"
-                                                                                   FontSize="9"
-                                                                                   Foreground="{StaticResource Text2Brush}"
-                                                                                   TextTrimming="CharacterEllipsis"
-                                                                                   IsVisible="{Binding HasSubtitle}" />
-                                                                    </StackPanel>
-                                                                    <TextBlock Grid.Column="2"
-                                                                               Text="{Binding ChildSessionCount}"
-                                                                               Margin="10,0,0,0"
-                                                                               FontSize="10"
-                                                                               Foreground="{StaticResource Text2Brush}"
-                                                                               VerticalAlignment="Center" />
-                                                                    <Button Grid.Column="3"
-                                                                            Classes="session-row-action"
-                                                                            Margin="6,0,0,0"
-                                                                            Click="OnRenameSessionClick"
-                                                                            ToolTip.Tip="{Binding L[session.menu.rename]}">
-                                                                        <Path Classes="prototype-icon"
-                                                                              Data="{StaticResource PencilIcon}"
-                                                                              Width="12"
-                                                                              Height="12"
-                                                                              Stroke="{StaticResource Text2Brush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                    </Button>
-                                                                    <Button Grid.Column="4"
-                                                                            Classes="session-row-action"
-                                                                            Click="OnDeleteSessionClick"
-                                                                            ToolTip.Tip="{Binding L[session.menu.delete]}">
-                                                                        <Path Classes="prototype-icon"
-                                                                              Data="{StaticResource Trash2Icon}"
-                                                                              Width="12"
-                                                                              Height="12"
-                                                                              Stroke="{StaticResource Text2Brush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                    </Button>
-                                                                </Grid>
+                                                                          VerticalAlignment="Center"
+                                                                          IsVisible="{Binding IsCollapsed}" />
+                                                                    <Path Classes="prototype-icon"
+                                                                          Data="{StaticResource ChevronDownIcon}"
+                                                                          Width="13"
+                                                                          Height="13"
+                                                                          Stroke="{StaticResource Text2Brush}"
+                                                                          HorizontalAlignment="Center"
+                                                                          VerticalAlignment="Center"
+                                                                          IsVisible="{Binding !IsCollapsed}" />
+                                                                </Panel>
                                                             </Border>
+                                                        </Button>
+
+                                                        <Grid IsVisible="{Binding HasParent}"
+                                                              IsHitTestVisible="False">
+                                                            <Border Width="1"
+                                                                    Background="{StaticResource BorderStrongBrush}"
+                                                                    Opacity="0.55"
+                                                                    HorizontalAlignment="Center"
+                                                                    VerticalAlignment="Stretch" />
+                                                            <Border Width="11"
+                                                                    Height="1"
+                                                                    Background="{StaticResource BorderStrongBrush}"
+                                                                    Opacity="0.75"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Center"
+                                                                    Margin="0,0,3,0" />
+                                                            <Path Data="{StaticResource ChevronRightIcon}"
+                                                                  Width="8"
+                                                                  Height="8"
+                                                                  Stretch="Uniform"
+                                                                  Fill="{StaticResource BorderStrongBrush}"
+                                                                  HorizontalAlignment="Right"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="0,0,0,0" />
                                                         </Grid>
                                                     </Grid>
 
-                                                    <Grid IsVisible="{Binding IsLeafSession}"
-                                                          HorizontalAlignment="Stretch">
-                                                        <Grid IsVisible="{Binding HasParent}"
-                                                              ColumnDefinitions="28,*"
-                                                              HorizontalAlignment="Stretch">
-                                                            <Grid Grid.Column="0"
-                                                                  Height="42"
-                                                                  HorizontalAlignment="Stretch">
-                                                                <Border Width="1"
-                                                                        Background="{StaticResource BorderStrongBrush}"
-                                                                        Opacity="0.55"
-                                                                        HorizontalAlignment="Center"
-                                                                        VerticalAlignment="Stretch" />
-                                                                <Border Width="12"
-                                                                        Height="1"
-                                                                        Background="{StaticResource BorderStrongBrush}"
-                                                                        Opacity="0.7"
-                                                                        HorizontalAlignment="Right"
-                                                                        VerticalAlignment="Center"
-                                                                        Margin="0,0,2,0" />
-                                                            </Grid>
+                                                    <Border Grid.Column="1"
+                                                            MinHeight="42"
+                                                            Padding="10,6"
+                                                            Classes="prototype-interactive-surface interactive"
+                                                            Classes.selected="{Binding $parent[ListBoxItem].IsSelected}">
 
-                                                            <Border Grid.Column="1"
-                                                                    MinHeight="40"
-                                                                    Padding="10,6"
-                                                                    Classes="prototype-interactive-surface interactive"
-                                                                    Classes.selected="{Binding $parent[ListBoxItem].IsSelected}">
+                                                        <Grid ColumnDefinitions="16,*,Auto,Auto,Auto"
+                                                              VerticalAlignment="Center">
+                                                            <Path Classes="prototype-icon"
+                                                                  Data="{Binding IconGeometry}"
+                                                                  Width="16"
+                                                                  Height="16"
+                                                                  Stroke="{StaticResource AccentCyanBrush}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"
+                                                                  IsVisible="{Binding IsGroupSession}" />
+                                                            <Path Classes="prototype-icon"
+                                                                  Data="{Binding IconGeometry}"
+                                                                  Width="16"
+                                                                  Height="16"
+                                                                  Stroke="{StaticResource AccentBlueBrush}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"
+                                                                  IsVisible="{Binding IsLeafSession}" />
 
-                                                                <Grid ColumnDefinitions="16,*,Auto,Auto"
-                                                                      VerticalAlignment="Center">
-                                                                    <Path Classes="prototype-icon"
-                                                                          Data="{Binding IconGeometry}"
-                                                                          Width="16"
-                                                                          Height="16"
-                                                                          Stroke="{StaticResource AccentBlueBrush}"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-
-                                                                    <StackPanel Grid.Column="1"
-                                                                                Spacing="2"
-                                                                                VerticalAlignment="Center">
-                                                                        <StackPanel Orientation="Horizontal"
-                                                                                    Spacing="8">
-                                                                            <Ellipse Width="4"
-                                                                                     Height="4"
-                                                                                     Fill="{Binding Status, Converter={StaticResource StatusColorConverter}}"
-                                                                                     VerticalAlignment="Center" />
-                                                                            <TextBlock Text="{Binding DisplayName}"
-                                                                                       FontSize="11"
-                                                                                       Foreground="{StaticResource Text0Brush}"
-                                                                                       VerticalAlignment="Center"
-                                                                                       TextTrimming="CharacterEllipsis" />
-                                                                        </StackPanel>
-                                                                        <TextBlock Text="{Binding Subtitle}"
-                                                                                   Margin="12,0,0,0"
-                                                                                   FontFamily="JetBrains Mono, Consolas, monospace"
-                                                                                   FontSize="9"
-                                                                                   Foreground="{StaticResource Text2Brush}"
-                                                                                   TextTrimming="CharacterEllipsis"
-                                                                                   IsVisible="{Binding HasSubtitle}" />
-                                                                    </StackPanel>
-                                                                    <Button Grid.Column="2"
-                                                                            Classes="session-row-action"
-                                                                            Margin="6,0,0,0"
-                                                                            Click="OnRenameSessionClick"
-                                                                            ToolTip.Tip="{Binding L[session.menu.rename]}">
-                                                                        <Path Classes="prototype-icon"
-                                                                              Data="{StaticResource PencilIcon}"
-                                                                              Width="12"
-                                                                              Height="12"
-                                                                              Stroke="{StaticResource Text2Brush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                    </Button>
-                                                                    <Button Grid.Column="3"
-                                                                            Classes="session-row-action"
-                                                                            Click="OnDeleteSessionClick"
-                                                                            ToolTip.Tip="{Binding L[session.menu.delete]}">
-                                                                        <Path Classes="prototype-icon"
-                                                                              Data="{StaticResource Trash2Icon}"
-                                                                              Width="12"
-                                                                              Height="12"
-                                                                              Stroke="{StaticResource Text2Brush}"
-                                                                              HorizontalAlignment="Center"
-                                                                              VerticalAlignment="Center" />
-                                                                    </Button>
-                                                                </Grid>
-                                                            </Border>
-                                                        </Grid>
-
-                                                        <Border IsVisible="{Binding !HasParent}"
-                                                                MinHeight="40"
-                                                                Padding="10,6"
-                                                                Classes="prototype-interactive-surface interactive"
-                                                                Classes.selected="{Binding $parent[ListBoxItem].IsSelected}">
-
-                                                            <Grid ColumnDefinitions="16,*,Auto,Auto"
-                                                                  VerticalAlignment="Center">
+                                                            <StackPanel Grid.Column="1"
+                                                                        Margin="8,0,0,0"
+                                                                        Spacing="2"
+                                                                        VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding DisplayName}"
+                                                                           FontFamily="JetBrains Mono, Consolas, monospace"
+                                                                           FontSize="11"
+                                                                           Foreground="{StaticResource Text0Brush}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           IsVisible="{Binding IsGroupSession}" />
+                                                                <StackPanel Orientation="Horizontal"
+                                                                            Spacing="8"
+                                                                            IsVisible="{Binding IsLeafSession}">
+                                                                    <Ellipse Width="4"
+                                                                             Height="4"
+                                                                             Fill="{Binding Status, Converter={StaticResource StatusColorConverter}}"
+                                                                             VerticalAlignment="Center" />
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontSize="11"
+                                                                               Foreground="{StaticResource Text0Brush}"
+                                                                               VerticalAlignment="Center"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Subtitle}"
+                                                                           Margin="12,0,0,0"
+                                                                           FontFamily="JetBrains Mono, Consolas, monospace"
+                                                                           FontSize="9"
+                                                                           Foreground="{StaticResource Text2Brush}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           IsVisible="{Binding HasSubtitle}" />
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="2"
+                                                                       Text="{Binding ChildSessionCount}"
+                                                                       Margin="10,0,0,0"
+                                                                       FontSize="10"
+                                                                       Foreground="{StaticResource Text2Brush}"
+                                                                       VerticalAlignment="Center"
+                                                                       IsVisible="{Binding IsGroupSession}" />
+                                                            <Button Grid.Column="3"
+                                                                    Classes="session-row-action"
+                                                                    Margin="6,0,0,0"
+                                                                    Click="OnRenameSessionClick"
+                                                                    ToolTip.Tip="{Binding L[session.menu.rename]}">
                                                                 <Path Classes="prototype-icon"
-                                                                      Data="{Binding IconGeometry}"
-                                                                      Width="16"
-                                                                      Height="16"
-                                                                      Stroke="{StaticResource AccentBlueBrush}"
+                                                                      Data="{StaticResource PencilIcon}"
+                                                                      Width="12"
+                                                                      Height="12"
+                                                                      Stroke="{StaticResource Text2Brush}"
                                                                       HorizontalAlignment="Center"
                                                                       VerticalAlignment="Center" />
-
-                                                                <StackPanel Grid.Column="1"
-                                                                            Spacing="2"
-                                                                            VerticalAlignment="Center">
-                                                                    <StackPanel Orientation="Horizontal"
-                                                                                Spacing="8">
-                                                                        <Ellipse Width="4"
-                                                                                 Height="4"
-                                                                                 Fill="{Binding Status, Converter={StaticResource StatusColorConverter}}"
-                                                                                 VerticalAlignment="Center" />
-                                                                        <TextBlock Text="{Binding DisplayName}"
-                                                                                   FontSize="11"
-                                                                                   Foreground="{StaticResource Text0Brush}"
-                                                                                   VerticalAlignment="Center"
-                                                                                   TextTrimming="CharacterEllipsis" />
-                                                                    </StackPanel>
-                                                                    <TextBlock Text="{Binding Subtitle}"
-                                                                               Margin="12,0,0,0"
-                                                                               FontFamily="JetBrains Mono, Consolas, monospace"
-                                                                               FontSize="9"
-                                                                               Foreground="{StaticResource Text2Brush}"
-                                                                               TextTrimming="CharacterEllipsis"
-                                                                               IsVisible="{Binding HasSubtitle}" />
-                                                                </StackPanel>
-                                                                <Button Grid.Column="2"
-                                                                        Classes="session-row-action"
-                                                                        Margin="6,0,0,0"
-                                                                        Click="OnRenameSessionClick"
-                                                                        ToolTip.Tip="{Binding L[session.menu.rename]}">
-                                                                    <Path Classes="prototype-icon"
-                                                                          Data="{StaticResource PencilIcon}"
-                                                                          Width="12"
-                                                                          Height="12"
-                                                                          Stroke="{StaticResource Text2Brush}"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-                                                                </Button>
-                                                                <Button Grid.Column="3"
-                                                                        Classes="session-row-action"
-                                                                        Click="OnDeleteSessionClick"
-                                                                        ToolTip.Tip="{Binding L[session.menu.delete]}">
-                                                                    <Path Classes="prototype-icon"
-                                                                          Data="{StaticResource Trash2Icon}"
-                                                                          Width="12"
-                                                                          Height="12"
-                                                                          Stroke="{StaticResource Text2Brush}"
-                                                                          HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center" />
-                                                                </Button>
-                                                            </Grid>
-                                                        </Border>
-                                                    </Grid>
+                                                            </Button>
+                                                            <Button Grid.Column="4"
+                                                                    Classes="session-row-action"
+                                                                    Click="OnDeleteSessionClick"
+                                                                    ToolTip.Tip="{Binding L[session.menu.delete]}">
+                                                                <Path Classes="prototype-icon"
+                                                                      Data="{StaticResource Trash2Icon}"
+                                                                      Width="12"
+                                                                      Height="12"
+                                                                      Stroke="{StaticResource Text2Brush}"
+                                                                      HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center" />
+                                                            </Button>
+                                                        </Grid>
+                                                    </Border>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>

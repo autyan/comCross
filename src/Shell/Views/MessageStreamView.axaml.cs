@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -15,6 +17,7 @@ namespace ComCross.Shell.Views;
 public partial class MessageStreamView : BaseUserControl
 {
     private INotifyCollectionChanged? _currentMessages;
+    private MessageStreamViewModel? _currentViewModel;
     private int _messageSubscriptionVersion;
     private bool _isDetached;
 
@@ -54,6 +57,8 @@ public partial class MessageStreamView : BaseUserControl
 
         if (DataContext is MessageStreamViewModel vm)
         {
+            _currentViewModel = vm;
+            _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
             _currentMessages = vm.MessageItems;
             _currentMessages.CollectionChanged += OnMessagesChanged;
             unchecked
@@ -74,6 +79,48 @@ public partial class MessageStreamView : BaseUserControl
                 _messageSubscriptionVersion++;
             }
         }
+
+        if (_currentViewModel is not null)
+        {
+            _currentViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _currentViewModel = null;
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(MessageStreamViewModel.AggregateSelectionVersion), StringComparison.Ordinal)
+            && sender is MessageStreamViewModel aggregateVm)
+        {
+            SelectAggregateSearchMatch(aggregateVm);
+            return;
+        }
+
+        if (string.Equals(e.PropertyName, nameof(MessageStreamViewModel.ReturnToLatestNavigationVersion), StringComparison.Ordinal)
+            && sender is MessageStreamViewModel latestVm)
+        {
+            ScrollToLatestWindow(latestVm);
+            return;
+        }
+
+        if (!string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageItem), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageNavigationVersion), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (sender is not MessageStreamViewModel vm || vm.SelectedMessageItem is null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isDetached && ReferenceEquals(DataContext, vm) && vm.SelectedMessageItem is not null)
+            {
+                ScrollToSelectedMessage(vm);
+            }
+        }, DispatcherPriority.Loaded);
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -102,7 +149,10 @@ public partial class MessageStreamView : BaseUserControl
             return;
         }
 
-        if (!vm.Display.AutoScrollEnabled || vm.MessageItems.Count == 0)
+        if (!vm.Display.AutoScrollEnabled
+            || vm.MessageItems.Count == 0
+            || vm.HasSearchQuery
+            || vm.IsReturnToLatestVisible)
         {
             return;
         }
@@ -120,6 +170,8 @@ public partial class MessageStreamView : BaseUserControl
             || !ReferenceEquals(sender, _currentMessages)
             || !ReferenceEquals(DataContext, vm)
             || !vm.Display.AutoScrollEnabled
+            || vm.HasSearchQuery
+            || vm.IsReturnToLatestVisible
             || vm.MessageItems.Count == 0)
         {
             return;
@@ -130,6 +182,113 @@ public partial class MessageStreamView : BaseUserControl
         {
             MessageList.ScrollIntoView(latest);
         }
+
+        if (vm.IsAggregateTextMode)
+        {
+            ScrollAggregateToEnd(vm);
+        }
+    }
+
+    private void ScrollToLatestWindow(MessageStreamViewModel vm)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm))
+            {
+                return;
+            }
+
+            if (vm.IsAggregateTextMode)
+            {
+                ScrollAggregateToEnd(vm);
+                return;
+            }
+
+            if (vm.MessageItems.LastOrDefault() is { } latest)
+            {
+                MessageList.ScrollIntoView(latest);
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void ScrollAggregateToEnd(MessageStreamViewModel vm)
+    {
+        if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+        {
+            return;
+        }
+
+        AggregateMessageTextBox.UpdateLayout();
+        var textLength = AggregateMessageTextBox.Text?.Length ?? 0;
+        AggregateMessageTextBox.CaretIndex = textLength;
+        AggregateMessageTextBox.SelectionStart = textLength;
+        AggregateMessageTextBox.SelectionEnd = textLength;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+            {
+                return;
+            }
+
+            AggregateMessageTextBox.UpdateLayout();
+            var scrollViewer = AggregateMessageTextBox.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+            if (scrollViewer is null)
+            {
+                return;
+            }
+
+            var targetY = Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetY);
+        }, DispatcherPriority.Render);
+    }
+
+    private void ScrollToSelectedMessage(MessageStreamViewModel vm)
+    {
+        if (_isDetached || !ReferenceEquals(DataContext, vm) || vm.SelectedMessageItem is null)
+        {
+            return;
+        }
+
+        MessageList.UpdateLayout();
+        MessageList.ScrollIntoView(vm.SelectedMessageItem);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || vm.SelectedMessageItem is null)
+            {
+                return;
+            }
+
+            MessageList.UpdateLayout();
+            MessageList.ScrollIntoView(vm.SelectedMessageItem);
+            CenterSelectedMessageContainer(vm);
+        }, DispatcherPriority.Render);
+    }
+
+    private void CenterSelectedMessageContainer(MessageStreamViewModel vm)
+    {
+        var selectedItem = vm.SelectedMessageItem;
+        if (selectedItem is null || MessageList.ContainerFromItem(selectedItem) is not Control container)
+        {
+            return;
+        }
+
+        var scrollViewer = MessageList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        if (scrollViewer is null)
+        {
+            return;
+        }
+
+        var bounds = container.TranslatePoint(new Point(0, container.Bounds.Height / 2), scrollViewer);
+        if (bounds is not { } center)
+        {
+            return;
+        }
+
+        var targetY = scrollViewer.Offset.Y + center.Y - scrollViewer.Viewport.Height / 2;
+        targetY = Math.Clamp(targetY, 0, Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height));
+        scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetY);
     }
 
     private void OnDisplayModeToggleRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -165,6 +324,54 @@ public partial class MessageStreamView : BaseUserControl
         {
             vm.ToggleMetricsBar();
         }
+    }
+
+    private void OnClearSearchClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ClearSearch();
+        }
+    }
+
+    private void OnPreviousSearchResultClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.GoToPreviousSearchMatch();
+        }
+    }
+
+    private void OnNextSearchResultClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.GoToNextSearchMatch();
+        }
+    }
+
+    private void OnReturnToLatestClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MessageStreamViewModel vm)
+        {
+            vm.ReturnToLatest();
+        }
+    }
+
+    private void SelectAggregateSearchMatch(MessageStreamViewModel vm)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+            {
+                return;
+            }
+
+            var start = Math.Clamp(vm.AggregateSelectionStart, 0, AggregateMessageTextBox.Text?.Length ?? 0);
+            var end = Math.Clamp(start + vm.AggregateSelectionLength, start, AggregateMessageTextBox.Text?.Length ?? start);
+            AggregateMessageTextBox.SelectionStart = start;
+            AggregateMessageTextBox.SelectionEnd = end;
+        });
     }
 
     private void OnExportMessagesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
