@@ -25,7 +25,7 @@
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />
         <TextBox Name="NameTextBox"
-                 Watermark="{Binding L[dialog.createWorkload.namePlaceholder]}"
+                 PlaceholderText="{Binding L[dialog.createWorkload.namePlaceholder]}"
                  MaxLength="50"
                  Text="{Binding WorkloadName, Mode=TwoWay}" />
         <TextBlock Text="{Binding NameError}"
@@ -41,7 +41,7 @@
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />
         <TextBox Name="DescriptionTextBox"
-                 Watermark="{Binding L[dialog.createWorkload.descriptionPlaceholder]}"
+                 PlaceholderText="{Binding L[dialog.createWorkload.descriptionPlaceholder]}"
                  MaxLength="200"
                  Height="60"
                  TextWrapping="Wrap"

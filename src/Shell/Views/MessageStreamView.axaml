@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ComCross.Shell.ViewModels"
              xmlns:controls="using:ComCross.Shell.Controls"
+             xmlns:ae="using:AvaloniaEdit"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="ComCross.Shell.Views.MessageStreamView"
              x:DataType="vm:MessageStreamViewModel">
@@ -27,42 +28,18 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Opacity" Value="1" />
         </Style>
-        <Style Selector="TextBox.aggregate-message-text">
+        <Style Selector="ae|TextEditor.aggregate-message-editor">
             <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
         </Style>
-        <Style Selector="TextBox.aggregate-message-text:pointerover">
+        <Style Selector="ae|TextEditor.aggregate-message-editor:pointerover">
             <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
-        <Style Selector="TextBox.aggregate-message-text:focus">
+        <Style Selector="ae|TextEditor.aggregate-message-editor:focus">
             <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
-        <Style Selector="TextBox.aggregate-message-text:focus-within">
+        <Style Selector="ae|TextEditor.aggregate-message-editor:focus-within">
             <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-        </Style>
-        <Style Selector="TextBox.aggregate-message-text /template/ Border">
-            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-        </Style>
-        <Style Selector="TextBox.aggregate-message-text:pointerover /template/ Border">
-            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-        </Style>
-        <Style Selector="TextBox.aggregate-message-text:focus /template/ Border">
-            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-        </Style>
-        <Style Selector="TextBox.aggregate-message-text:focus-within /template/ Border">
-            <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
         </Style>
         <Style Selector="Border.latest-floating-button-frame">
             <Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}" />
@@ -218,7 +195,7 @@
                                  Text="{Binding SearchQuery}"
                                  Classes="prototype-search-input prototype-embedded-input"
                                  Margin="10,0,0,0"
-                                 Watermark="{Binding L[stream.search.placeholder]}" />
+                                 PlaceholderText="{Binding L[stream.search.placeholder]}" />
                         <Button Grid.Column="2"
                                 Width="28"
                                 Height="28"
@@ -391,21 +368,31 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <TextBox x:Name="AggregateMessageTextBox"
-                     Classes="aggregate-message-text"
-                     IsVisible="{Binding IsAggregateTextMode}"
-                     Text="{Binding AggregateMessageText}"
-                     IsReadOnly="True"
-                     AcceptsReturn="True"
-                     BorderThickness="0"
-                     Background="{StaticResource Bg0Brush}"
-                     Foreground="{StaticResource Text0Brush}"
-                     Padding="18,12"
-                     TextWrapping="NoWrap"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     FontFamily="{Binding Display.MessageFontFamily}"
-                     FontSize="{Binding Display.MessageFontSize}" />
+            <ae:TextEditor x:Name="PlainAggregateMessageEditor"
+                           Classes="aggregate-message-editor"
+                           IsVisible="{Binding IsPlainAggregateTextMode}"
+                           IsReadOnly="True"
+                           Background="{StaticResource Bg0Brush}"
+                           Foreground="{StaticResource Text0Brush}"
+                           Padding="18,12"
+                           WordWrap="True"
+                           HorizontalScrollBarVisibility="Disabled"
+                           VerticalScrollBarVisibility="Auto"
+                           FontFamily="{Binding Display.MessageFontFamily}"
+                           FontSize="{Binding Display.MessageFontSize}" />
+
+            <ae:TextEditor x:Name="SlimAggregateMessageEditor"
+                           Classes="aggregate-message-editor"
+                           IsVisible="{Binding IsSlimAggregateTextMode}"
+                           IsReadOnly="True"
+                           Background="{StaticResource Bg0Brush}"
+                           Foreground="{StaticResource Text0Brush}"
+                           Padding="8,12,18,12"
+                           WordWrap="True"
+                           HorizontalScrollBarVisibility="Disabled"
+                           VerticalScrollBarVisibility="Auto"
+                           FontFamily="{Binding Display.MessageFontFamily}"
+                           FontSize="{Binding Display.MessageFontSize}" />
 
             <Border HorizontalAlignment="Right"
                     VerticalAlignment="Top"

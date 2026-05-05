@@ -20,7 +20,7 @@
     <TextBox Grid.Row="1"
              x:Name="InputBox"
              Text="{Binding Text, Mode=TwoWay}"
-             Watermark="{Binding Watermark}"
+             PlaceholderText="{Binding Watermark}"
              Margin="0,0,0,16" />
 
     <StackPanel Grid.Row="2"

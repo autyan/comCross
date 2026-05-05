@@ -149,16 +149,16 @@ public class AvaloniaTextBoxControl : AvaloniaPluginUiControl
 
         _textBox = new TextBox
         {
-            Watermark = field.Label,
-            UseFloatingWatermark = true
+            PlaceholderText = field.Label,
+            UseFloatingPlaceholder = true
         };
 
         if (!string.IsNullOrWhiteSpace(_labelKey))
         {
-            _textBox.Watermark = _localization.Strings[_labelKey!];
+            _textBox.PlaceholderText = _localization.Strings[_labelKey!];
             _languageChanged = (_, _) =>
             {
-                _textBox.Watermark = _localization.Strings[_labelKey!];
+                _textBox.PlaceholderText = _localization.Strings[_labelKey!];
             };
             _localization.LanguageChanged += _languageChanged;
 

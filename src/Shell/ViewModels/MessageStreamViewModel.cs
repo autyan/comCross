@@ -59,6 +59,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private bool _isReturnToLatestVisible;
     private string _searchStatus = string.Empty;
     private string _aggregateMessageText = string.Empty;
+    private string _aggregateDirectionGutterText = string.Empty;
     private LogMessageListItemViewModel? _selectedMessageItem;
 
     public MessageStreamViewModel(
@@ -184,6 +185,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
             {
                 OnPropertyChanged(nameof(DisplayDensityLabel));
                 OnPropertyChanged(nameof(IsAggregateTextMode));
+                OnPropertyChanged(nameof(IsPlainAggregateTextMode));
+                OnPropertyChanged(nameof(IsSlimAggregateTextMode));
                 OnPropertyChanged(nameof(IsDetailedDisplayMode));
                 _selectedDisplayDensityOption = DisplayDensityOptions.FirstOrDefault(x => x.Density == value);
                 OnPropertyChanged(nameof(SelectedDisplayDensityOption));
@@ -310,7 +313,17 @@ public sealed class MessageStreamViewModel : BaseViewModel
         private set => SetProperty(ref _aggregateMessageText, value);
     }
 
+    public string AggregateDirectionGutterText
+    {
+        get => _aggregateDirectionGutterText;
+        private set => SetProperty(ref _aggregateDirectionGutterText, value);
+    }
+
     public bool IsAggregateTextMode => DisplayDensity is MessageDisplayDensity.Plain or MessageDisplayDensity.Slim;
+
+    public bool IsPlainAggregateTextMode => DisplayDensity == MessageDisplayDensity.Plain;
+
+    public bool IsSlimAggregateTextMode => DisplayDensity == MessageDisplayDensity.Slim;
 
     public bool IsDetailedDisplayMode => DisplayDensity == MessageDisplayDensity.Detailed;
 
@@ -976,30 +989,34 @@ public sealed class MessageStreamViewModel : BaseViewModel
         if (!IsAggregateTextMode)
         {
             AggregateMessageText = string.Empty;
+            AggregateDirectionGutterText = string.Empty;
             ClearAggregateSelection();
             return;
         }
 
         var sb = new StringBuilder();
+        var gutter = new StringBuilder();
         foreach (var item in MessageItems)
         {
             var frameId = long.TryParse(item.Message.Id, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
                 ? parsed
                 : 0;
-            var start = sb.Length;
+
+            var payload = RenderAggregatePayload(item.Message);
 
             if (DisplayDensity == MessageDisplayDensity.Slim)
             {
-                if (sb.Length > 0)
+                if (sb.Length > 0 && sb[^1] != '\n')
                 {
-                    sb.AppendLine();
+                    sb.Append('\n');
+                    gutter.Append('\n');
                 }
 
-                sb.Append(item.Source);
-                sb.Append("  ");
+                AppendSlimGutterFrame(gutter, item.Source, payload);
             }
 
-            sb.Append(RenderAggregatePayload(item.Message));
+            var start = sb.Length;
+            sb.Append(payload);
 
             if (frameId > 0)
             {
@@ -1008,6 +1025,9 @@ public sealed class MessageStreamViewModel : BaseViewModel
         }
 
         AggregateMessageText = sb.ToString();
+        AggregateDirectionGutterText = DisplayDensity == MessageDisplayDensity.Slim
+            ? gutter.ToString()
+            : string.Empty;
     }
 
     private void SelectAggregateFrame(long frameId)
@@ -1059,12 +1079,60 @@ public sealed class MessageStreamViewModel : BaseViewModel
         var raw = message.RawData;
         if (raw is null || raw.Length == 0)
         {
-            return message.Content ?? string.Empty;
+            return PayloadRenderMode == PayloadRenderMode.Hex
+                ? string.Empty
+                : NormalizeAggregateStringPayload(message.Content ?? string.Empty);
         }
 
         return PayloadRenderMode == PayloadRenderMode.Hex
             ? BitConverter.ToString(raw).Replace("-", " ")
-            : Encoding.UTF8.GetString(raw);
+            : NormalizeAggregateStringPayload(Encoding.UTF8.GetString(raw));
+    }
+
+    private static void AppendSlimGutterFrame(StringBuilder gutter, string source, string payload)
+    {
+        gutter.Append(source);
+
+        for (var i = 0; i < payload.Length; i++)
+        {
+            if (payload[i] == '\n')
+            {
+                gutter.Append('\n');
+            }
+        }
+    }
+
+    private static string NormalizeAggregateStringPayload(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder(value.Length);
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            switch (ch)
+            {
+                case '\r':
+                    if (i + 1 < value.Length && value[i + 1] == '\n')
+                    {
+                        i++;
+                    }
+
+                    sb.Append('\n');
+                    break;
+                case '\n':
+                    sb.Append('\n');
+                    break;
+                default:
+                    sb.Append(ch);
+                    break;
+            }
+        }
+
+        return sb.ToString();
     }
 
     private void ApplySessionDisplayOptions(Session? session)

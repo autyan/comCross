@@ -46,12 +46,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.2" />
-    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.2" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Avalonia" Version="12.0.2" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.2" />
+    <PackageReference Include="Avalonia.HarfBuzz" Version="12.0.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
   </ItemGroup>
@@ -105,10 +105,6 @@
     <MakeDir Directories="$(_BuiltInPluginsOut)" />
 
     <!-- Publish each built-in plugin into its own folder so plugin-local managed deps and native assets are present in dev runs. -->
-    <MSBuild
-      Projects="@(BuiltInPluginProjects)"
-      Targets="Publish"
-      BuildInParallel="true"
-      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);PublishDir=$(_BuiltInPluginsOut)%(BuiltInPluginProjects.PluginPackageId)\;SelfContained=false" />
+    <MSBuild Projects="@(BuiltInPluginProjects)" Targets="Publish" BuildInParallel="true" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);PublishDir=$(_BuiltInPluginsOut)%(BuiltInPluginProjects.PluginPackageId)\;SelfContained=false" />
   </Target>
 </Project>
