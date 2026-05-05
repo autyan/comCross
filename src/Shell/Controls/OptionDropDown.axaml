@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ComCross.Shell.Controls.OptionDropDown"
+             x:Name="Root"
+             Cursor="Hand"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch"
+             ClipToBounds="True"
+             x:CompileBindings="False">
+    <Grid HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch">
+        <Button x:Name="DropDownButton"
+                Classes="option-dropdown-button"
+                Click="OnDropDownClick"
+                ToolTip.Tip="{Binding ToolTipText, ElementName=Root}"
+                Width="{Binding Bounds.Width, ElementName=Root}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <Grid ColumnDefinitions="*,12">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding SelectedLabel, ElementName=Root}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource Text0Brush}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+                <Path Grid.Column="1"
+                      Data="{StaticResource ChevronDownIcon}"
+                      Width="10"
+                      Height="10"
+                      Margin="6,0,0,0"
+                      Stretch="Uniform"
+                      Stroke="{StaticResource ModeBorderHoverBrush}"
+                      StrokeThickness="1.7"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round"
+                      VerticalAlignment="Center" />
+            </Grid>
+        </Button>
+
+        <Popup IsOpen="{Binding IsOpen, ElementName=Root, Mode=TwoWay}"
+               PlacementTarget="{Binding #DropDownButton}"
+               Placement="Bottom"
+               IsLightDismissEnabled="True"
+               MinWidth="{Binding Bounds.Width, ElementName=DropDownButton}">
+            <Border Classes="option-dropdown-popup">
+                <ListBox ItemsSource="{Binding ItemsSource, ElementName=Root}"
+                         SelectedItem="{Binding SelectedItem, ElementName=Root, Mode=TwoWay}"
+                         Classes="option-dropdown-list"
+                         SelectionChanged="OnSelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text0Brush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

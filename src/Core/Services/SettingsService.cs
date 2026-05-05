@@ -27,6 +27,11 @@ public sealed class SettingsService
 
     public event EventHandler<AppSettings>? SettingsChanged;
 
+    public void NotifyChanged()
+    {
+        SettingsChanged?.Invoke(this, _current);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         var settings = await _configService.LoadAppSettingsAsync(cancellationToken);
@@ -35,6 +40,7 @@ public sealed class SettingsService
             _current = settings;
         }
 
+        MigrateLegacySettings();
         EnsureDefaults();
     }
 
@@ -42,16 +48,11 @@ public sealed class SettingsService
     {
         await _configService.SaveAppSettingsAsync(_current, cancellationToken);
         await _database.InsertConfigHistoryAsync(JsonSerializer.Serialize(_current), cancellationToken);
-        SettingsChanged?.Invoke(this, _current);
+        NotifyChanged();
     }
 
     private void EnsureDefaults()
     {
-        if (string.IsNullOrWhiteSpace(_current.Logs.Directory))
-        {
-            _current.Logs.Directory = _paths.LogDirectory;
-        }
-
         if (string.IsNullOrWhiteSpace(_current.AppLogs.Directory))
         {
             _current.AppLogs.Directory = _paths.AppLogDirectory;
@@ -62,8 +63,39 @@ public sealed class SettingsService
             _current.Export.DefaultDirectory = _paths.ExportDirectory;
         }
 
-        Directory.CreateDirectory(_current.Logs.Directory);
+        if (string.IsNullOrWhiteSpace(_current.Display.UiFontFamily))
+        {
+            _current.Display.UiFontFamily = DisplaySettings.GetDefaultUiFontFamily();
+        }
+
+        if (string.IsNullOrWhiteSpace(_current.Display.FontFamily))
+        {
+            _current.Display.FontFamily = DisplaySettings.GetDefaultMessageFontFamily();
+        }
+
+        if (_current.Display.FontSize <= 0)
+        {
+            _current.Display.FontSize = 13;
+        }
+
         Directory.CreateDirectory(_current.AppLogs.Directory);
         Directory.CreateDirectory(_current.Export.DefaultDirectory);
     }
+
+    private void MigrateLegacySettings()
+    {
+        var legacyLogs = _current.Logs;
+        if (legacyLogs is null)
+        {
+            return;
+        }
+
+        _current.SessionStorage.GlobalSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxTotalSizeMb, _current.SessionStorage.GlobalSizeLimitMb);
+        _current.SessionStorage.PerSessionSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxPerSessionSizeMb, _current.SessionStorage.PerSessionSizeLimitMb);
+        _current.SessionStorage.SegmentSizeLimitMb = NormalizeMegabytes(legacyLogs.MaxFileSizeMb, _current.SessionStorage.SegmentSizeLimitMb);
+        _current.Logs = null;
+    }
+
+    private static int NormalizeMegabytes(int value, int fallback)
+        => value > 0 ? value : Math.Max(1, fallback);
 }

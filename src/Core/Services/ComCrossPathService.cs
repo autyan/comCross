@@ -97,5 +97,9 @@ public sealed class ComCrossPathService
 
     public string ExportDirectory => Path.Combine(LocalDataDirectory, "exports");
 
+    public string SessionSpoolDirectory => Path.Combine(LocalDataDirectory, "session-spool");
+
+    public string SessionArchiveDirectory => Path.Combine(LocalDataDirectory, "session-archive");
+
     public string PluginSessionStorageDirectory => Path.Combine(LocalDataDirectory, "plugin-session-storage");
 }

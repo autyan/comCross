@@ -30,7 +30,10 @@
                         <DataTemplate>
                             <Border Padding="12" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <StackPanel Grid.Column="0" Spacing="6">
+                                    <StackPanel Grid.Column="0"
+                                                Spacing="6"
+                                                Cursor="Hand"
+                                                PointerPressed="OnNotificationMessagePressed">
                                         <TextBlock Text="{Binding Message}" FontSize="12" Foreground="{StaticResource Text0Brush}" TextWrapping="Wrap" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="{StaticResource Text2Brush}" />

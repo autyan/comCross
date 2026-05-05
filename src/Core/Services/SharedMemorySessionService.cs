@@ -32,6 +32,7 @@ public sealed class SharedMemorySessionService
 
         try
         {
+            _sharedMemoryIngest.Drain(sessionId);
             _sharedMemoryIngest.Unregister(sessionId);
         }
         catch
@@ -74,6 +75,7 @@ public sealed class SharedMemorySessionService
 
         try
         {
+            _sharedMemoryIngest.Drain(sessionId);
             _sharedMemoryIngest.Unregister(sessionId);
         }
         catch

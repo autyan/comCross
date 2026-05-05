@@ -16,12 +16,12 @@ public sealed class WorkspaceService
 {
     private readonly DeviceService _deviceService;
     private readonly IMessageStreamService _messageStream;
-    private readonly LogStorageService _logStorageService;
     private readonly NotificationService _notificationService;
     private readonly WorkspaceStateStore _workspaceStateStore;
     private readonly WorkloadService _workloadService;
     private readonly PluginSessionInitializationService _sessionInitializationService;
     private readonly SessionDataCleanupService _sessionDataCleanupService;
+    private readonly ISessionArchiveStore _archiveStore;
     private readonly IEventBus _eventBus;
 
     private bool _sessionsRestored;
@@ -29,23 +29,24 @@ public sealed class WorkspaceService
     public WorkspaceService(
         DeviceService deviceService,
         IMessageStreamService messageStream,
-        LogStorageService logStorageService,
         NotificationService notificationService,
         WorkspaceStateStore workspaceStateStore,
         WorkloadService workloadService,
         PluginSessionInitializationService sessionInitializationService,
         SessionDataCleanupService sessionDataCleanupService,
+        ISessionArchiveStore archiveStore,
         IEventBus eventBus)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
-        _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _workspaceStateStore = workspaceStateStore ?? throw new ArgumentNullException(nameof(workspaceStateStore));
         _workloadService = workloadService ?? throw new ArgumentNullException(nameof(workloadService));
         _sessionInitializationService = sessionInitializationService ?? throw new ArgumentNullException(nameof(sessionInitializationService));
         _sessionDataCleanupService = sessionDataCleanupService ?? throw new ArgumentNullException(nameof(sessionDataCleanupService));
+        _archiveStore = archiveStore ?? throw new ArgumentNullException(nameof(archiveStore));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _eventBus.Subscribe<SessionArchiveWriteFailedCoreEvent>(evt => _ = SetSessionArchiveStateAsync(evt.SessionId, SessionArchiveState.Error, evt.Error));
     }
 
     /// <summary>
@@ -88,7 +89,6 @@ public sealed class WorkspaceService
                 resourceId,
                 cancellationToken);
             await _workloadService.AddSessionToActiveWorkloadIfMissingAsync(session.Id);
-            _logStorageService.StartSession(session);
 
             // DeviceService publishes SessionCreatedEvent before workspace membership is updated.
             // Publish a second upsert after membership so filtered session lists can include it immediately.
@@ -109,7 +109,6 @@ public sealed class WorkspaceService
         try
         {
             await _deviceService.DisconnectAsync(sessionId);
-            await _logStorageService.StopSessionAsync(sessionId);
         }
         catch (Exception)
         {
@@ -283,7 +282,6 @@ public sealed class WorkspaceService
                 await DisconnectAsync(deleteId, cancellationToken);
             }
 
-            await _logStorageService.StopSessionAsync(deleteId);
             _deviceService.RemoveSession(deleteId);
             ClearMessages(deleteId);
             await _workloadService.RemoveSessionFromAllWorkloadsAsync(deleteId);
@@ -345,6 +343,104 @@ public sealed class WorkspaceService
         _eventBus.Publish(new SessionRenamedEvent(sessionId, trimmedName));
     }
 
+    public async Task SetSessionArchiveStateAsync(
+        string sessionId,
+        SessionArchiveState archiveState,
+        string? archiveError = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        session.ArchiveState = archiveState;
+        session.ArchiveError = archiveState == SessionArchiveState.Error ? archiveError : null;
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var descriptor = state.SessionDescriptors.FirstOrDefault(d => string.Equals(d.Id, sessionId, StringComparison.Ordinal));
+            if (descriptor is null)
+            {
+                return;
+            }
+
+            descriptor.ArchiveState = session.ArchiveState;
+            descriptor.ArchiveError = session.ArchiveError;
+            descriptor.EnableDatabaseStorage = false;
+        }, cancellationToken);
+
+        _eventBus.Publish(new SessionUpdatedEvent(session));
+    }
+
+    public async Task SetSessionDisplayOptionsAsync(
+        string sessionId,
+        PayloadRenderMode payloadRenderMode,
+        MessageDisplayDensity displayDensity,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        if (session.PayloadRenderMode == payloadRenderMode && session.DisplayDensity == displayDensity)
+        {
+            return;
+        }
+
+        session.PayloadRenderMode = payloadRenderMode;
+        session.DisplayDensity = displayDensity;
+
+        await _workspaceStateStore.UpdateAsync(state =>
+        {
+            var descriptor = state.SessionDescriptors.FirstOrDefault(d => string.Equals(d.Id, sessionId, StringComparison.Ordinal));
+            if (descriptor is null)
+            {
+                return;
+            }
+
+            descriptor.PayloadRenderMode = session.PayloadRenderMode;
+            descriptor.DisplayDensity = session.DisplayDensity;
+        }, cancellationToken);
+
+        _eventBus.Publish(new SessionUpdatedEvent(session));
+    }
+
+    public bool HasSessionArchiveData(string sessionId)
+        => _archiveStore.HasArchive(sessionId);
+
+    public async Task DeleteSessionArchiveDataAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var session = _deviceService.GetSession(sessionId);
+        if (session is null)
+        {
+            return;
+        }
+
+        _archiveStore.Delete(sessionId);
+        await SetSessionArchiveStateAsync(sessionId, SessionArchiveState.Disabled, cancellationToken: cancellationToken);
+    }
+
     /// <summary>
     /// Build workspace state from current sessions and workloads.
     /// In v0.4+, includes Workload information with session associations.
@@ -365,9 +461,13 @@ public sealed class WorkspaceService
                 DisplaySubtitle = s.DisplaySubtitle,
                 DisplayIcon = s.DisplayIcon,
                 CanReconnect = s.CanReconnect,
+                CanTransmit = s.CanTransmit,
                 InitializationState = s.InitializationState,
                 InitializationError = s.InitializationError,
-                EnableDatabaseStorage = s.EnableDatabaseStorage,
+                ArchiveState = s.ArchiveState,
+                ArchiveError = s.ArchiveError,
+                PayloadRenderMode = s.PayloadRenderMode,
+                DisplayDensity = s.DisplayDensity,
                 ParentSessionId = s.ParentSessionId,
                 ManagedResourceKinds = s.ManagedResourceKinds.ToList()
             })

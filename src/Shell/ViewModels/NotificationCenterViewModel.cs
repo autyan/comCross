@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ComCross.Core.Services;
@@ -160,6 +163,7 @@ public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<Notif
     public string Id => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Id;
     public DateTime CreatedAt => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).CreatedAt.ToLocalTime();
     public NotificationLevel Level => (_item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.")).Level;
+    public bool CanOpenTargetDirectory => GetTargetFilePath() is { Length: > 0 };
 
     public string Message
     {
@@ -168,6 +172,24 @@ public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<Notif
             var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
             return Localization.GetString(item.MessageKey, _args);
         }
+    }
+
+    public Task OpenTargetDirectoryAsync()
+    {
+        var path = GetTargetFilePath();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return Task.CompletedTask;
+        }
+
+        OpenDirectory(directory);
+        return Task.CompletedTask;
     }
 
     public bool IsRead
@@ -223,4 +245,37 @@ public sealed class NotificationItemViewModel : LocalizedItemViewModelBase<Notif
         };
     }
 
+    private string? GetTargetFilePath()
+    {
+        var item = _item ?? throw new InvalidOperationException("NotificationItemViewModel not initialized.");
+        if (item.Category != NotificationCategory.Export || _args.Length < 2)
+        {
+            return null;
+        }
+
+        return _args[1] as string;
+    }
+
+    private static void OpenDirectory(string directory)
+    {
+        try
+        {
+            var fileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? "explorer.exe"
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? "open"
+                    : "xdg-open";
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            startInfo.ArgumentList.Add(directory);
+            using var _ = Process.Start(startInfo);
+        }
+        catch
+        {
+        }
+    }
 }

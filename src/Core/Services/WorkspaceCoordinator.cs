@@ -39,6 +39,10 @@ public interface IWorkspaceCoordinator
         string? resourceId = null);
     Task RenameSessionAsync(string sessionId, string name);
     Task DeleteSessionAsync(string sessionId);
+    Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null);
+    Task SetSessionDisplayOptionsAsync(string sessionId, PayloadRenderMode payloadRenderMode, MessageDisplayDensity displayDensity);
+    bool HasSessionArchiveData(string sessionId);
+    Task DeleteSessionArchiveDataAsync(string sessionId);
     Task<PluginCommandResult> SendMessageAsync(
         string sessionId,
         string message,
@@ -52,7 +56,12 @@ public interface IWorkspaceCoordinator
     void SubscribeToMessages(string sessionId, Action<LogMessage> callback);
     
     // Export Operations
-    Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null);
+    Task<string> ExportAsync(
+        Session session,
+        string? searchQuery = null,
+        string? customFilePath = null,
+        SessionLogExportFormat? format = null,
+        MessageFrameDataSource source = MessageFrameDataSource.LiveSpool);
 
     // Statistics aggregated by coordinator
     long TotalRxBytes { get; }
@@ -187,6 +196,18 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
 
     public Task RenameSessionAsync(string sessionId, string name) => _workspaceService.RenameSessionAsync(sessionId, name);
 
+    public Task SetSessionArchiveStateAsync(string sessionId, SessionArchiveState state, string? error = null)
+        => _workspaceService.SetSessionArchiveStateAsync(sessionId, state, error);
+
+    public Task SetSessionDisplayOptionsAsync(string sessionId, PayloadRenderMode payloadRenderMode, MessageDisplayDensity displayDensity)
+        => _workspaceService.SetSessionDisplayOptionsAsync(sessionId, payloadRenderMode, displayDensity);
+
+    public bool HasSessionArchiveData(string sessionId)
+        => _workspaceService.HasSessionArchiveData(sessionId);
+
+    public Task DeleteSessionArchiveDataAsync(string sessionId)
+        => _workspaceService.DeleteSessionArchiveDataAsync(sessionId);
+
     public Task<PluginCommandResult> SendMessageAsync(
         string sessionId,
         string message,
@@ -207,6 +228,11 @@ public class WorkspaceCoordinator : IWorkspaceCoordinator
     public void SubscribeToMessages(string sessionId, Action<LogMessage> callback)
         => _workspaceService.SubscribeToMessages(sessionId, callback);
 
-    public Task<string> ExportAsync(Session session, string? searchQuery = null, string? customFilePath = null)
-        => _exportService.ExportAsync(session, searchQuery, customFilePath);
+    public Task<string> ExportAsync(
+        Session session,
+        string? searchQuery = null,
+        string? customFilePath = null,
+        SessionLogExportFormat? format = null,
+        MessageFrameDataSource source = MessageFrameDataSource.LiveSpool)
+        => _exportService.ExportAsync(session, searchQuery, customFilePath, format, source);
 }

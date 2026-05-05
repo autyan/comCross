@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ComCross.Shared.Models;
 
 public sealed class AppSettings
@@ -5,7 +7,12 @@ public sealed class AppSettings
     public string Language { get; set; } = "en-US";
     public bool FollowSystemLanguage { get; set; } = true;
     public AppLogSettings AppLogs { get; set; } = new();
-    public LogSettings Logs { get; set; } = new();
+
+    public SessionStorageSettings SessionStorage { get; set; } = new();
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LegacyLogSettings? Logs { get; set; }
+
     public CommandSettings Commands { get; set; } = new();
     public NotificationSettings Notifications { get; set; } = new();
     public ConnectionSettings Connection { get; set; } = new();
@@ -22,22 +29,38 @@ public sealed class AppLogSettings
     public string MinLevel { get; set; } = "Info";
 }
 
-public sealed class LogSettings
+public sealed class SessionStorageSettings
 {
+    public const int SettingsSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = SettingsSchemaVersion;
+
+    /// <summary>
+    /// Segment rollover size for the live session landing buffer working format.
+    /// </summary>
+    public int SegmentSizeLimitMb { get; set; } = 10;
+
+    /// <summary>
+    /// Global maximum live session landing buffer size.
+    /// </summary>
+    public int GlobalSizeLimitMb { get; set; } = 256;
+
+    /// <summary>
+    /// Per-session maximum live session landing buffer size.
+    /// </summary>
+    public int PerSessionSizeLimitMb { get; set; } = 64;
+}
+
+public sealed class LegacyLogSettings
+{
+    public int SchemaVersion { get; set; }
     public bool AutoSaveEnabled { get; set; } = true;
     public string Directory { get; set; } = string.Empty;
     public int MaxFileSizeMb { get; set; } = 10;
     public int MaxTotalSizeMb { get; set; } = 256;
+    public int MaxPerSessionSizeMb { get; set; } = 64;
     public bool AutoDeleteEnabled { get; set; }
-    
-    /// <summary>
-    /// Enable database persistence for message storage (default: enabled)
-    /// </summary>
-    public bool DatabasePersistenceEnabled { get; set; } = true;
-    
-    /// <summary>
-    /// Database directory (optional, defaults to the ComCross local data directory if not specified)
-    /// </summary>
+    public bool DatabasePersistenceEnabled { get; set; }
     public string? DatabaseDirectory { get; set; }
 }
 
@@ -70,23 +93,38 @@ public sealed class DisplaySettings
     public int MaxMessages { get; set; } = 10000;
     public bool AutoScroll { get; set; } = true;
     public string TimestampFormat { get; set; } = "HH:mm:ss.fff";
-    public string FontFamily { get; set; } = GetDefaultFontFamily();
-    public int FontSize { get; set; } = 11;
+    public string UiFontFamily { get; set; } = GetDefaultUiFontFamily();
+    public string FontFamily { get; set; } = GetDefaultMessageFontFamily();
+    public int FontSize { get; set; } = 13;
 
-    private static string GetDefaultFontFamily()
+    public static string GetDefaultUiFontFamily()
     {
         if (OperatingSystem.IsWindows())
         {
-            return "Consolas";
+            return "Segoe UI, Noto Sans, Arial, sans-serif";
         }
-        else if (OperatingSystem.IsMacOS())
+
+        if (OperatingSystem.IsMacOS())
         {
-            return "Menlo";
+            return "SF Pro Text, .AppleSystemUIFont, Helvetica Neue, sans-serif";
         }
-        else // Linux
+
+        return "Inter, Noto Sans, Ubuntu, Cantarell, DejaVu Sans, sans-serif";
+    }
+
+    public static string GetDefaultMessageFontFamily()
+    {
+        if (OperatingSystem.IsWindows())
         {
-            return "DejaVu Sans Mono";
+            return "JetBrains Mono, Cascadia Mono, Consolas, monospace";
         }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "JetBrains Mono, SF Mono, Menlo, monospace";
+        }
+
+        return "JetBrains Mono, DejaVu Sans Mono, Liberation Mono, monospace";
     }
 }
 
@@ -94,7 +132,18 @@ public sealed class ExportSettings
 {
     public string DefaultFormat { get; set; } = "txt";
     public string DefaultDirectory { get; set; } = string.Empty;
+
+    public SessionLogExportFormat DefaultSessionLogFormat { get; set; } = SessionLogExportFormat.Plain;
+    public PayloadRenderMode DefaultPayloadRenderMode { get; set; } = PayloadRenderMode.String;
+
+    /// <summary>
+    /// Legacy export range option. v0.6 Session Logs export is complete-source only.
+    /// </summary>
     public ExportRangeMode RangeMode { get; set; } = ExportRangeMode.All;
+
+    /// <summary>
+    /// Legacy export count option. v0.6 Session Logs export is complete-source only.
+    /// </summary>
     public int RangeCount { get; set; } = 1000;
 }
 

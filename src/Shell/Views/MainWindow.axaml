@@ -12,6 +12,7 @@
         KeyDown="OnKeyDown"
         Width="1440" Height="900"
         MinWidth="1280" MinHeight="720"
+        FontFamily="{Binding Display.UiFontFamily}"
         Background="{StaticResource Bg0Brush}">
 
     <Grid RowDefinitions="Auto,*,Auto">
@@ -256,6 +257,37 @@
                                                 <TextBlock Text="{Binding SessionDetailTxBytes}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" />
                                             </StackPanel>
                                         </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Classes="prototype-card" Padding="14">
+                                    <StackPanel Spacing="10">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="{Binding L[session.archive.label]}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Text2Brush}" />
+                                                <TextBlock Text="{Binding SessionDetailArchiveStatus}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Text0Brush}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Height="28"
+                                                    Padding="10,0"
+                                                    IsEnabled="{Binding CanDeleteSessionDetailArchiveData}"
+                                                    Click="OnDeleteArchiveDataClick">
+                                                <TextBlock Text="{Binding L[session.archive.deleteData]}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Text1Brush}"
+                                                           VerticalAlignment="Center" />
+                                            </Button>
+                                        </Grid>
+                                        <TextBlock Text="{Binding SessionDetailArchiveError}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource AccentRedBrush}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasSessionDetailArchiveError}" />
                                     </StackPanel>
                                 </Border>
 

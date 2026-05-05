@@ -15,9 +15,9 @@ namespace ComCross.Core.Services;
 public sealed class FrameStoreMessageStreamPumpService : IDisposable
 {
     private const int MaxLogBytes = 4 * 1024;
-    private const int MaxFramesPerSessionPerPump = 256;
-
     private readonly IFrameStore _frameStore;
+    private readonly IMessageFrameQueryService _queryService;
+    private readonly IStoragePolicyService _storagePolicy;
     private readonly IMessageStreamService _messageStream;
     private readonly ILogger<FrameStoreMessageStreamPumpService> _logger;
 
@@ -36,10 +36,14 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
 
     public FrameStoreMessageStreamPumpService(
         IFrameStore frameStore,
+        IMessageFrameQueryService queryService,
+        IStoragePolicyService storagePolicy,
         IMessageStreamService messageStream,
         ILogger<FrameStoreMessageStreamPumpService> logger)
     {
         _frameStore = frameStore ?? throw new ArgumentNullException(nameof(frameStore));
+        _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+        _storagePolicy = storagePolicy ?? throw new ArgumentNullException(nameof(storagePolicy));
         _messageStream = messageStream ?? throw new ArgumentNullException(nameof(messageStream));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -118,30 +122,31 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
                 return Task.CompletedTask;
             }
 
-            var frames = _frameStore.ReadAfter(sessionId, cursor, MaxFramesPerSessionPerPump, out var firstAvailable);
-            if (frames.Count == 0)
+            var result = _queryService.Query(new MessageFrameQuery(
+                sessionId,
+                MessageFrameDataSource.LiveSpool,
+                MessageFrameQueryKind.After,
+                cursor,
+                _storagePolicy.Current.MessagePumpBatchSize));
+            var firstAvailable = result.FirstAvailableFrameId ?? 0;
+            if (result.Status == MessageFrameQueryStatus.DataEvicted && cursor + 1 < firstAvailable)
             {
+                AppendSkippedMessage(sessionId, firstAvailable - (cursor + 1));
+                cursor = firstAvailable - 1;
+                _cursors[sessionId] = cursor;
+            }
+
+            if (result.Frames.Count == 0)
+            {
+                if (result.Status is MessageFrameQueryStatus.SourceUnavailable or MessageFrameQueryStatus.InvalidQuery)
+                {
+                    _logger.LogDebug("Message frame query returned {Status}: {SessionId}", result.Status, sessionId);
+                }
+
                 return Task.CompletedTask;
             }
 
-            if (cursor + 1 < firstAvailable)
-            {
-                var skipped = firstAvailable - (cursor + 1);
-                _messageStream.Append(sessionId, new LogMessage
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Timestamp = DateTime.UtcNow,
-                    Content = $"[system] message consumption skipped {skipped} frames (window eviction)",
-                    Level = LogLevel.Warning,
-                    Source = "system",
-                    RawData = Array.Empty<byte>(),
-                    Format = MessageFormat.Text,
-                    Attributes = MessageFrameAttributes.Empty,
-                });
-                cursor = firstAvailable - 1;
-            }
-
-            foreach (var frame in frames)
+            foreach (var frame in result.Frames)
             {
                 cursor = frame.FrameId;
                 _cursors[sessionId] = cursor;
@@ -163,7 +168,22 @@ public sealed class FrameStoreMessageStreamPumpService : IDisposable
         }
     }
 
-    private static string FormatContent(FrameRecord frame)
+    private void AppendSkippedMessage(string sessionId, long skipped)
+    {
+        _messageStream.Append(sessionId, new LogMessage
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow,
+            Content = $"[system] message consumption skipped {skipped} frames (window eviction)",
+            Level = LogLevel.Warning,
+            Source = "system",
+            RawData = Array.Empty<byte>(),
+            Format = MessageFormat.Text,
+            Attributes = MessageFrameAttributes.Empty,
+        });
+    }
+
+    private static string FormatContent(MessageFrameRecord frame)
     {
         var data = frame.RawData ?? Array.Empty<byte>();
         if (data.Length == 0)

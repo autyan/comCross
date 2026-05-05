@@ -35,6 +35,9 @@
         <Color x:Key="AccentBlueColor">#3AA0FF</Color>
         <Color x:Key="AccentBlueBrightColor">#58B8FF</Color>
         <Color x:Key="AccentCyanColor">#2CB5A9</Color>
+        <Color x:Key="ModeColor">#5A6FA0</Color>
+        <Color x:Key="ModeBrightColor">#6B7FB5</Color>
+        <Color x:Key="ModeActiveColor">#7B8FC8</Color>
         <Color x:Key="WarnColor">#F5A524</Color>
         <Color x:Key="ErrorColor">#E5534B</Color>
         <Color x:Key="BorderColor">#25303A</Color>
@@ -48,6 +51,8 @@
         <SolidColorBrush x:Key="Bg3Brush" Color="{StaticResource Bg3Color}" />
         <SolidColorBrush x:Key="BgCardBrush" Color="{StaticResource BgCardColor}" />
         <SolidColorBrush x:Key="BgOverlayBrush" Color="{StaticResource BgOverlayColor}" />
+        <SolidColorBrush x:Key="BgHighlightBrush" Color="{StaticResource BgHighlightColor}" />
+        <SolidColorBrush x:Key="BgHighlightEndBrush" Color="{StaticResource BgHighlightEndColor}" />
         <SolidColorBrush x:Key="BgInteractiveHoverBrush" Color="{StaticResource BgInteractiveHoverColor}" />
         <SolidColorBrush x:Key="Text0Brush" Color="{StaticResource Text0Color}" />
         <SolidColorBrush x:Key="Text1Brush" Color="{StaticResource Text1Color}" />
@@ -56,6 +61,9 @@
         <SolidColorBrush x:Key="AccentBlueBrush" Color="{StaticResource AccentBlueColor}" />
         <SolidColorBrush x:Key="AccentBlueBrightBrush" Color="{StaticResource AccentBlueBrightColor}" />
         <SolidColorBrush x:Key="AccentCyanBrush" Color="{StaticResource AccentCyanColor}" />
+        <SolidColorBrush x:Key="ModeBorderBrush" Color="{StaticResource ModeColor}" />
+        <SolidColorBrush x:Key="ModeBorderHoverBrush" Color="{StaticResource ModeBrightColor}" />
+        <SolidColorBrush x:Key="ModeBorderActiveBrush" Color="{StaticResource ModeActiveColor}" />
         <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
         <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
         <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderColor}" />
@@ -76,6 +84,16 @@
         <LinearGradientBrush x:Key="PrimaryButtonBrush" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Color="{StaticResource AccentBlueColor}" Offset="0" />
             <GradientStop Color="#4FB0FF" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="ModeButtonBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#3D4E7A" Offset="0" />
+            <GradientStop Color="#4A5D8E" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="ModeButtonHoverBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#4A5D8E" Offset="0" />
+            <GradientStop Color="#5668A0" Offset="1" />
         </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="GlowOverlayBrush" StartPoint="0%,0%" EndPoint="100%,100%">

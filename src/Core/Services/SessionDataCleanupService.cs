@@ -9,24 +9,25 @@ public sealed record SessionDataCleanupResult(
     string SessionId,
     int DeletedLogFiles,
     bool PluginStorageDeleted,
+    bool ArchiveDeleted,
     IReadOnlyList<string> Warnings);
 
 public sealed class SessionDataCleanupService
 {
-    private readonly LogStorageService _logStorageService;
     private readonly PluginSessionStorageService _pluginSessionStorage;
     private readonly AppDatabase _database;
+    private readonly ISessionArchiveStore _archiveStore;
     private readonly ILogger<SessionDataCleanupService> _logger;
 
     public SessionDataCleanupService(
-        LogStorageService logStorageService,
         PluginSessionStorageService pluginSessionStorage,
         AppDatabase database,
+        ISessionArchiveStore archiveStore,
         ILogger<SessionDataCleanupService> logger)
     {
-        _logStorageService = logStorageService ?? throw new ArgumentNullException(nameof(logStorageService));
         _pluginSessionStorage = pluginSessionStorage ?? throw new ArgumentNullException(nameof(pluginSessionStorage));
         _database = database ?? throw new ArgumentNullException(nameof(database));
+        _archiveStore = archiveStore ?? throw new ArgumentNullException(nameof(archiveStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -55,15 +56,7 @@ public sealed class SessionDataCleanupService
         var warnings = new List<string>();
         var deletedLogFiles = 0;
         var pluginStorageDeleted = false;
-
-        try
-        {
-            await _logStorageService.StopSessionAsync(target.SessionId);
-        }
-        catch (Exception ex)
-        {
-            AddWarning(warnings, target.SessionId, $"Failed to stop session log writer: {ex.Message}", ex);
-        }
+        var archiveDeleted = false;
 
         IReadOnlyList<LogFileRecord> logFiles = Array.Empty<LogFileRecord>();
         try
@@ -118,7 +111,16 @@ public sealed class SessionDataCleanupService
             }
         }
 
-        return new SessionDataCleanupResult(target.SessionId, deletedLogFiles, pluginStorageDeleted, warnings);
+        try
+        {
+            archiveDeleted = _archiveStore.Delete(target.SessionId);
+        }
+        catch (Exception ex)
+        {
+            AddWarning(warnings, target.SessionId, $"Failed to delete session archive: {ex.Message}", ex);
+        }
+
+        return new SessionDataCleanupResult(target.SessionId, deletedLogFiles, pluginStorageDeleted, archiveDeleted, warnings);
     }
 
     private void AddWarning(List<string> warnings, string sessionId, string warning, Exception exception)

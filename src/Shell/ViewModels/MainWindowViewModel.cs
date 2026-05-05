@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -39,6 +40,7 @@ public class MainWindowViewModel : BaseViewModel
     private bool _isSessionReconnectEditorOpen;
     private bool _isRightToolDockVisible = true;
     private Session? _sessionDetailSession;
+    private readonly PropertyChangedEventHandler _sessionDetailPropertyChangedHandler;
 
     public LeftSidebarViewModel LeftSidebar { get; }
     public MessageStreamViewModel MessageStream { get; }
@@ -163,18 +165,34 @@ public class MainWindowViewModel : BaseViewModel
         get => _sessionDetailSession;
         private set
         {
-            if (SetProperty(ref _sessionDetailSession, value))
+            if (ReferenceEquals(_sessionDetailSession, value))
             {
-                OnPropertyChanged(nameof(HasSessionDetailSession));
-                OnPropertyChanged(nameof(SessionDetailTitle));
-                OnPropertyChanged(nameof(SessionDetailName));
-                OnPropertyChanged(nameof(SessionDetailType));
-                OnPropertyChanged(nameof(SessionDetailEndpoint));
-                OnPropertyChanged(nameof(SessionDetailStatusLabel));
-                OnPropertyChanged(nameof(SessionDetailStatusBrush));
-                OnPropertyChanged(nameof(SessionDetailRxBytes));
-                OnPropertyChanged(nameof(SessionDetailTxBytes));
+                return;
             }
+
+            if (_sessionDetailSession is not null)
+            {
+                _sessionDetailSession.PropertyChanged -= _sessionDetailPropertyChangedHandler;
+            }
+
+            _sessionDetailSession = value;
+
+            if (_sessionDetailSession is not null)
+            {
+                _sessionDetailSession.PropertyChanged += _sessionDetailPropertyChangedHandler;
+            }
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSessionDetailSession));
+            OnPropertyChanged(nameof(SessionDetailTitle));
+            OnPropertyChanged(nameof(SessionDetailName));
+            OnPropertyChanged(nameof(SessionDetailType));
+            OnPropertyChanged(nameof(SessionDetailEndpoint));
+            OnPropertyChanged(nameof(SessionDetailStatusLabel));
+            OnPropertyChanged(nameof(SessionDetailStatusBrush));
+            OnPropertyChanged(nameof(SessionDetailRxBytes));
+            OnPropertyChanged(nameof(SessionDetailTxBytes));
+            RefreshSessionDetailArchiveProperties();
         }
     }
 
@@ -218,6 +236,24 @@ public class MainWindowViewModel : BaseViewModel
 
     // i18n-ignore (data format, unit symbol)
     public string SessionDetailTxBytes => $"{SessionDetailSession?.TxBytes ?? 0:N0} B";
+
+    public string SessionDetailArchiveStatus => SessionDetailSession?.ArchiveState switch
+    {
+        SessionArchiveState.Enabled => L["session.archive.status.enabled"],
+        SessionArchiveState.Stopped => L["session.archive.status.stopped"],
+        SessionArchiveState.Error => L["session.archive.status.error"],
+        _ => L["session.archive.status.disabled"]
+    };
+
+    public string SessionDetailArchiveError => SessionDetailSession?.ArchiveError ?? string.Empty;
+
+    public bool HasSessionDetailArchiveError
+        => !string.IsNullOrWhiteSpace(SessionDetailSession?.ArchiveError);
+
+    public bool CanDeleteSessionDetailArchiveData
+        => SessionDetailSession?.Id is { Length: > 0 } sessionId
+           && SessionDetailSession.ArchiveState != SessionArchiveState.Enabled
+           && _workspaceCoordinator.HasSessionArchiveData(sessionId);
 
     public ToolDockTab SelectedToolTab
     {
@@ -287,6 +323,7 @@ public class MainWindowViewModel : BaseViewModel
         IProgressDialogFactory progressDialogFactory)
         : base(localization)
     {
+        _sessionDetailPropertyChangedHandler = OnSessionDetailSessionPropertyChanged;
         _settingsService = settingsService;
         _appLogService = appLogService;
         _appHost = appHost;
@@ -421,7 +458,18 @@ public class MainWindowViewModel : BaseViewModel
 
     public void ClearMessages() => RightToolDock.ClearMessages();
 
-    public Task ExportAsync(string? filePath = null) => RightToolDock.ExportAsync(filePath);
+    public Task ExportAsync(string? filePath = null, SessionLogExportFormat? format = null) => RightToolDock.ExportAsync(filePath, format);
+
+    public async Task DeleteSessionDetailArchiveDataAsync()
+    {
+        if (SessionDetailSession?.Id is not { Length: > 0 } sessionId)
+        {
+            return;
+        }
+
+        await _workspaceCoordinator.DeleteSessionArchiveDataAsync(sessionId);
+        RefreshSessionDetailArchiveProperties();
+    }
 
     public void ToggleSettings()
     {
@@ -505,6 +553,30 @@ public class MainWindowViewModel : BaseViewModel
         (ExportMessagesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
+    private void OnSessionDetailSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, SessionDetailSession))
+        {
+            return;
+        }
+
+        if (e.PropertyName is nameof(Session.ArchiveState)
+            or nameof(Session.ArchiveError)
+            or null
+            or "")
+        {
+            RefreshSessionDetailArchiveProperties();
+        }
+    }
+
+    private void RefreshSessionDetailArchiveProperties()
+    {
+        OnPropertyChanged(nameof(SessionDetailArchiveStatus));
+        OnPropertyChanged(nameof(SessionDetailArchiveError));
+        OnPropertyChanged(nameof(HasSessionDetailArchiveError));
+        OnPropertyChanged(nameof(CanDeleteSessionDetailArchiveData));
+    }
+
     private async Task SaveWorkspaceStateAsync()
     {
         try
@@ -581,5 +653,15 @@ public class MainWindowViewModel : BaseViewModel
                 await Dispatcher.UIThread.InvokeAsync(() => progressWindow.Close());
             }
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && _sessionDetailSession is not null)
+        {
+            _sessionDetailSession.PropertyChanged -= _sessionDetailPropertyChangedHandler;
+        }
+
+        base.Dispose(disposing);
     }
 }

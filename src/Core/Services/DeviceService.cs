@@ -361,9 +361,13 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             DisplaySubtitle = descriptor.DisplaySubtitle,
             DisplayIcon = descriptor.DisplayIcon,
             CanReconnect = descriptor.CanReconnect ?? true,
+            CanTransmit = descriptor.CanTransmit ?? true,
             InitializationState = descriptor.InitializationState,
             InitializationError = descriptor.InitializationError,
-            EnableDatabaseStorage = descriptor.EnableDatabaseStorage,
+            ArchiveState = ResolveArchiveState(descriptor),
+            ArchiveError = descriptor.ArchiveError,
+            PayloadRenderMode = descriptor.PayloadRenderMode,
+            DisplayDensity = descriptor.DisplayDensity,
             ParentSessionId = descriptor.ParentSessionId,
             ManagedResourceKinds = descriptor.ManagedResourceKinds,
             Status = SessionStatus.Disconnected
@@ -392,9 +396,13 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.DisplayIcon = session.DisplayIcon;
             state.Session.CanReconnect = session.CanReconnect;
+            state.Session.CanTransmit = session.CanTransmit;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
-            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.ArchiveState = session.ArchiveState;
+            state.Session.ArchiveError = session.ArchiveError;
+            state.Session.PayloadRenderMode = session.PayloadRenderMode;
+            state.Session.DisplayDensity = session.DisplayDensity;
             state.Session.ParentSessionId = session.ParentSessionId;
             state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
             if (state.Session.Status != SessionStatus.Connected)
@@ -426,15 +434,24 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.DisplayIcon = session.DisplayIcon;
             state.Session.CanReconnect = session.CanReconnect;
+            state.Session.CanTransmit = session.CanTransmit;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
-            state.Session.EnableDatabaseStorage = session.EnableDatabaseStorage;
+            state.Session.ArchiveState = session.ArchiveState;
+            state.Session.ArchiveError = session.ArchiveError;
+            state.Session.PayloadRenderMode = session.PayloadRenderMode;
+            state.Session.DisplayDensity = session.DisplayDensity;
             state.Session.ParentSessionId = session.ParentSessionId;
             state.Session.ManagedResourceKinds = session.ManagedResourceKinds;
         }
 
         _eventBus.Publish(new SessionUpdatedEvent(state.Session));
     }
+
+    private static SessionArchiveState ResolveArchiveState(SessionDescriptor descriptor)
+        => descriptor.ArchiveState == SessionArchiveState.Disabled && descriptor.EnableDatabaseStorage
+            ? SessionArchiveState.Enabled
+            : descriptor.ArchiveState;
 
     public bool RemoveSession(string sessionId)
     {
@@ -458,11 +475,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
         {
             return;
-        }
-
-        foreach (var sessionId in _sessions.Keys)
-        {
-            _frameStore.Clear(sessionId);
         }
 
         _sessions.Clear();
@@ -498,7 +510,6 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
                 // best-effort during shutdown
             }
 
-            _frameStore.Clear(sessionId);
         }
 
         _sessions.Clear();
@@ -580,6 +591,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         if (result.CanReconnect is { } canReconnect)
         {
             session.CanReconnect = canReconnect;
+        }
+        if (result.CanTransmit is { } canTransmit)
+        {
+            session.CanTransmit = canTransmit;
         }
         session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
 
