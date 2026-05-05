@@ -3,7 +3,6 @@
     <Style Selector="Window">
         <Setter Property="Background" Value="{StaticResource Bg0Brush}" />
         <Setter Property="Foreground" Value="{StaticResource Text0Brush}" />
-        <Setter Property="FontFamily" Value="IBM Plex Sans, Inter, Segoe UI, Arial" />
         <Setter Property="FontSize" Value="12" />
     </Style>
 
@@ -357,6 +356,18 @@
         <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
         <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.outline-warning">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+    </Style>
+
+    <Style Selector="Button.prototype-action-button.outline-warning:pointerover:not(.active)">
+        <Setter Property="Background" Value="{StaticResource BgInteractiveHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
     </Style>
 
     <Style Selector="Button.prototype-action-button.compact">

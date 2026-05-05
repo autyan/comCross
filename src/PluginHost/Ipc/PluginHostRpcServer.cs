@@ -28,7 +28,14 @@ internal sealed class PluginHostRpcServer
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous);
 
-        await server.WaitForConnectionAsync(cancellationToken);
+        try
+        {
+            await server.WaitForConnectionAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
 
         using var reader = new StreamReader(server, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         using var writer = new StreamWriter(server, Encoding.UTF8, bufferSize: 1024, leaveOpen: true)
@@ -38,7 +45,16 @@ internal sealed class PluginHostRpcServer
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
             if (line is null)
             {
                 break;

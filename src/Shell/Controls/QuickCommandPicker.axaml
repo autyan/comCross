@@ -116,7 +116,7 @@
                              Classes="prototype-embedded-input quick-command-picker-textbox"
                              IsVisible="{Binding IsCommandSearchOpen}"
                              KeyDown="OnCommandSearchKeyDown"
-                             Watermark="{Binding L[tool.commands.search]}" />
+                             PlaceholderText="{Binding L[tool.commands.search]}" />
                     <Grid IsVisible="{Binding IsCommandSelectionVisible}"
                           ColumnDefinitions="96,12,*"
                           VerticalAlignment="Center">

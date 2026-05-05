@@ -10,7 +10,7 @@ A cross-platform embedded communication toolbox for serial, TCP, and UDP workflo
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)
-![Version](https://img.shields.io/badge/version-v0.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.6.0-blue.svg)
 
 ## Languages
 
@@ -27,9 +27,9 @@ A cross-platform embedded communication toolbox for serial, TCP, and UDP workflo
 
 ## Status
 
-ComCross is preparing the v0.5.0 release. This release focuses on packaging,
-release automation, and a clearer supported-platform baseline for broader
-pre-release validation.
+ComCross is preparing the v0.6.0 release. This release focuses on optional
+session archive history, large message viewing, cancellable message search, and
+message workflow stability on top of the v0.5 release packaging baseline.
 
 The v0.4.0+ workspace format is not compatible with old v0.3 session state.
 Existing sessions from older development builds should be recreated.
@@ -63,6 +63,9 @@ ComCross does not currently provide official macOS packages.
 - Serial, TCP, and UDP bus adapters delivered as isolated plugins.
 - Session and workload management with persisted descriptors.
 - RX/TX message stream with searchable frame attributes.
+- Optional per-session Archive history for stored message browsing.
+- Plain, Slim, and Detailed message display modes.
+- Cancellable message search and navigation over available session data.
 - UDP listener replies through plugin-provided transmit targets.
 - TCP listener accepted clients as scoped child sessions.
 - Quick commands with editable user storage and localized defaults.
@@ -151,24 +154,29 @@ When adding user-visible Shell copy, use localization keys and run the i18n guar
 
 ## Release Notes
 
-v0.4.0 focuses on architecture convergence and stable day-to-day use:
+v0.6.0 focuses on message workflow stability:
 
-- Plugin IPC is consumed through Core services instead of Shell raw host calls.
-- Serial port discovery belongs to the serial adapter plugin.
-- Plugin settings snapshots are passed to plugin UI-state queries.
-- Session persistence uses `SessionDescriptors`; old v0.3 session state is intentionally unsupported.
-- Message frames support bounded attributes: max 8 entries, key <= 32 bytes, value <= 128 bytes.
-- Multi-target send is plugin-declared and currently powers UDP listener replies.
+- Optional per-session Archive and archive history browsing.
+- Live/archive message data-source separation.
+- Plain, Slim, and Detailed display modes.
+- Cancellable search as a message-viewer navigation workflow.
+- Message font settings and improved aggregate text rendering.
+- First official static website source under `website/`.
 
-## v0.6 Direction
+See [v0.6.0 release notes](docs/release/notes/v0.6.0.md) and
+[v0.6.0 changelog](docs/release/changelog/v0.6.0.md).
 
-Planned post-v0.5 work:
+## v0.6.1 Direction
 
-- File-stream-backed message storage/display for lower memory pressure.
-- Complete removal of remaining controlled Shell static bridges.
-- Plugin diagnostics and test tooling through explicit services.
-- Protocol parsing cache and CPDL improvements.
-- Release security and permission hardening.
+Planned post-v0.6.0 work:
+
+- Search highlight and navigation hardening across all display modes.
+- Detailed row copy and stable Plain/Slim copy behavior.
+- Export reliability for live spool and archive sources.
+- Archive/spool error-state UX improvements.
+- Release documentation and website update checks.
+
+See [v0.6.1 scope](docs/roadmap/v0.6.1-scope.md).
 
 ## Runtime Baseline
 

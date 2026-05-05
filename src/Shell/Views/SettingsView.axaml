@@ -69,7 +69,7 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="400" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.appLogs.directory]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding AppLogDirectory}" Watermark="{Binding L[settings.appLogs.directory.defaultWatermark]}" />
+                        <TextBox Text="{Binding AppLogDirectory}" PlaceholderText="{Binding L[settings.appLogs.directory.defaultWatermark]}" />
                     </StackPanel>
                     <StackPanel Width="160" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.appLogs.format]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
@@ -127,11 +127,11 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="320" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.display.uiFontFamily]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding DisplayFontFamily}" />
+                        <TextBox Text="{Binding DisplayFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     <StackPanel Width="320" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.display.messageFontFamily]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding MessageFontFamily}" />
+                        <TextBox Text="{Binding MessageFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     <StackPanel Width="120" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.display.messageFontSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />

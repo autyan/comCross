@@ -8,6 +8,12 @@ namespace ComCross.Shell.Views;
 
 public partial class WorkloadPanel : BaseUserControl
 {
+    private static readonly DataFormat<string> SessionIdFormat =
+        DataFormat.CreateInProcessFormat<string>("comcross.session-id");
+
+    private static readonly DataFormat<string> SessionNameFormat =
+        DataFormat.CreateInProcessFormat<string>("comcross.session-name");
+
     public WorkloadPanel()
     {
         InitializeComponent();
@@ -41,11 +47,14 @@ public partial class WorkloadPanel : BaseUserControl
             e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
         {
             // 开始拖拽操作
-            var dragData = new DataObject();
-            dragData.Set("SessionId", session.Id);
-            dragData.Set("SessionName", session.Name);
+            var dragItem = new DataTransferItem();
+            dragItem.Set(SessionIdFormat, session.Id);
+            dragItem.Set(SessionNameFormat, session.Name);
 
-            await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Move);
+            var dragData = new DataTransfer();
+            dragData.Add(dragItem);
+
+            await DragDrop.DoDragDropAsync(e, dragData, DragDropEffects.Move);
         }
     }
 

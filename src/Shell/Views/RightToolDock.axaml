@@ -29,7 +29,7 @@
                         <StackPanel Spacing="12" Margin="12">
                             <TextBox x:Name="SendMessageBox"
                                  Text="{Binding MessageInput, Mode=TwoWay}"
-                                 Watermark="{Binding L[tool.send.message.placeholderWithShortcut]}"
+                                 PlaceholderText="{Binding L[tool.send.message.placeholderWithShortcut]}"
                                  Height="116"
                                  Classes="prototype-editor"
                                  FontFamily="{Binding Display.MessageFontFamily}"
@@ -361,7 +361,7 @@
                     </Grid>
 
                     <TextBox Text="{Binding CommandCenter.EditorName}"
-                             Watermark="{Binding L[tool.commands.name]}" />
+                             PlaceholderText="{Binding L[tool.commands.name]}" />
                     <ComboBox ItemsSource="{Binding CommandCenter.PayloadTypeOptions}"
                               SelectedItem="{Binding CommandCenter.SelectedPayloadType}">
                         <ComboBox.ItemTemplate>
@@ -371,17 +371,17 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                     <TextBox Text="{Binding CommandCenter.EditorPayload}"
-                             Watermark="{Binding L[tool.commands.payload]}"
+                             PlaceholderText="{Binding L[tool.commands.payload]}"
                              AcceptsReturn="True"
                              Height="72" />
                     <Grid ColumnDefinitions="*,84">
                         <TextBox Grid.Column="0"
                                  Text="{Binding CommandCenter.EditorEncoding}"
-                                 Watermark="{Binding L[tool.commands.encoding]}" />
+                                 PlaceholderText="{Binding L[tool.commands.encoding]}" />
                         <TextBox Grid.Column="1"
                                  Margin="8,0,0,0"
                                  Text="{Binding CommandCenter.EditorSortOrder}"
-                                 Watermark="{Binding L[tool.commands.sortOrder]}" />
+                                 PlaceholderText="{Binding L[tool.commands.sortOrder]}" />
                     </Grid>
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <CheckBox Content="{Binding L[tool.commands.appendCr]}"
@@ -390,7 +390,7 @@
                                   IsChecked="{Binding CommandCenter.EditorAppendLf}" />
                     </StackPanel>
                     <TextBox Text="{Binding CommandCenter.EditorHotkey}"
-                             Watermark="{Binding L[tool.commands.hotkey]}" />
+                             PlaceholderText="{Binding L[tool.commands.hotkey]}" />
 
                     <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                         <Button Grid.Column="0"

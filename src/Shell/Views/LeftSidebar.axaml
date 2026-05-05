@@ -309,6 +309,7 @@
 
                                         <Grid Height="40">
                                             <Button Content="{Binding L[menu.disconnect]}"
+                                                    Classes="prototype-action-button outline-warning compact"
                                                     Command="{Binding BusAdapterSelectorViewModel.DisconnectCommand}"
                                                     IsVisible="{Binding IsConnected}" />
                                             <Button Content="{Binding L[sidebar.reconnect.direct]}"

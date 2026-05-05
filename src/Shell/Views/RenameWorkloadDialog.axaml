@@ -25,7 +25,7 @@
                    FontWeight="Medium"
                    Foreground="{DynamicResource --text-0}" />
         <TextBox Name="NameTextBox"
-                 Watermark="{Binding L[dialog.renameWorkload.namePlaceholder]}"
+                 PlaceholderText="{Binding L[dialog.renameWorkload.namePlaceholder]}"
                  MaxLength="50"
                  Text="{Binding WorkloadName, Mode=TwoWay}"
                  SelectionStart="0"
