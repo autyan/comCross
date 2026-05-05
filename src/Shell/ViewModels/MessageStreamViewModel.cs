@@ -52,6 +52,7 @@ public sealed class MessageStreamViewModel : BaseViewModel
     private int _aggregateSelectionLength;
     private int _aggregateSelectionVersion;
     private int _selectedMessageNavigationVersion;
+    private int _returnToLatestNavigationVersion;
     private bool _applyingSessionDisplayOptions;
     private bool _isMetricsBarVisible;
     private bool _isSearchRunning;
@@ -321,6 +322,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
 
     public int SelectedMessageNavigationVersion => _selectedMessageNavigationVersion;
 
+    public int ReturnToLatestNavigationVersion => _returnToLatestNavigationVersion;
+
     public int SearchMatchCount => _searchMatches.Count;
 
     public int CurrentSearchMatchOrdinal => _selectedSearchMatchIndex >= 0 ? _selectedSearchMatchIndex + 1 : 0;
@@ -439,6 +442,8 @@ public sealed class MessageStreamViewModel : BaseViewModel
         IsReturnToLatestVisible = false;
         _preSearchWindowSnapshot = null;
         LoadMessages();
+        _returnToLatestNavigationVersion++;
+        OnPropertyChanged(nameof(ReturnToLatestNavigationVersion));
     }
 
     public async Task StartSearchAsync()

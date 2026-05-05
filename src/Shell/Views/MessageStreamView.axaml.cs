@@ -96,6 +96,13 @@ public partial class MessageStreamView : BaseUserControl
             return;
         }
 
+        if (string.Equals(e.PropertyName, nameof(MessageStreamViewModel.ReturnToLatestNavigationVersion), StringComparison.Ordinal)
+            && sender is MessageStreamViewModel latestVm)
+        {
+            ScrollToLatestWindow(latestVm);
+            return;
+        }
+
         if (!string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageItem), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(MessageStreamViewModel.SelectedMessageNavigationVersion), StringComparison.Ordinal))
         {
@@ -175,6 +182,65 @@ public partial class MessageStreamView : BaseUserControl
         {
             MessageList.ScrollIntoView(latest);
         }
+
+        if (vm.IsAggregateTextMode)
+        {
+            ScrollAggregateToEnd(vm);
+        }
+    }
+
+    private void ScrollToLatestWindow(MessageStreamViewModel vm)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm))
+            {
+                return;
+            }
+
+            if (vm.IsAggregateTextMode)
+            {
+                ScrollAggregateToEnd(vm);
+                return;
+            }
+
+            if (vm.MessageItems.LastOrDefault() is { } latest)
+            {
+                MessageList.ScrollIntoView(latest);
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void ScrollAggregateToEnd(MessageStreamViewModel vm)
+    {
+        if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+        {
+            return;
+        }
+
+        AggregateMessageTextBox.UpdateLayout();
+        var textLength = AggregateMessageTextBox.Text?.Length ?? 0;
+        AggregateMessageTextBox.CaretIndex = textLength;
+        AggregateMessageTextBox.SelectionStart = textLength;
+        AggregateMessageTextBox.SelectionEnd = textLength;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isDetached || !ReferenceEquals(DataContext, vm) || !vm.IsAggregateTextMode)
+            {
+                return;
+            }
+
+            AggregateMessageTextBox.UpdateLayout();
+            var scrollViewer = AggregateMessageTextBox.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+            if (scrollViewer is null)
+            {
+                return;
+            }
+
+            var targetY = Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetY);
+        }, DispatcherPriority.Render);
     }
 
     private void ScrollToSelectedMessage(MessageStreamViewModel vm)
