@@ -44,6 +44,11 @@ Final release notes should include only:
 - Important compatibility or support notes
 - Links to the full changelog and supporting docs
 
+GitHub Release notes are rendered outside the repository file tree. Links from
+release notes to repository documents must therefore use absolute GitHub `blob`
+URLs pinned to the published release tag. Do not use Markdown paths such as
+`../changelog/v0.6.0.md` in files that will be passed to `release_notes_path`.
+
 Do not make support, compatibility, signing, or security claims in a release
 note unless the claim is also true in the code, package scripts, and release
 verification evidence.

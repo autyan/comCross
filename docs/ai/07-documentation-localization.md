@@ -77,6 +77,10 @@ accurate.
   `docs/release/changelog/v<version>.md`.
 - Final release notes must link to the matching changelog and supporting docs
   instead of duplicating full change history.
+- GitHub Release notes are rendered from the release page, not from the
+  `docs/release/notes/` directory. Repository document links inside release
+  notes must be absolute GitHub `blob` URLs pinned to the published release tag,
+  not relative Markdown paths.
 - Localized documents must not add release, signing, support, compatibility, or
   security claims beyond the authoritative English release notes, changelog, and
   specifications.
