@@ -90,6 +90,7 @@ public sealed class SessionDescriptor
     public PayloadRenderMode PayloadRenderMode { get; set; } = PayloadRenderMode.String;
     public MessageDisplayDensity DisplayDensity { get; set; } = MessageDisplayDensity.Detailed;
     public bool? CanReconnect { get; set; }
+    public bool? CanTransmit { get; set; }
     public SessionInitializationState InitializationState { get; set; } = SessionInitializationState.Pending;
     public string? InitializationError { get; set; }
     public string? LastInitializedPluginVersion { get; set; }

@@ -26,6 +26,7 @@ public sealed class Session : INotifyPropertyChanged
     private MessageDisplayDensity _displayDensity = MessageDisplayDensity.Detailed;
     private string? _parentSessionId;
     private bool _canReconnect = true;
+    private bool _canTransmit = true;
     private SessionInitializationState _initializationState = SessionInitializationState.Ready;
     private string? _initializationError;
     private IReadOnlyList<string> _managedResourceKinds = Array.Empty<string>();
@@ -122,6 +123,15 @@ public sealed class Session : INotifyPropertyChanged
     {
         get => _canReconnect;
         set => SetField(ref _canReconnect, value);
+    }
+
+    /// <summary>
+    /// Whether the session itself can accept outbound payloads.
+    /// </summary>
+    public bool CanTransmit
+    {
+        get => _canTransmit;
+        set => SetField(ref _canTransmit, value);
     }
 
     public SessionInitializationState InitializationState

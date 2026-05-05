@@ -27,6 +27,11 @@ public sealed class SettingsService
 
     public event EventHandler<AppSettings>? SettingsChanged;
 
+    public void NotifyChanged()
+    {
+        SettingsChanged?.Invoke(this, _current);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         var settings = await _configService.LoadAppSettingsAsync(cancellationToken);
@@ -43,7 +48,7 @@ public sealed class SettingsService
     {
         await _configService.SaveAppSettingsAsync(_current, cancellationToken);
         await _database.InsertConfigHistoryAsync(JsonSerializer.Serialize(_current), cancellationToken);
-        SettingsChanged?.Invoke(this, _current);
+        NotifyChanged();
     }
 
     private void EnsureDefaults()
@@ -56,6 +61,21 @@ public sealed class SettingsService
         if (string.IsNullOrWhiteSpace(_current.Export.DefaultDirectory))
         {
             _current.Export.DefaultDirectory = _paths.ExportDirectory;
+        }
+
+        if (string.IsNullOrWhiteSpace(_current.Display.UiFontFamily))
+        {
+            _current.Display.UiFontFamily = DisplaySettings.GetDefaultUiFontFamily();
+        }
+
+        if (string.IsNullOrWhiteSpace(_current.Display.FontFamily))
+        {
+            _current.Display.FontFamily = DisplaySettings.GetDefaultMessageFontFamily();
+        }
+
+        if (_current.Display.FontSize <= 0)
+        {
+            _current.Display.FontSize = 13;
         }
 
         Directory.CreateDirectory(_current.AppLogs.Directory);

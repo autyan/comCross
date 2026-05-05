@@ -678,6 +678,7 @@ public sealed class NetworkBusAdapterPlugin :
                 DisplayTitle: "TCP Listener",
                 DisplaySubtitle: subtitle,
                 SessionIcon: "ServerIcon",
+                CanTransmit: false,
                 ManagedResourceKinds: new[] { PluginResourceKinds.Pending });
         }
         catch (Exception ex)
@@ -1614,8 +1615,11 @@ public sealed class NetworkBusAdapterPlugin :
         return hasParent
             ? new PluginSessionMetadataPatch(
                 DisplaySubtitle: BuildStoredEndpointSubtitle(parameters),
-                CanReconnect: false)
-            : new PluginSessionMetadataPatch(DisplaySubtitle: BuildListenerSubtitle(parameters));
+                CanReconnect: false,
+                CanTransmit: true)
+            : new PluginSessionMetadataPatch(
+                DisplaySubtitle: BuildListenerSubtitle(parameters),
+                CanTransmit: false);
     }
 
     private static PluginSessionMetadataPatch? BuildUdpListenerSessionPatch(JsonElement parameters)

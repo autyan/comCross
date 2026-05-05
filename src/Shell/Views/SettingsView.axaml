@@ -101,32 +101,12 @@
                 <TextBlock Text="{Binding L[settings.section.connection]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Width="180" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.connection.defaultBaudRate]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="300" Maximum="2000000" Value="{Binding ConnectionDefaultBaudRate}" HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                    <StackPanel Width="160" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.connection.defaultEncoding]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding ConnectionDefaultEncoding}" />
-                    </StackPanel>
-                    <StackPanel Width="180" Margin="0,0,12,8">
                         <TextBlock Height="16" Margin="0,0,0,4" />
                         <CheckBox Content="{Binding L[settings.connection.defaultAddCr]}" IsChecked="{Binding ConnectionDefaultAddCr}" />
                     </StackPanel>
                     <StackPanel Width="180" Margin="0,0,12,8">
                         <TextBlock Height="16" Margin="0,0,0,4" />
                         <CheckBox Content="{Binding L[settings.connection.defaultAddLf]}" IsChecked="{Binding ConnectionDefaultAddLf}" />
-                    </StackPanel>
-                    <StackPanel Width="280" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.connection.existingSessionBehavior]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <ComboBox ItemsSource="{Binding ConnectionBehaviorOptions}" 
-                                  SelectedItem="{Binding SelectedConnectionBehavior, Mode=TwoWay}" 
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Label}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
                     </StackPanel>
                 </WrapPanel>
             </StackPanel>
@@ -135,10 +115,6 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="{Binding L[settings.section.display]}" FontSize="13" FontWeight="Bold" Foreground="#E6EDF3" />
                 <WrapPanel Orientation="Horizontal">
-                    <StackPanel Width="180" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.display.maxMessages]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="100" Maximum="200000" Value="{Binding DisplayMaxMessages}" HorizontalAlignment="Stretch" />
-                    </StackPanel>
                     <StackPanel Width="200" Margin="0,0,12,8">
                         <TextBlock Text="{Binding L[settings.display.timestampFormat]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
                         <TextBox Text="{Binding DisplayTimestampFormat}" />
@@ -149,13 +125,17 @@
                     </StackPanel>
                 </WrapPanel>
                 <WrapPanel Orientation="Horizontal">
-                    <StackPanel Width="200" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.display.fontFamily]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                    <StackPanel Width="320" Margin="0,0,12,8">
+                        <TextBlock Text="{Binding L[settings.display.uiFontFamily]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
                         <TextBox Text="{Binding DisplayFontFamily}" />
                     </StackPanel>
+                    <StackPanel Width="320" Margin="0,0,12,8">
+                        <TextBlock Text="{Binding L[settings.display.messageFontFamily]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                        <TextBox Text="{Binding MessageFontFamily}" />
+                    </StackPanel>
                     <StackPanel Width="120" Margin="0,0,12,8">
-                        <TextBlock Text="{Binding L[settings.display.fontSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
-                        <NumericUpDown Minimum="8" Maximum="24" Value="{Binding DisplayFontSize}" HorizontalAlignment="Stretch" />
+                        <TextBlock Text="{Binding L[settings.display.messageFontSize]}" FontSize="11" Foreground="#B7C1CC" Margin="0,0,0,4" />
+                        <NumericUpDown Minimum="8" Maximum="24" Value="{Binding MessageFontSize}" HorizontalAlignment="Stretch" />
                     </StackPanel>
                 </WrapPanel>
             </StackPanel>

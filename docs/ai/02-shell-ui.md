@@ -40,6 +40,7 @@
 - Icon+text buttons must use a fixed-size icon slot and a fixed text line box instead of relying on `StackPanel` baseline behavior or ad hoc per-button transforms. Icons in these buttons should use explicit geometry bounds inside the slot, not unknown cropped geometry stretched to fit. Hover/pressed feedback for prominent floating buttons should use border, shadow, or color changes; do not use opacity changes that make the control look disabled.
 - Composite input controls must have one visual frame. If an outer container owns the background, border, radius, hover, or focus state, the inner `TextBox` must be transparent and borderless, including focused state, so Avalonia's default input chrome does not create a nested box.
 - Popup-backed pickers must treat the popup as a separate interaction layer. Do not decide whether a popup click is "inside" by walking ancestors from the parent control, because `Popup` content lives under a separate popup root. Prefer `Popup.IsLightDismissEnabled` for outside-click dismissal, handle item actions inside the popup explicitly, and synchronize the ViewModel search/open state from the popup close event.
+- Interface font and message font are separate settings. Interface font controls Shell chrome and uses fixed design-token sizes for now. Message font controls message viewer and send-editor surfaces and may expose both family and size. Font family settings use comma-separated fallback lists in text fields; do not add OS font enumeration/dropdowns unless a later scope explicitly asks for it.
 
 ## Message Viewer
 

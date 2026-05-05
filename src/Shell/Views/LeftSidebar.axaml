@@ -208,6 +208,7 @@
                                     Background="{StaticResource Bg1Brush}"
                                     BorderBrush="{StaticResource BorderSubtleBrush}"
                                     BorderThickness="0,0,0,1"
+                                    Height="172"
                                     Padding="16,12">
                                 <StackPanel Spacing="8">
                                     <Border Background="{StaticResource BgCardBrush}"
@@ -306,13 +307,16 @@
                                             </TextBlock>
                                         </StackPanel>
 
-                                        <Button Content="{Binding L[menu.disconnect]}"
-                                                Command="{Binding BusAdapterSelectorViewModel.DisconnectCommand}"
-                                                IsVisible="{Binding IsConnected}" />
-                                        <Button Content="{Binding L[sidebar.reconnect.direct]}"
-                                                Classes="prototype-action-button primary compact"
-                                                Command="{Binding DirectReconnectCommand}"
-                                                IsVisible="{Binding CanReconnectActiveSession}" />
+                                        <Grid Height="40">
+                                            <Button Content="{Binding L[menu.disconnect]}"
+                                                    Command="{Binding BusAdapterSelectorViewModel.DisconnectCommand}"
+                                                    IsVisible="{Binding IsConnected}" />
+                                            <Button Content="{Binding L[sidebar.reconnect.direct]}"
+                                                    Classes="prototype-action-button primary compact"
+                                                    Command="{Binding DirectReconnectCommand}"
+                                                    IsEnabled="{Binding CanReconnectActiveSession}"
+                                                    IsVisible="{Binding !IsConnected}" />
+                                        </Grid>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>

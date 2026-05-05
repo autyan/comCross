@@ -361,6 +361,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             DisplaySubtitle = descriptor.DisplaySubtitle,
             DisplayIcon = descriptor.DisplayIcon,
             CanReconnect = descriptor.CanReconnect ?? true,
+            CanTransmit = descriptor.CanTransmit ?? true,
             InitializationState = descriptor.InitializationState,
             InitializationError = descriptor.InitializationError,
             ArchiveState = ResolveArchiveState(descriptor),
@@ -395,6 +396,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.DisplayIcon = session.DisplayIcon;
             state.Session.CanReconnect = session.CanReconnect;
+            state.Session.CanTransmit = session.CanTransmit;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
             state.Session.ArchiveState = session.ArchiveState;
@@ -432,6 +434,7 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
             state.Session.DisplaySubtitle = session.DisplaySubtitle;
             state.Session.DisplayIcon = session.DisplayIcon;
             state.Session.CanReconnect = session.CanReconnect;
+            state.Session.CanTransmit = session.CanTransmit;
             state.Session.InitializationState = session.InitializationState;
             state.Session.InitializationError = session.InitializationError;
             state.Session.ArchiveState = session.ArchiveState;
@@ -588,6 +591,10 @@ public sealed class DeviceService : IDisposable, IAsyncDisposable
         if (result.CanReconnect is { } canReconnect)
         {
             session.CanReconnect = canReconnect;
+        }
+        if (result.CanTransmit is { } canTransmit)
+        {
+            session.CanTransmit = canTransmit;
         }
         session.ManagedResourceKinds = result.ManagedResourceKinds ?? Array.Empty<string>();
 
