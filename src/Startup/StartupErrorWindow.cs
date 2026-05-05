@@ -19,6 +19,7 @@ internal sealed class StartupErrorWindow : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         CanResize = false;
+        Icon = new WindowIcon("app-icon.ico");
 
         var titleBlock = new TextBlock
         {

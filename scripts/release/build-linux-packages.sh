@@ -142,7 +142,10 @@ exec /opt/comcross/ComCross.Startup "$@"
 EOF
   chmod +x "${staging_dir}/usr/bin/comcross"
 
-  sed 's#^Exec=.*#Exec=/opt/comcross/ComCross.Startup#; s#^StartupWMClass=.*#StartupWMClass=ComCross.Startup#' \
+  # Startup launches Shell, but the visible window is still owned by Shell.
+  # Keep StartupWMClass aligned with Shell so desktop shells attach the icon to
+  # the running window instead of showing a generic or duplicate app icon.
+  sed 's#^Exec=.*#Exec=/opt/comcross/ComCross.Startup#' \
     src/Assets/Resources/comcross.desktop \
     > "${staging_dir}/usr/share/applications/comcross.desktop"
   cp src/Assets/Resources/Icons/app-icon-256.png \

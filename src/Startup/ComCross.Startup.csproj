@@ -13,8 +13,17 @@
     <FileVersion>0.4.0.0</FileVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <ApplicationIcon>..\Assets\Resources\Icons\app-icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <Content Include="..\Assets\Resources\Icons\app-icon.ico" Link="app-icon.ico" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="ComCross.Instance.json" CopyToOutputDirectory="PreserveNewest" />
+    <AvaloniaResource Include="..\Assets\Resources\Icons\app-icon.ico" Link="app-icon.ico" />
   </ItemGroup>
 
   <ItemGroup>

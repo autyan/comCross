@@ -93,8 +93,11 @@ mkdir -p "${staging_dir}/usr/share/icons/hicolor/256x256/apps"
 # Copy application files
 cp -r "${source_dir}"/* "${staging_dir}${prefix}/"
 
-# Copy desktop file and icon
-cp "src/Assets/Resources/comcross.desktop" "${staging_dir}/usr/share/applications/"
+# Copy desktop file and icon. Startup launches Shell, but the visible window is
+# still owned by Shell, so StartupWMClass must stay aligned with ComCross.Shell.
+sed "s#^Exec=.*#Exec=${prefix}/ComCross.Startup#" \
+  "src/Assets/Resources/comcross.desktop" \
+  > "${staging_dir}/usr/share/applications/comcross.desktop"
 cp "src/Assets/Resources/Icons/app-icon-256.png" "${staging_dir}/usr/share/icons/hicolor/256x256/apps/comcross.png"
 
 fpm -s dir -t deb -n comcross -v "${version}" \
