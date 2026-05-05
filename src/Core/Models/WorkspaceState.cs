@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ComCross.Shared.Models;
 
 namespace ComCross.Core.Models;
@@ -81,8 +82,15 @@ public sealed class SessionDescriptor
     public string? DisplayTitle { get; set; }
     public string? DisplaySubtitle { get; set; }
     public string? DisplayIcon { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool EnableDatabaseStorage { get; set; }
+    public SessionArchiveState ArchiveState { get; set; } = SessionArchiveState.Disabled;
+    public string? ArchiveError { get; set; }
+    public PayloadRenderMode PayloadRenderMode { get; set; } = PayloadRenderMode.String;
+    public MessageDisplayDensity DisplayDensity { get; set; } = MessageDisplayDensity.Detailed;
     public bool? CanReconnect { get; set; }
+    public bool? CanTransmit { get; set; }
     public SessionInitializationState InitializationState { get; set; } = SessionInitializationState.Pending;
     public string? InitializationError { get; set; }
     public string? LastInitializedPluginVersion { get; set; }

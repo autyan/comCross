@@ -44,8 +44,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new AppDatabase(sp.GetRequiredService<ComCrossPathService>()));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<NotificationService>();
+        services.AddSingleton<IStorageHealthService, StorageHealthService>();
+        services.AddSingleton<IStoragePolicyService, StoragePolicyService>();
+        services.AddSingleton<IStorageCalibrationService, StorageCalibrationService>();
         services.AddSingleton<AppLogService>();
-        services.AddSingleton<LogStorageService>();
         
         services.AddSingleton<MessageStreamService>();
         services.AddSingleton<IMessageStreamService>(sp => sp.GetRequiredService<MessageStreamService>());
@@ -96,7 +98,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new SharedMemoryConfig());
         services.AddSingleton<ISharedMemoryMapFactory, SharedMemoryMapFactory>();
         services.AddSingleton<SharedMemoryManager>();
-        services.AddSingleton<IFrameStore, InMemoryFrameStore>();
+        services.AddSingleton<SessionSpoolFrameStore>();
+        services.AddSingleton<SessionArchiveStateTracker>();
+        services.AddSingleton<ISessionArchiveStore, SessionArchiveStore>();
+        services.AddSingleton<SessionArchiveWriter>();
+        services.AddSingleton<IFrameStore>(sp => new ArchivingFrameStore(
+            sp.GetRequiredService<SessionSpoolFrameStore>(),
+            sp.GetRequiredService<SessionArchiveWriter>()));
+        services.AddSingleton<IMessageFrameQueryService, MessageFrameQueryService>();
+        services.AddSingleton<IMessageFrameSearchService, MessageFrameSearchService>();
         services.AddSingleton<SharedMemoryIngestService>();
         services.AddSingleton<SharedMemorySessionService>();
         services.AddSingleton<FrameStoreMessageStreamPumpService>();

@@ -605,7 +605,8 @@ public sealed class LeftSidebarViewModel : BaseViewModel
         target.CanReconnect = source.CanReconnect;
         target.InitializationState = source.InitializationState;
         target.InitializationError = source.InitializationError;
-        target.EnableDatabaseStorage = source.EnableDatabaseStorage;
+        target.ArchiveState = source.ArchiveState;
+        target.ArchiveError = source.ArchiveError;
         target.ParentSessionId = source.ParentSessionId;
         target.ManagedResourceKinds = source.ManagedResourceKinds;
         target.Status = source.Status;

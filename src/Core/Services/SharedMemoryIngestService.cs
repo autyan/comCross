@@ -31,6 +31,7 @@ public sealed class SharedMemoryIngestService : IDisposable
     private readonly IEventBus _eventBus;
 
     private readonly ConcurrentDictionary<string, SessionSegment> _segments = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, object> _segmentGates = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
     private int _started;
@@ -55,6 +56,7 @@ public sealed class SharedMemoryIngestService : IDisposable
         }
 
         _segments[sessionId] = segment;
+        _segmentGates.GetOrAdd(sessionId, _ => new object());
     }
 
     public void Unregister(string sessionId)
@@ -65,6 +67,27 @@ public sealed class SharedMemoryIngestService : IDisposable
         }
 
         _segments.TryRemove(sessionId, out _);
+        _segmentGates.TryRemove(sessionId, out _);
+    }
+
+    public void Drain(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)
+            || !_segments.TryGetValue(sessionId, out var segment)
+            || !_segmentGates.TryGetValue(sessionId, out var gate))
+        {
+            return;
+        }
+
+        lock (gate)
+        {
+            if (!_segments.TryGetValue(sessionId, out var current) || !ReferenceEquals(current, segment))
+            {
+                return;
+            }
+
+            DrainSegment(sessionId, segment, maxFrames: null);
+        }
     }
 
     private void Start()
@@ -93,22 +116,19 @@ public sealed class SharedMemoryIngestService : IDisposable
                     var sessionId = kvp.Key;
                     var segment = kvp.Value;
 
-                    var drained = 0;
-                    while (drained < MaxDrainPerSessionPerRound && segment.TryReadFrameRecord(out var record))
+                    if (!_segmentGates.TryGetValue(sessionId, out var gate))
                     {
-                        drained++;
-                        hadActivity = true;
+                        continue;
+                    }
 
-                        _frameStore.Append(
-                            sessionId,
-                            record.TimestampUtc,
-                            FrameDirection.Rx,
-                            record.RawData,
-                            MessageFormat.Hex,
-                            source: "shm-rx",
-                            attributes: record.Attributes);
+                    lock (gate)
+                    {
+                        if (!_segments.TryGetValue(sessionId, out var current) || !ReferenceEquals(current, segment))
+                        {
+                            continue;
+                        }
 
-                        _eventBus.Publish(new DataReceivedEvent(sessionId, record.RawData, record.RawData.Length));
+                        hadActivity |= DrainSegment(sessionId, segment, MaxDrainPerSessionPerRound) > 0;
                     }
                 }
 
@@ -145,6 +165,27 @@ public sealed class SharedMemoryIngestService : IDisposable
                 }
             }
         }
+    }
+
+    private int DrainSegment(string sessionId, SessionSegment segment, int? maxFrames)
+    {
+        var drained = 0;
+        while ((!maxFrames.HasValue || drained < maxFrames.Value) && segment.TryReadFrameRecord(out var record))
+        {
+            drained++;
+            _frameStore.Append(
+                sessionId,
+                record.TimestampUtc,
+                FrameDirection.Rx,
+                record.RawData,
+                MessageFormat.Hex,
+                source: "shm-rx",
+                attributes: record.Attributes);
+
+            _eventBus.Publish(new DataReceivedEvent(sessionId, record.RawData, record.RawData.Length));
+        }
+
+        return drained;
     }
 
     public void Dispose()

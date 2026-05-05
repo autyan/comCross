@@ -12,7 +12,7 @@ namespace ComCross.Tests.Core;
 public sealed class DeviceServiceLifecycleTests
 {
     [Fact]
-    public async Task DisposeAsync_ClearsSessionsAndFrameStore()
+    public async Task DisposeAsync_ClearsRuntimeSessionsButKeepsFrameStore()
     {
         await using var harness = await TestHarness.CreateAsync();
 
@@ -31,11 +31,8 @@ public sealed class DeviceServiceLifecycleTests
 
         Assert.Null(deviceService.GetSession(sessionId));
         Assert.Empty(deviceService.GetAllSessions());
-        Assert.Empty(frameStore.ReadAfter(sessionId, 0, 10, out _));
-
-        var window = frameStore.GetWindowInfo(sessionId);
-        Assert.Equal(0, window.LastFrameId);
-        Assert.Equal(0, window.DroppedFrames);
+        Assert.NotEmpty(frameStore.ReadAfter(sessionId, 0, 10, out _));
+        Assert.Equal(1, frameStore.GetWindowInfo(sessionId).LastFrameId);
     }
 
     [Fact]

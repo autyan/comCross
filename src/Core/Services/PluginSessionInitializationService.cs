@@ -170,6 +170,11 @@ public sealed class PluginSessionInitializationService
             session.CanReconnect = patch.CanReconnect.Value;
         }
 
+        if (patch.CanTransmit is not null)
+        {
+            session.CanTransmit = patch.CanTransmit.Value;
+        }
+
         if (patch.ParentSessionId is not null)
         {
             session.ParentSessionId = patch.ParentSessionId;
@@ -200,6 +205,7 @@ public sealed class PluginSessionInitializationService
             descriptor.DisplaySubtitle = session.DisplaySubtitle;
             descriptor.DisplayIcon = session.DisplayIcon;
             descriptor.CanReconnect = session.CanReconnect;
+            descriptor.CanTransmit = session.CanTransmit;
             descriptor.InitializationState = session.InitializationState;
             descriptor.InitializationError = session.InitializationError;
             descriptor.LastInitializedPluginVersion = pluginVersion;

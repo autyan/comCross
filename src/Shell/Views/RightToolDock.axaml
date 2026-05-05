@@ -32,8 +32,10 @@
                                  Watermark="{Binding L[tool.send.message.placeholderWithShortcut]}"
                                  Height="116"
                                  Classes="prototype-editor"
+                                 FontFamily="{Binding Display.MessageFontFamily}"
+                                 FontSize="{Binding Display.MessageFontSize}"
                                  KeyDown="OnSendMessageBoxKeyDown"
-                                 IsEnabled="{Binding IsConnected}" />
+                                 IsEnabled="{Binding CanUseSendTool}" />
 
                             <StackPanel Spacing="6"
                                         IsVisible="{Binding IsTransmitTargetSelectorVisible}">
@@ -45,7 +47,7 @@
                                           SelectedItem="{Binding SelectedTransmitTarget}"
                                           PlaceholderText="{Binding L[tool.send.target.placeholder]}"
                                           HorizontalAlignment="Stretch"
-                                          IsEnabled="{Binding IsConnected}">
+                                          IsEnabled="{Binding CanUseSendTool}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid RowDefinitions="Auto,Auto">
@@ -72,42 +74,56 @@
                                        Foreground="{StaticResource ErrorBrush}"
                                        TextWrapping="Wrap" />
 
-                            <Grid ColumnDefinitions="64,*,*">
-                                <Border Grid.Column="0"
-                                    Height="34"
-                                    Width="64"
-                                    CornerRadius="{StaticResource RadiusSm}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                    BorderThickness="1"
-                                    Background="{StaticResource Bg0Brush}"
-                                    Padding="10,6"
-                                    Cursor="Hand"
-                                    PointerPressed="OnToggleSendMode">
-                                <TextBlock Text="{Binding SendModeLabel}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           Foreground="{StaticResource Text0Brush}" />
+                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="174,96">
+                                <Border Grid.Row="0"
+                                        Grid.Column="0"
+                                        Width="174"
+                                        Margin="0,0,0,8"
+                                        Background="Transparent">
+                                    <controls:SwitchCheckBox Label="{Binding SendModeLabel}"
+                                                             IsChecked="{Binding IsSendHexMode}"
+                                                             AutoToggle="False"
+                                                             ToolTip.Tip="{Binding SendModeLabel}"
+                                                             ToggleRequested="OnSendModeToggleRequested"
+                                                             IsEnabled="{Binding CanUseSendTool}"
+                                                             HorizontalAlignment="Left" />
                                 </Border>
-                                <CheckBox Grid.Column="1"
-                                      x:Name="ClearAfterSendCheckBox"
-                                      Classes="prototype-check"
-                                      Content="{Binding L[tool.send.clearAfterSend]}"
-                                      Margin="10,0,0,0"
-                                      IsChecked="{Binding ClearAfterSend}" />
-                                <CheckBox Grid.Column="2"
-                                      x:Name="AddCrCheckBox"
-                                      Classes="prototype-check"
-                                      Content="{Binding L[tool.send.addcr]}"
-                                      Margin="8,0,0,0"
-                                      IsChecked="{Binding Settings.ConnectionDefaultAddCr}" />
+                                <Border Grid.Row="0"
+                                        Grid.Column="1"
+                                        Width="96"
+                                        Margin="0,0,0,8"
+                                        Background="Transparent">
+                                    <controls:SwitchCheckBox x:Name="ClearAfterSendCheckBox"
+                                                             Label="{Binding L[tool.send.clear]}"
+                                                             IsChecked="{Binding ClearAfterSend}"
+                                                             ToolTip.Tip="{Binding L[tool.send.clearAfterSend]}"
+                                                             IsEnabled="{Binding CanUseSendTool}"
+                                                             HorizontalAlignment="Left" />
+                                </Border>
+                                <Border Grid.Row="1"
+                                        Grid.Column="0"
+                                        Width="174"
+                                        Margin="0"
+                                        Background="Transparent">
+                                    <controls:SwitchCheckBox x:Name="AddCrCheckBox"
+                                                             Label="{Binding L[tool.send.cr]}"
+                                                             IsChecked="{Binding Settings.ConnectionDefaultAddCr}"
+                                                             ToolTip.Tip="{Binding L[tool.send.addcr]}"
+                                                             IsEnabled="{Binding CanUseSendTool}"
+                                                             HorizontalAlignment="Left" />
+                                </Border>
+                                <Border Grid.Row="1"
+                                        Grid.Column="1"
+                                        Width="96"
+                                        Background="Transparent">
+                                    <controls:SwitchCheckBox x:Name="AddLfCheckBox"
+                                                             Label="{Binding L[tool.send.lf]}"
+                                                             IsChecked="{Binding Settings.ConnectionDefaultAddLf}"
+                                                             ToolTip.Tip="{Binding L[tool.send.addlf]}"
+                                                             IsEnabled="{Binding CanUseSendTool}"
+                                                             HorizontalAlignment="Left" />
+                                </Border>
                             </Grid>
-
-                            <CheckBox x:Name="AddLfCheckBox"
-                                  Classes="prototype-check"
-                                  Content="{Binding L[tool.send.addlf]}"
-                                  IsChecked="{Binding Settings.ConnectionDefaultAddLf}" />
 
                             <Grid ColumnDefinitions="*,36">
                                 <Button Grid.Column="0"
@@ -219,6 +235,7 @@
                                                         Width="32"
                                                         Height="32"
                                                         Padding="0"
+                                                        IsEnabled="{Binding CanSend}"
                                                         Click="OnQuickCommandClick">
                                                     <Path Data="{StaticResource SendIcon}"
                                                           Width="14"

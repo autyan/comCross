@@ -219,6 +219,8 @@ public sealed class WorkspaceStateFlowTests
         descriptor.DisplayTitle = "TCP Client";
         descriptor.DisplaySubtitle = "127.0.0.1:58004 -> 127.0.0.1:5020";
         descriptor.CanReconnect = false;
+        descriptor.PayloadRenderMode = PayloadRenderMode.Hex;
+        descriptor.DisplayDensity = MessageDisplayDensity.Slim;
 
         deviceService.RestoreSession(descriptor);
         await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("display-session"));
@@ -228,6 +230,46 @@ public sealed class WorkspaceStateFlowTests
         Assert.Equal("TCP Client", persisted.DisplayTitle);
         Assert.Equal("127.0.0.1:58004 -> 127.0.0.1:5020", persisted.DisplaySubtitle);
         Assert.False(persisted.CanReconnect);
+        Assert.Equal(PayloadRenderMode.Hex, persisted.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Slim, persisted.DisplayDensity);
+    }
+
+    [Fact]
+    public async Task SetSessionDisplayOptionsAsync_PersistsSessionDisplayState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+
+        await workspaceService.LoadStateAsync();
+
+        var descriptor = CreateDescriptor("session-display-options");
+        deviceService.RestoreSession(descriptor);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), deviceService.GetSession("session-display-options"));
+
+        await workspaceService.SetSessionDisplayOptionsAsync(
+            "session-display-options",
+            PayloadRenderMode.Hex,
+            MessageDisplayDensity.Plain);
+
+        var session = deviceService.GetSession("session-display-options");
+        Assert.Equal(PayloadRenderMode.Hex, session!.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Plain, session.DisplayDensity);
+
+        var state = await workspaceService.LoadStateAsync();
+        var persisted = Assert.Single(state.SessionDescriptors, d => d.Id == "session-display-options");
+        Assert.Equal(PayloadRenderMode.Hex, persisted.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Plain, persisted.DisplayDensity);
+    }
+
+    [Fact]
+    public void SessionDescriptor_DisplayStateDefaults_AreCompatibleReadFallback()
+    {
+        var descriptor = new SessionDescriptor();
+
+        Assert.Equal(PayloadRenderMode.String, descriptor.PayloadRenderMode);
+        Assert.Equal(MessageDisplayDensity.Detailed, descriptor.DisplayDensity);
     }
 
     [Fact]
@@ -341,6 +383,76 @@ public sealed class WorkspaceStateFlowTests
         var snapshot = await storage.LoadAsync(descriptor.PluginId!, descriptor.Id);
         Assert.Equal(0, snapshot.SchemaVersion);
         Assert.Empty(snapshot.Values);
+    }
+
+    [Fact]
+    public async Task SetSessionArchiveStateAsync_PersistsSessionArchiveState()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+
+        deviceService.RestoreSession(CreateDescriptor("session-archive"));
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, "session-archive");
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+
+        await workspaceService.SetSessionArchiveStateAsync("session-archive", SessionArchiveState.Enabled);
+
+        var session = deviceService.GetSession("session-archive");
+        Assert.NotNull(session);
+        Assert.Equal(SessionArchiveState.Enabled, session!.ArchiveState);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        var descriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == "session-archive");
+        Assert.Equal(SessionArchiveState.Enabled, descriptor.ArchiveState);
+
+        await workspaceService.SetSessionArchiveStateAsync("session-archive", SessionArchiveState.Stopped);
+
+        persistedState = await configService.LoadWorkspaceStateAsync();
+        descriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == "session-archive");
+        Assert.Equal(SessionArchiveState.Stopped, descriptor.ArchiveState);
+        Assert.Null(descriptor.ArchiveError);
+    }
+
+    [Fact]
+    public async Task DeleteSessionArchiveDataAsync_RemovesArchiveAndDisablesSessionArchive()
+    {
+        await using var harness = await TestHarness.CreateAsync();
+
+        var workspaceService = harness.Services.GetRequiredService<WorkspaceService>();
+        var workloadService = harness.Services.GetRequiredService<WorkloadService>();
+        var deviceService = harness.Services.GetRequiredService<DeviceService>();
+        var archiveStore = harness.Services.GetRequiredService<ISessionArchiveStore>();
+        var configService = harness.Services.GetRequiredService<ConfigService>();
+
+        await workspaceService.LoadStateAsync();
+        var activeWorkloadId = await workloadService.GetActiveWorkloadIdAsync();
+        var descriptor = CreateDescriptor("session-archive-delete");
+        descriptor.ArchiveState = SessionArchiveState.Stopped;
+        deviceService.RestoreSession(descriptor);
+        await workloadService.AddSessionToWorkloadAsync(activeWorkloadId, descriptor.Id);
+        await workspaceService.SaveCurrentStateAsync(deviceService.GetAllSessions(), null);
+        archiveStore.Append(new MessageFrameRecord(1, descriptor.Id, DateTime.UtcNow, FrameDirection.Rx, [0x01], MessageFormat.Hex, "test"));
+
+        Assert.True(workspaceService.HasSessionArchiveData(descriptor.Id));
+
+        await workspaceService.DeleteSessionArchiveDataAsync(descriptor.Id);
+
+        Assert.False(workspaceService.HasSessionArchiveData(descriptor.Id));
+        var session = deviceService.GetSession(descriptor.Id);
+        Assert.NotNull(session);
+        Assert.Equal(SessionArchiveState.Disabled, session!.ArchiveState);
+
+        var persistedState = await configService.LoadWorkspaceStateAsync();
+        Assert.NotNull(persistedState);
+        var persistedDescriptor = Assert.Single(persistedState!.SessionDescriptors, x => x.Id == descriptor.Id);
+        Assert.Equal(SessionArchiveState.Disabled, persistedDescriptor.ArchiveState);
     }
 
     private static SessionDescriptor CreateDescriptor(

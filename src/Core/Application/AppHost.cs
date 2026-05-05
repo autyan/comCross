@@ -69,6 +69,10 @@ public class AppHost : IAppHost
             var commandDefaults = _serviceProvider.GetRequiredService<CommandDefaultService>();
             await commandDefaults.EnsureInitializedAsync();
 
+            // 2.3 Start storage calibration in the background. Storage remains conservative until it completes.
+            var storageCalibration = _serviceProvider.GetRequiredService<ComCross.Shared.Interfaces.IStorageCalibrationService>();
+            await storageCalibration.StartAsync();
+
             // 3. Start Background Services
             var pluginManager = _serviceProvider.GetRequiredService<PluginManagerService>();
             await pluginManager.InitializeAsync();

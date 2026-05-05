@@ -40,5 +40,6 @@ public sealed record PluginSessionMetadataPatch(
     string? DisplaySubtitle = null,
     string? DisplayIcon = null,
     bool? CanReconnect = null,
+    bool? CanTransmit = null,
     string? ParentSessionId = null,
     IReadOnlyList<string>? ManagedResourceKinds = null);

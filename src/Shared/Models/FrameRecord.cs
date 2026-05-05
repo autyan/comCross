@@ -1,7 +1,7 @@
 namespace ComCross.Shared.Models;
 
 /// <summary>
-/// In-memory fact record for RX/TX physical frames.
+/// Legacy in-memory fact record for RX/TX physical frames.
 /// RawData is always the original payload bytes (no hex/text conversion).
 /// </summary>
 public sealed record FrameRecord(
@@ -13,4 +13,17 @@ public sealed record FrameRecord(
     MessageFormat Format,
     string Source,
     IReadOnlyDictionary<string, string> Attributes,
-    int AttributeSchemaVersion = MessageFrameAttributes.SchemaVersion);
+    int AttributeSchemaVersion = MessageFrameAttributes.SchemaVersion)
+{
+    public MessageFrameRecord ToMessageFrameRecord()
+        => new(
+            FrameId,
+            SessionId,
+            TimestampUtc,
+            Direction,
+            RawData,
+            Format,
+            Source,
+            Attributes,
+            AttributeSchemaVersion);
+}

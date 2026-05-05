@@ -20,9 +20,13 @@ public sealed class Session : INotifyPropertyChanged
     private DateTime? _startTime;
     private long _rxBytes;
     private long _txBytes;
-    private bool _enableDatabaseStorage;
+    private SessionArchiveState _archiveState = SessionArchiveState.Disabled;
+    private string? _archiveError;
+    private PayloadRenderMode _payloadRenderMode = PayloadRenderMode.String;
+    private MessageDisplayDensity _displayDensity = MessageDisplayDensity.Detailed;
     private string? _parentSessionId;
     private bool _canReconnect = true;
+    private bool _canTransmit = true;
     private SessionInitializationState _initializationState = SessionInitializationState.Ready;
     private string? _initializationError;
     private IReadOnlyList<string> _managedResourceKinds = Array.Empty<string>();
@@ -121,6 +125,15 @@ public sealed class Session : INotifyPropertyChanged
         set => SetField(ref _canReconnect, value);
     }
 
+    /// <summary>
+    /// Whether the session itself can accept outbound payloads.
+    /// </summary>
+    public bool CanTransmit
+    {
+        get => _canTransmit;
+        set => SetField(ref _canTransmit, value);
+    }
+
     public SessionInitializationState InitializationState
     {
         get => _initializationState;
@@ -154,17 +167,28 @@ public sealed class Session : INotifyPropertyChanged
         }
     }
 
-    /// <summary>
-    /// Enable database storage for this session (overrides global default)
-    /// Note: Historical data will not be converted. Switching may result in data loss.
-    /// </summary>
-    public bool EnableDatabaseStorage
+    public SessionArchiveState ArchiveState
     {
-        get => _enableDatabaseStorage;
-        set
-        {
-            SetField(ref _enableDatabaseStorage, value);
-        }
+        get => _archiveState;
+        set => SetField(ref _archiveState, value);
+    }
+
+    public string? ArchiveError
+    {
+        get => _archiveError;
+        set => SetField(ref _archiveError, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+
+    public PayloadRenderMode PayloadRenderMode
+    {
+        get => _payloadRenderMode;
+        set => SetField(ref _payloadRenderMode, value);
+    }
+
+    public MessageDisplayDensity DisplayDensity
+    {
+        get => _displayDensity;
+        set => SetField(ref _displayDensity, value);
     }
     
     public SessionStatus Status
