@@ -344,7 +344,7 @@
               IsVisible="{Binding CanConnect}" />
 
       <Button Content="{Binding L[menu.disconnect]}"
-              Classes="prototype-action-button"
+              Classes="prototype-action-button outline-warning"
               HorizontalAlignment="Stretch"
               Command="{Binding DisconnectCommand}"
               IsVisible="{Binding CanDisconnect}" />
