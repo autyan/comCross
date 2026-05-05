@@ -346,6 +346,13 @@
         <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrightBrush}" />
     </Style>
 
+    <Style Selector="Button.prototype-action-button.primary:disabled">
+        <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
     <Style Selector="Button.prototype-action-button.outline-accent">
         <Setter Property="Background" Value="{StaticResource Bg1Brush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}" />
@@ -405,8 +412,6 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         <Setter Property="Padding" Value="12" />
-        <Setter Property="FontFamily" Value="JetBrains Mono, Cascadia Mono, Consolas, Courier New, monospace" />
-        <Setter Property="FontSize" Value="12" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="AcceptsReturn" Value="True" />
     </Style>

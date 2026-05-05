@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia;
@@ -926,38 +927,6 @@ public sealed class SettingsViewModel : BaseViewModel
         }
     }
 
-    public int ConnectionDefaultBaudRate
-    {
-        get => _settingsService.Current.Connection.DefaultBaudRate;
-        set
-        {
-            if (_settingsService.Current.Connection.DefaultBaudRate == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Connection.DefaultBaudRate = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public string ConnectionDefaultEncoding
-    {
-        get => _settingsService.Current.Connection.DefaultEncoding;
-        set
-        {
-            if (_settingsService.Current.Connection.DefaultEncoding == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Connection.DefaultEncoding = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
     public bool ConnectionDefaultAddCr
     {
         get => _settingsService.Current.Connection.DefaultAddCr;
@@ -985,38 +954,6 @@ public sealed class SettingsViewModel : BaseViewModel
             }
 
             _settingsService.Current.Connection.DefaultAddLf = value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public SettingOption<ConnectionBehavior>? SelectedConnectionBehavior
-    {
-        get => ConnectionBehaviorOptions.FirstOrDefault(o => o.Value == _settingsService.Current.Connection.ExistingSessionBehavior);
-        set
-        {
-            if (value == null || _settingsService.Current.Connection.ExistingSessionBehavior == value.Value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Connection.ExistingSessionBehavior = value.Value;
-            ScheduleSave();
-            OnPropertyChanged();
-        }
-    }
-
-    public int DisplayMaxMessages
-    {
-        get => _settingsService.Current.Display.MaxMessages;
-        set
-        {
-            if (_settingsService.Current.Display.MaxMessages == value)
-            {
-                return;
-            }
-
-            _settingsService.Current.Display.MaxMessages = value;
             ScheduleSave();
             OnPropertyChanged();
         }
@@ -1056,34 +993,118 @@ public sealed class SettingsViewModel : BaseViewModel
 
     public string DisplayFontFamily
     {
-        get => _settingsService.Current.Display.FontFamily;
+        get => _settingsService.Current.Display.UiFontFamily;
         set
         {
-            if (_settingsService.Current.Display.FontFamily == value)
+            var normalized = NormalizeFontFamilyList(value, DisplaySettings.GetDefaultUiFontFamily());
+            if (_settingsService.Current.Display.UiFontFamily == normalized)
             {
                 return;
             }
 
-            _settingsService.Current.Display.FontFamily = value;
+            _settingsService.Current.Display.UiFontFamily = normalized;
+            _settingsService.NotifyChanged();
             ScheduleSave();
             OnPropertyChanged();
         }
     }
 
-    public int DisplayFontSize
+    public string MessageFontFamily
     {
-        get => _settingsService.Current.Display.FontSize;
+        get => _settingsService.Current.Display.FontFamily;
         set
         {
-            if (_settingsService.Current.Display.FontSize == value)
+            var normalized = NormalizeFontFamilyList(value, DisplaySettings.GetDefaultMessageFontFamily());
+            if (_settingsService.Current.Display.FontFamily == normalized)
             {
                 return;
             }
 
-            _settingsService.Current.Display.FontSize = value;
+            _settingsService.Current.Display.FontFamily = normalized;
+            _settingsService.NotifyChanged();
             ScheduleSave();
             OnPropertyChanged();
         }
+    }
+
+    public int MessageFontSize
+    {
+        get => _settingsService.Current.Display.FontSize;
+        set
+        {
+            var normalized = Math.Clamp(value, 8, 24);
+            if (_settingsService.Current.Display.FontSize == normalized)
+            {
+                return;
+            }
+
+            _settingsService.Current.Display.FontSize = normalized;
+            _settingsService.NotifyChanged();
+            ScheduleSave();
+            OnPropertyChanged();
+        }
+    }
+
+    private static string NormalizeFontFamilyList(string? value, string fallback)
+    {
+        var families = SplitFontFamilyList(value)
+            .Select(UnquoteFontFamily)
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .ToArray();
+
+        return families.Length == 0 ? fallback : string.Join(", ", families);
+    }
+
+    private static IEnumerable<string> SplitFontFamilyList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            yield break;
+        }
+
+        const char apostrophe = (char)39;
+        const char quotationMark = (char)34;
+        var current = new StringBuilder();
+        var quote = '\0';
+        foreach (var ch in value)
+        {
+            if ((ch == apostrophe || ch == quotationMark) && quote == '\0')
+            {
+                quote = ch;
+                current.Append(ch);
+                continue;
+            }
+
+            if (ch == quote)
+            {
+                quote = '\0';
+                current.Append(ch);
+                continue;
+            }
+
+            if (ch == ',' && quote == '\0')
+            {
+                yield return current.ToString();
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        yield return current.ToString();
+    }
+
+    private static string UnquoteFontFamily(string value)
+    {
+        const char apostrophe = (char)39;
+        const char quotationMark = (char)34;
+        var trimmed = value.Trim();
+        return trimmed.Length >= 2
+               && ((trimmed[0] == quotationMark && trimmed[^1] == quotationMark)
+                   || (trimmed[0] == apostrophe && trimmed[^1] == apostrophe))
+            ? trimmed[1..^1].Trim()
+            : trimmed;
     }
 
     public event EventHandler<string>? LanguageChanged;
@@ -1153,14 +1174,6 @@ public sealed class SettingsViewModel : BaseViewModel
         Localization.SetCulture(cultureCode);
         LanguageChanged?.Invoke(this, cultureCode);
     }
-
-    public IReadOnlyList<SettingOption<ConnectionBehavior>> ConnectionBehaviorOptions =>
-        new[]
-        {
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.CreateNew, L["settings.connection.behavior.createNew"]),
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.SwitchToExisting, L["settings.connection.behavior.switchToExisting"]),
-            new SettingOption<ConnectionBehavior>(ConnectionBehavior.PromptUser, L["settings.connection.behavior.promptUser"])
-        };
 
     private LocaleCultureInfo ResolveLanguage(string cultureCode)
     {

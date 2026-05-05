@@ -12,6 +12,7 @@
         KeyDown="OnKeyDown"
         Width="1440" Height="900"
         MinWidth="1280" MinHeight="720"
+        FontFamily="{Binding Display.UiFontFamily}"
         Background="{StaticResource Bg0Brush}">
 
     <Grid RowDefinitions="Auto,*,Auto">

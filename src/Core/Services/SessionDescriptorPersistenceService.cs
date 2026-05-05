@@ -112,6 +112,7 @@ public sealed class SessionDescriptorPersistenceService : IDisposable, IAsyncDis
                 DisplaySubtitle = s.DisplaySubtitle,
                 DisplayIcon = s.DisplayIcon,
                 CanReconnect = s.CanReconnect,
+                CanTransmit = s.CanTransmit,
                 InitializationState = s.InitializationState,
                 InitializationError = s.InitializationError,
                 ArchiveState = s.ArchiveState,

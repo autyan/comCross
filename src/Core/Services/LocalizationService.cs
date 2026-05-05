@@ -705,8 +705,11 @@ public sealed class LocalizationService : IExtensibleLocalizationService
             ["tool.send.clearAfterSend"] = "Clear after send",
             ["tool.send.clear"] = "Clear",
             ["settings.display.timestampFormat"] = "Timestamp format",
-            ["settings.display.fontFamily"] = "Font family",
-            ["settings.display.fontSize"] = "Font size",
+            ["settings.display.fontFamily"] = "Message font family",
+            ["settings.display.fontSize"] = "Message font size",
+            ["settings.display.uiFontFamily"] = "Interface font family",
+            ["settings.display.messageFontFamily"] = "Message font family",
+            ["settings.display.messageFontSize"] = "Message font size",
             ["settings.actions.close"] = "Close",
             ["dialog.cancel"] = "Cancel",
 

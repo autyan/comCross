@@ -93,23 +93,38 @@ public sealed class DisplaySettings
     public int MaxMessages { get; set; } = 10000;
     public bool AutoScroll { get; set; } = true;
     public string TimestampFormat { get; set; } = "HH:mm:ss.fff";
-    public string FontFamily { get; set; } = GetDefaultFontFamily();
-    public int FontSize { get; set; } = 11;
+    public string UiFontFamily { get; set; } = GetDefaultUiFontFamily();
+    public string FontFamily { get; set; } = GetDefaultMessageFontFamily();
+    public int FontSize { get; set; } = 13;
 
-    private static string GetDefaultFontFamily()
+    public static string GetDefaultUiFontFamily()
     {
         if (OperatingSystem.IsWindows())
         {
-            return "Consolas";
+            return "Segoe UI, Noto Sans, Arial, sans-serif";
         }
-        else if (OperatingSystem.IsMacOS())
+
+        if (OperatingSystem.IsMacOS())
         {
-            return "Menlo";
+            return "SF Pro Text, .AppleSystemUIFont, Helvetica Neue, sans-serif";
         }
-        else // Linux
+
+        return "Inter, Noto Sans, Ubuntu, Cantarell, DejaVu Sans, sans-serif";
+    }
+
+    public static string GetDefaultMessageFontFamily()
+    {
+        if (OperatingSystem.IsWindows())
         {
-            return "DejaVu Sans Mono";
+            return "JetBrains Mono, Cascadia Mono, Consolas, monospace";
         }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "JetBrains Mono, SF Mono, Menlo, monospace";
+        }
+
+        return "JetBrains Mono, DejaVu Sans Mono, Liberation Mono, monospace";
     }
 }
 

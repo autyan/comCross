@@ -21,6 +21,7 @@ public sealed class DisplaySettingsViewModel : BaseViewModel
 
     public string TimestampFormat => _settingsService.Current.Display.TimestampFormat;
     public bool AutoScrollEnabled => _settingsService.Current.Display.AutoScroll;
+    public string UiFontFamily => _settingsService.Current.Display.UiFontFamily;
     public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
     public int MessageFontSize => _settingsService.Current.Display.FontSize;
 
@@ -28,6 +29,7 @@ public sealed class DisplaySettingsViewModel : BaseViewModel
     {
         OnPropertyChanged(nameof(TimestampFormat));
         OnPropertyChanged(nameof(AutoScrollEnabled));
+        OnPropertyChanged(nameof(UiFontFamily));
         OnPropertyChanged(nameof(MessageFontFamily));
         OnPropertyChanged(nameof(MessageFontSize));
     }

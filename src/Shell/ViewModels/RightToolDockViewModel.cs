@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -30,6 +31,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
     private bool _isAdvancedOptionsOpen;
     private bool _clearAfterSend;
     private string _messageInput = string.Empty;
+    private bool _isLoadingMessageDraft;
     private string? _sendErrorText;
     private string _commandSearchQuery = string.Empty;
     private CommandGroupFilterOption? _selectedCommandGroupFilter;
@@ -40,6 +42,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
     private ToolDockTab _selectedToolTab = ToolDockTab.Send;
     private TransmitTargetListItemViewModel? _selectedTransmitTarget;
     private int _transmitTargetRefreshVersion;
+    private readonly Dictionary<string, string> _messageDraftsBySessionId = new(StringComparer.Ordinal);
 
     public RightToolDockViewModel(
         ILocalizationService localization,
@@ -47,6 +50,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         IEventBus eventBus,
         AppLogService appLogService,
         MessageStreamViewModel messageStream,
+        DisplaySettingsViewModel display,
         SettingsViewModel settings,
         CommandCenterViewModel commandCenter)
         : base(localization)
@@ -55,6 +59,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
         _appLogService = appLogService;
         _messageStream = messageStream;
 
+        Display = display;
         Settings = settings;
         CommandCenter = commandCenter;
         CommandCenter.Commands.CollectionChanged += OnCommandsChanged;
@@ -65,6 +70,8 @@ public sealed class RightToolDockViewModel : BaseViewModel
     }
 
     public SettingsViewModel Settings { get; }
+
+    public DisplaySettingsViewModel Display { get; }
 
     public CommandCenterViewModel CommandCenter { get; }
 
@@ -130,6 +137,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
                 return;
             }
 
+            SaveActiveMessageDraft();
             OnPropertyChanged(nameof(CanSend));
             OnPropertyChanged(nameof(CanClearInput));
         }
@@ -263,9 +271,12 @@ public sealed class RightToolDockViewModel : BaseViewModel
 
     public bool IsSendTabActive => _selectedToolTab == ToolDockTab.Send;
     public bool IsCommandsTabActive => _selectedToolTab == ToolDockTab.Commands;
-    public bool CanSend
+    public bool CanUseSendTool
         => IsConnected
            && _activeSession?.InitializationState == SessionInitializationState.Ready
+           && _activeSession.CanTransmit;
+    public bool CanSend
+        => CanUseSendTool
            && (!RequiresTransmitTarget || SelectedTransmitTarget is not null)
            && !string.IsNullOrWhiteSpace(MessageInput);
     public bool CanClearInput => !string.IsNullOrWhiteSpace(MessageInput);
@@ -277,8 +288,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
     public bool ShowCommandSearchSuggestions => IsCommandSearchOpen && HasSearchCommands;
     public bool IsCommandSelectionVisible => !IsCommandSearchOpen;
     public bool CanSendCommand
-        => IsConnected
-           && _activeSession?.InitializationState == SessionInitializationState.Ready;
+        => CanUseSendTool;
     public bool CanSendSelectedSearchCommand => CanSendCommand && SelectedSearchCommand is not null;
     public bool CanPinSelectedSearchCommand => SelectedSearchCommand is not null;
     public bool CanOpenCommandEditor => CommandCenter.Commands.Count > 0;
@@ -296,6 +306,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
     {
         if (!ReferenceEquals(_activeSession, session) && _activeSession is not null)
         {
+            SaveActiveMessageDraft();
             _activeSession.PropertyChanged -= OnActiveSessionPropertyChanged;
         }
 
@@ -307,10 +318,13 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
 
         IsConnected = _activeSession?.Status == SessionStatus.Connected;
+        LoadActiveMessageDraft();
         ResetTransmitTargets();
+        OnPropertyChanged(nameof(CanUseSendTool));
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanSendCommand));
         OnPropertyChanged(nameof(CanSendSelectedSearchCommand));
+        RefreshCommandSendState();
         CommandCenter.SetSession(session?.Id, session?.Name);
         CommandCenter.IsActive = IsCommandsTabActive;
         SyncQuickCommands();
@@ -330,12 +344,20 @@ public sealed class RightToolDockViewModel : BaseViewModel
         }
 
         if (string.Equals(e.PropertyName, nameof(Session.Status), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(Session.InitializationState), StringComparison.Ordinal))
+            || string.Equals(e.PropertyName, nameof(Session.InitializationState), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(Session.CanTransmit), StringComparison.Ordinal))
         {
             IsConnected = _activeSession?.Status == SessionStatus.Connected;
+            if (_activeSession?.CanTransmit != true)
+            {
+                ResetTransmitTargets();
+            }
+
+            OnPropertyChanged(nameof(CanUseSendTool));
             OnPropertyChanged(nameof(CanSend));
             OnPropertyChanged(nameof(CanSendCommand));
             OnPropertyChanged(nameof(CanSendSelectedSearchCommand));
+            RefreshCommandSendState();
         }
     }
 
@@ -571,9 +593,18 @@ public sealed class RightToolDockViewModel : BaseViewModel
             QuickCommands.Add(new CommandListItemViewModel(command));
         }
 
+        RefreshCommandSendState();
         OnPropertyChanged(nameof(HasQuickCommands));
         OnPropertyChanged(nameof(CanOpenCommandEditor));
         OnPropertyChanged(nameof(PinnedCommandCountText));
+    }
+
+    private void RefreshCommandSendState()
+    {
+        foreach (var command in QuickCommands)
+        {
+            command.CanSend = CanSendCommand;
+        }
     }
 
     private void SyncCommandGroups()
@@ -637,7 +668,7 @@ public sealed class RightToolDockViewModel : BaseViewModel
     private async Task RefreshTransmitTargetsAsync()
     {
         var session = ActiveSession;
-        if (session is null || session.Status != SessionStatus.Connected)
+        if (session is null || session.Status != SessionStatus.Connected || !session.CanTransmit)
         {
             ResetTransmitTargets();
             return;
@@ -685,7 +716,40 @@ public sealed class RightToolDockViewModel : BaseViewModel
             ?? (RequiresTransmitTarget ? TransmitTargets.FirstOrDefault() : null);
 
         OnPropertyChanged(nameof(IsTransmitTargetSelectorVisible));
+        OnPropertyChanged(nameof(CanUseSendTool));
         OnPropertyChanged(nameof(CanSend));
+    }
+
+    private void SaveActiveMessageDraft()
+    {
+        if (_isLoadingMessageDraft || _activeSession is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_messageInput))
+        {
+            _messageDraftsBySessionId.Remove(_activeSession.Id);
+            return;
+        }
+
+        _messageDraftsBySessionId[_activeSession.Id] = _messageInput;
+    }
+
+    private void LoadActiveMessageDraft()
+    {
+        _isLoadingMessageDraft = true;
+        try
+        {
+            MessageInput = _activeSession is not null
+                           && _messageDraftsBySessionId.TryGetValue(_activeSession.Id, out var draft)
+                ? draft
+                : string.Empty;
+        }
+        finally
+        {
+            _isLoadingMessageDraft = false;
+        }
     }
 
     private void ResetTransmitTargets()
@@ -739,8 +803,10 @@ public sealed class RightToolDockViewModel : BaseViewModel
     }
 }
 
-public sealed class CommandListItemViewModel
+public sealed class CommandListItemViewModel : INotifyPropertyChanged
 {
+    private bool _canSend;
+
     public CommandListItemViewModel(CommandDefinition command)
     {
         Command = command;
@@ -753,6 +819,21 @@ public sealed class CommandListItemViewModel
     public string Group => Command.Group;
 
     public bool IsPinned => Command.IsPinned;
+
+    public bool CanSend
+    {
+        get => _canSend;
+        set
+        {
+            if (_canSend == value)
+            {
+                return;
+            }
+
+            _canSend = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanSend)));
+        }
+    }
 
     public string PayloadPreview
     {
@@ -783,6 +864,8 @@ public sealed class CommandListItemViewModel
             return payload;
         }
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public sealed record CommandGroupFilterOption(string Value, string Label);
