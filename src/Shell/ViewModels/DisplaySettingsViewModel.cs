@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using ComCross.Core.Services;
 using ComCross.Shared.Models;
 using ComCross.Shared.Services;
@@ -21,8 +22,8 @@ public sealed class DisplaySettingsViewModel : BaseViewModel
 
     public string TimestampFormat => _settingsService.Current.Display.TimestampFormat;
     public bool AutoScrollEnabled => _settingsService.Current.Display.AutoScroll;
-    public string UiFontFamily => _settingsService.Current.Display.UiFontFamily;
-    public string MessageFontFamily => _settingsService.Current.Display.FontFamily;
+    public FontFamily UiFontFamily => new(_settingsService.Current.Display.UiFontFamily);
+    public FontFamily MessageFontFamily => new(_settingsService.Current.Display.FontFamily);
     public int MessageFontSize => _settingsService.Current.Display.FontSize;
 
     private void OnSettingsChanged(object? sender, AppSettings settings)
