@@ -140,7 +140,7 @@ function formatLabel(format) {
 }
 
 function createFallbackReleaseManifest() {
-  const version = "0.5.1";
+  const version = "0.6.0";
   const tag = `v${version}`;
   const baseUrl = `https://github.com/autyan/comCross/releases/download/${tag}`;
 

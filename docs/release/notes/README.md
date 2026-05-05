@@ -71,18 +71,18 @@ Example final release trigger:
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.5.0 \
+  -f version=0.6.0 \
   -f prerelease=false \
   -f draft=false \
   -f require_signing=true \
-  -f release_notes_path=docs/release/notes/v0.5.0.md
+  -f release_notes_path=docs/release/notes/v0.6.0.md
 ```
 
 Example validation trigger:
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.5.0-rc.1 \
+  -f version=0.6.0-rc.1 \
   -f prerelease=true \
   -f draft=true \
   -f require_signing=true

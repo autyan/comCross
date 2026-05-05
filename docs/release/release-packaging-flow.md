@@ -30,7 +30,7 @@ format.
 ## Local Linux Verification
 
 ```bash
-scripts/release/local-verify.sh --version 0.5.0
+scripts/release/local-verify.sh --version 0.6.0
 ```
 
 This requires:
@@ -47,7 +47,7 @@ Run on Windows:
 
 ```powershell
 dotnet tool restore
-scripts/release/build-windows-msi.ps1 -Version 0.5.0
+scripts/release/build-windows-msi.ps1 -Version 0.6.0
 ```
 
 Windows MSI packages use WiX Toolset v7. WiX v7 EULA acceptance must be
@@ -82,7 +82,7 @@ Local verification accepts file paths:
 
 ```bash
 scripts/release/local-verify.sh \
-  --version 0.5.0 \
+  --version 0.6.0 \
   --gpg-private-key ~/.keys/comcross-release.asc
 ```
 
@@ -115,8 +115,8 @@ The release workflow is:
 
 It is manually triggered with `workflow_dispatch` inputs:
 
-- `version`: release version without the leading `v`, such as `0.5.0-rc.1` or
-  `0.5.0`
+- `version`: release version without the leading `v`, such as `0.6.0-rc.1` or
+  `0.6.0`
 - `prerelease`: whether the GitHub Release is marked as a pre-release
 - `draft`: whether the GitHub Release is created as a draft
 - `require_signing`: whether missing signing material should fail the workflow
@@ -155,7 +155,7 @@ Trigger example:
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.5.0-rc.1 \
+  -f version=0.6.0-rc.1 \
   -f prerelease=true \
   -f draft=true \
   -f require_signing=false
@@ -165,11 +165,11 @@ Final release example:
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.5.0 \
+  -f version=0.6.0 \
   -f prerelease=false \
   -f draft=false \
   -f require_signing=true \
-  -f release_notes_path=docs/release/notes/v0.5.0.md
+  -f release_notes_path=docs/release/notes/v0.6.0.md
 ```
 
 Follow-up commands:
@@ -177,7 +177,7 @@ Follow-up commands:
 ```bash
 gh run list --workflow release.yml
 gh run view <run-id> --log
-gh release view v0.5.0-rc.1
+gh release view v0.6.0-rc.1
 ```
 
 ## Release Notes And Changelog Source
